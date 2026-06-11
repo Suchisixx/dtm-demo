@@ -7,6 +7,9 @@
     global.AppLawsView.initLawFilters();
     global.AppClassifyView.initClassifyForm();
     global.AppLawsView.renderLaws();
+    if (global.AppQcvnView && global.AppQcvnView.initQcvnView) {
+      global.AppQcvnView.initQcvnView();
+    }
   }
 
   document.addEventListener('DOMContentLoaded', initApp);
