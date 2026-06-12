@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETC LegalHub — Hệ thống pháp lý môi trường</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/styles.css">
+</head>
+
+<body>
+
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
+          </svg>
+        </div>
+        <div>
+          <div class="logo-text">ETC LegalHub</div>
+          <div class="logo-sub">Hệ thống pháp lý môi trường</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="badge-update">⚡ Cập nhật: NĐ 48/2026</span>
+        <div id="auth-status-container">
+          <button class="filter-btn" id="btn-show-login" style="border-radius:6px;padding:6px 12px;font-weight:600">🔒 Đăng nhập</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav>
+    <div class="nav-inner">
+      <button class="nav-btn active" data-page="laws">📚 Văn bản pháp lý</button>
+      <button class="nav-btn tab-private" data-page="classify" id="tab-classify">🔒 Phân loại dự án</button>
+      <button class="nav-btn tab-private" data-page="qcvn" id="tab-qcvn">🔒 So sánh QCVN</button>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════ PAGE 1: LUẬT ═══ -->
+  <div id="laws" class="page active container">
+    <div class="section-head">Hệ thống văn bản pháp lý môi trường</div>
+    <div class="section-desc">Tổng hợp Luật, Nghị định, Thông tư và QCVN còn hiệu lực áp dụng trong công tác tư vấn môi
+      trường</div>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-num">4</div>
+        <div class="stat-label">Luật / Bộ luật</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">6</div>
+        <div class="stat-label">NĐ / VBHN</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">4</div>
+        <div class="stat-label">Thông tư</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">6</div>
+        <div class="stat-label">QCVN đang theo dõi</div>
+      </div>
+    </div>
+
+    <div class="notice-banner">
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+      </svg>
+      <span><strong>Thay đổi quan trọng:</strong> NĐ 08/2022 hiện không nên đọc riêng bản gốc. Chuỗi cập nhật mới gồm NĐ
+        05/2025, NĐ 48/2026, NĐ 110/2026 và bản hợp nhất 49/VBHN-BNNMT ngày 17/04/2026.</span>
+    </div>
+
+    <div class="legal-update-panel">
+      <div class="legal-update-head">
+        <div>
+          <div class="legal-update-title">Trạng thái cập nhật cơ sở pháp lý</div>
+          <div class="legal-update-sub">Danh sách bên dưới được sắp xếp theo mốc hiệu lực/cập nhật mới nhất trước. Đây
+            là trạng thái tham chiếu tại 30/05/2026, chưa phải đồng bộ realtime tự động.</div>
+        </div>
+        <!-- <span class="chip chip-warn">Cần rà soát tiếp</span> -->
+      </div>
+      <div class="legal-update-grid">
+        <div class="legal-update-item">
+          <strong>Đã bổ sung lên danh sách</strong>
+          <span>NĐ 110/2026, VBHN 49/VBHN-BNNMT và TT 09/2026 để phản ánh chuỗi cập nhật mới nhất của NĐ 08/2022 và TT
+            02/2022.</span>
+        </div>
+        <div class="legal-update-item">
+          <strong>Còn thiếu trong kho tài liệu gốc</strong>
+          <span>Nên tải thêm file nguồn của 110/2026/NĐ-CP, 49/VBHN-BNNMT, 09/2026/TT-BNNMT, 07/2025/TT-BTNMT,
+            07/2025/TT-BNNMT và 04/2023/TT-BTNMT.</span>
+        </div>
+        <div class="legal-update-item">
+          <strong>Lưu ý khi tính phân loại</strong>
+          <span>Engine phân loại hiện vẫn cần rà lại theo VBHN 49 và NĐ 110; phần checklist/mẫu hồ sơ cần rà lại theo
+            tuyến TT 02/2022 đã sửa đổi.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <button class="filter-btn on" data-filter="all">Tất cả</button>
+      <button class="filter-btn" data-filter="luat">Luật</button>
+      <button class="filter-btn" data-filter="nd">Nghị định</button>
+      <button class="filter-btn" data-filter="vbhn">VBHN</button>
+      <button class="filter-btn" data-filter="tt">Thông tư</button>
+      <button class="filter-btn" data-filter="qcvn">QCVN</button>
+      <button class="filter-btn" data-filter="hieuluc">✅ Còn hiệu lực</button>
+      <button class="filter-btn" data-filter="suadoi">🔄 Đã sửa đổi</button>
+    </div>
+
+    <div id="law-list"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ PAGE 2: PHÂN LOẠI ═══ -->
+  <div id="classify" class="page container">
+    <div class="section-head">Phân loại dự án & Xác định hồ sơ</div>
+    <div class="section-desc">Nhập thông tin dự án → tự động xác định loại hồ sơ, thẩm quyền, phụ lục áp dụng và danh
+      mục tài liệu cần nộp</div>
+
+    <div class="classify-grid">
+      <!-- COLUMN 1: SAVED PROJECTS LIST -->
+      <div class="projects-sidebar" id="projects-sidebar-container" style="display:none">
+        <button class="btn-new-project" id="btn-new-project" style="width:100%;padding:10px;background:var(--accent2);color:var(--accent);border:1px dashed var(--accent);border-radius:var(--radius);font-weight:600;font-size:13px;cursor:pointer;margin-bottom:16px;transition:all 0.15s">➕ Tạo dự án mới</button>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Dự án đã lưu</div>
+        <div id="saved-projects-list" style="display:flex;flex-direction:column;gap:8px">
+          <!-- Dynamically populated via JS -->
+          <div style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">Chưa có dự án nào</div>
+        </div>
+        <!-- Phân trang -->
+        <div id="projects-pagination" class="pagination-container" style="display:flex;justify-content:center;gap:6px;margin-top:16px">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+      <!-- FORM -->
+      <div class="form-section">
+        <!-- Hidden input to store current editing project ID (for update) -->
+        <input type="hidden" id="f-project-id" value="" />
+        
+        <div class="form-group">
+          <label class="form-label">Tên dự án *</label>
+          <input type="text" id="f-name" placeholder="Nhập tên dự án..." required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Loại hình dự án *</label>
+          <select id="f-nganh">
+            <option value="">— Chọn ngành nghề —</option>
+            <optgroup label="🏭 Công nghiệp chế biến">
+              <option value="che_bien_go">Chế biến gỗ / Sản xuất MDF, ván sàn</option>
+              <option value="xi_mang">Xi măng, clinker, vật liệu xây dựng</option>
+              <option value="thep">Luyện kim, sản xuất thép, phôi thép</option>
+              <option value="hoa_chat">Hóa chất, phân bón NPK, thuốc BVTV</option>
+              <option value="giay_bot">Giấy, bột giấy, carton</option>
+              <option value="det_nhuom">Dệt, nhuộm, hoàn tất vải sợi</option>
+              <option value="thuc_pham">Chế biến thực phẩm, đồ uống</option>
+              <option value="nhua_cao_su">Nhựa, cao su tổng hợp</option>
+              <option value="cao_su_cb">Cao su chế biến (mủ khô)</option>
+              <option value="duoc_pham">Dược phẩm, mỹ phẩm</option>
+            </optgroup>
+            <optgroup label="🏗️ Hạ tầng & Đô thị">
+              <option value="kcn">Khu công nghiệp / KCX / Khu kinh tế</option>
+              <option value="do_thi">Khu đô thị, nhà ở, chung cư</option>
+              <option value="trung_tam_tm">Trung tâm thương mại, văn phòng</option>
+              <option value="cao_toc">Đường cao tốc, quốc lộ</option>
+              <option value="cang_bien">Cảng biển, bến cảng</option>
+              <option value="thuy_dien">Thủy điện, điện mặt trời, điện gió</option>
+            </optgroup>
+            <optgroup label="🏥 Y tế & Dịch vụ">
+              <option value="benh_vien">Bệnh viện, phòng khám, cơ sở y tế</option>
+              <option value="khach_san">Khách sạn, resort, khu du lịch</option>
+            </optgroup>
+            <optgroup label="🌾 Nông — Lâm — Ngư">
+              <option value="nuoi_thuy_san">Nuôi trồng thủy sản (ao, lồng bè)</option>
+              <option value="chan_nuoi">Chăn nuôi gia súc, gia cầm</option>
+              <option value="nao_vet">Nạo vét luồng hàng hải, kênh rạch</option>
+            </optgroup>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" id="cap-label">Quy mô / Công suất *</label>
+          <input type="number" id="f-cap" min="0" step="1" placeholder="Nhập con số..." />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Lưu lượng nước thải phát sinh (m³/ngày)</label>
+          <input type="number" id="f-nt" min="0" step="10" placeholder="0 nếu chưa xác định" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Lưu lượng khí thải (m³/giờ)</label>
+          <input type="number" id="f-kt" min="0" step="100" placeholder="0 nếu chưa xác định" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tỉnh / Thành phố thực hiện dự án</label>
+          <input type="text" id="f-tinh" placeholder="VD: TP. Hồ Chí Minh" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Điều kiện đặc biệt</label>
+          <div class="check-grid">
+            <label class="check-item"><input type="checkbox" id="ck-rung"> Đất rừng PH/ĐD</label>
+            <label class="check-item"><input type="checkbox" id="ck-lua"> Đất lúa &gt;10 ha</label>
+            <label class="check-item"><input type="checkbox" id="ck-bg"> Vùng biên giới 50km</label>
+            <label class="check-item"><input type="checkbox" id="ck-kcn"> Trong KCN có ĐTM</label>
+            <label class="check-item"><input type="checkbox" id="ck-phanky"> Dự án phân kỳ</label>
+            <label class="check-item"><input type="checkbox" id="ck-morongdt"> Mở rộng dự án cũ</label>
+            <label class="check-item"><input type="checkbox" id="ck-ctnh"> Phát sinh CTNH</label>
+            <label class="check-item"><input type="checkbox" id="ck-dtcong"> Đầu tư công</label>
+          </div>
+        </div>
+
+        <button class="btn-classify">Phân loại hồ sơ →</button>
+      </div>
+
+      <!-- RESULT -->
+      <div class="result-area" id="result-area">
+        <div class="result-empty">
+          <div style="font-size:40px;margin-bottom:12px">📋</div>
+          <div style="font-weight:500;color:var(--text2);margin-bottom:6px">Nhập thông tin dự án</div>
+          <div style="font-size:13px">Điền form bên trái và nhấn <strong>Phân loại</strong><br>để xem kết quả chi tiết
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════ PAGE 3: QCVN ═══ -->
+  <div id="qcvn" class="page container">
+    <div class="section-head">So sánh kết quả quan trắc với QCVN</div>
+    <div class="section-desc">Nhập giá trị đo được hoặc dán bảng số liệu từ phòng thí nghiệm để tự động đối chiếu với ngưỡng quy chuẩn</div>
+
+    <div class="note-box">
+      ⚠️ <strong>Lưu ý:</strong> Giá trị giới hạn được đối chiếu tự động theo các QCVN hiện hành (QCVN 08-MT:2015, QCVN 40:2011, QCVN 14:2008, QCVN 09-MT:2015, QCVN 05:2013 và QCVN 03:2023). 
+      Chỉ số NH4+ tính theo N. Màu <span style="color:#A82020;font-weight:700">ĐỎ</span> = vượt ngưỡng, 
+      <span style="color:#8B6010;font-weight:700">CAM</span> = >80% ngưỡng (cảnh báo), 
+      <span style="color:#1A6B3A;font-weight:700">XANH</span> = đạt. Hãy luôn đối chiếu lại với văn bản gốc khi xuất hồ sơ chính thức.
+    </div>
+
+    <!-- Paste quick numbers -->
+    <div class="card" style="padding:18px 22px;margin-bottom:16px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label" style="display:flex;justify-content:space-between;align-items:center">
+          <span>📋 Dán nhanh bảng kết quả từ Lab (Excel / PDF / Word)</span>
+          <span style="font-size:11px;text-transform:none;color:var(--text3);font-weight:normal">Hệ thống sẽ tự nhận diện thông số và điền vào bảng</span>
+        </label>
+        <textarea id="qv-paste-area" rows="3" placeholder="Ví dụ:&#13;pH: 7.2&#13;BOD5: 12 mg/l&#13;TSS: 15&#13;Asen: 0.008 mg/l" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:monospace;font-size:13px;resize:vertical;background:var(--bg);margin-top:6px"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+          <button class="btn-classify" id="btn-parse-paste" style="width:auto;margin:0;padding:6px 16px;font-size:12px">⚡ Tự động điền bảng</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="card" style="padding:18px 22px;margin-bottom:16px">
+      <div class="qcvn-toolbar">
+        <div class="form-group" style="min-width:220px">
+          <label class="form-label">Loại môi trường</label>
+          <select id="qv-type">
+            <option value="nuoc_mat">💧 Nước mặt (QCVN 08-MT:2015)</option>
+            <option value="nuoc_thai_cn">🏭 Nước thải công nghiệp (QCVN 40:2011)</option>
+            <option value="nuoc_thai_sh">🏠 Nước thải sinh hoạt (QCVN 14:2008)</option>
+            <option value="nuoc_duoi_dat">🚰 Nước dưới đất (QCVN 09-MT:2015)</option>
+            <option value="khong_khi">🌬️ Không khí xung quanh (QCVN 05:2013)</option>
+            <option value="dat">🌱 Chất lượng đất (QCVN 03:2023)</option>
+          </select>
+        </div>
+        <div class="form-group" style="min-width:220px" id="qv-sub-type-group">
+          <label class="form-label">Cột / Phân loại</label>
+          <select id="qv-sub-type">
+            <!-- Dynamically populated -->
+          </select>
+        </div>
+        <div class="form-group" style="min-width:180px">
+          <label class="form-label">Tên mẫu / Vị trí</label>
+          <input type="text" id="qv-name" placeholder="VD: NM-01, NT-01..."/>
+        </div>
+        <div style="display:flex;gap:8px;padding-bottom:1px">
+          <button class="btn-export" onclick="AppQcvnView.exportQcvnPDF()">📄 Xuất PDF / In</button>
+          <button class="btn-export" onclick="AppQcvnView.exportQcvn()">⬇ Xuất File Text</button>
+          <button class="btn-clear" onclick="AppQcvnView.clearValues()">🗑 Xoá số liệu</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="summary-row" id="qv-summary" style="display:none">
+      <div class="summary-box"><div class="summary-num" id="sum-total" style="color:var(--text)">—</div><div class="summary-label">Tổng thông số</div></div>
+      <div class="summary-box"><div class="summary-num" id="sum-pass" style="color:#1A6B3A">—</div><div class="summary-label">Đạt chuẩn</div></div>
+      <div class="summary-box"><div class="summary-num" id="sum-near" style="color:#8B6010">—</div><div class="summary-label">Cảnh báo (&gt;80%)</div></div>
+      <div class="summary-box"><div class="summary-num" id="sum-fail" style="color:#A82020">—</div><div class="summary-label">Vượt ngưỡng</div></div>
+    </div>
+
+    <!-- Table -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="qv-table-wrap" style="overflow-x:auto">
+        <table class="qcvn-table" id="qv-table">
+          <thead>
+            <tr>
+              <th style="width:220px">Thông số</th>
+              <th>Đơn vị</th>
+              <th>Giới hạn cho phép</th>
+              <th>Kết quả đo</th>
+              <th>Đánh giá</th>
+              <th>Tỉ lệ/ngưỡng</th>
+            </tr>
+          </thead>
+          <tbody id="qv-tbody"></tbody>
+        </table>
+      </div>
+      <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);display:flex;justify-content:space-between;align-items:center">
+        <span>💡 Nhập giá trị vào cột "Kết quả đo" — đánh giá cập nhật ngay khi nhập</span>
+        <span id="qv-std-ref" style="font-style:italic"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="./assets/js/data/laws.js"></script>
+  <script src="./assets/js/data/classification-db.js"></script>
+  <script src="./assets/js/data/qcvn-db.js"></script>
+  <script src="./assets/js/utils/dom.js"></script>
+  <script src="./assets/js/services/classification-rules.js"></script>
+  <script src="./assets/js/ui/laws-view.js"></script>
+  <script src="./assets/js/ui/navigation.js"></script>
+  <script src="./assets/js/ui/classify-view.js"></script>
+  <script src="./assets/js/ui/qcvn-view.js"></script>
+  <script src="./assets/js/app.js"></script>
+
+  <!-- Modal Đăng nhập -->
+  <div id="login-modal" class="modal-overlay" style="display:none">
+    <div class="modal-card fade-up">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--accent)">Đăng nhập hệ thống</h3>
+        <button id="btn-close-login" style="background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--text3)">&times;</button>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label">Tên đăng nhập</label>
+          <input type="text" id="login-username" placeholder="Nhập tên đăng nhập..." required />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mật khẩu</label>
+          <input type="password" id="login-password" placeholder="Nhập mật khẩu..." required style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)" />
+        </div>
+        <div id="login-error-msg" style="color:var(--red);font-size:13px;margin-bottom:12px;display:none"></div>
+        <button type="submit" class="btn-classify" style="margin-top:8px">Đăng nhập</button>
+      </form>
+    </div>
+  </div>
+</body>
+
+</html>

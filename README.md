@@ -1,212 +1,153 @@
-# ETC LegalHub - Hệ thống pháp lý môi trường
+# ETC LegalHub - Hệ thống pháp lý & Đối chiếu môi trường doanh nghiệp
 
-ETC LegalHub là một ứng dụng web tĩnh dùng để tra cứu văn bản pháp lý môi trường và hỗ trợ phân loại dự án theo loại hồ sơ cần thực hiện. Dự án chạy bằng HTML, CSS và JavaScript thuần, không cần cài package hay build tool.
+ETC LegalHub là một ứng dụng web toàn diện (Full-stack) được xây dựng dành cho công tác tư vấn môi trường (VILAS 495). Hệ thống tích hợp tra cứu văn bản pháp luật, phân loại dự án/xác định hồ sơ, lưu trữ quản lý dự án nội bộ và đối chiếu nhanh kết quả quan trắc với các Quy chuẩn kỹ thuật quốc gia (QCVN).
 
-## Chức năng chính
+---
 
-- Tra cứu danh sách văn bản pháp lý môi trường theo nhóm: Luật, Nghị định, Thông tư, QCVN.
-- Lọc văn bản theo trạng thái còn hiệu lực hoặc đã sửa đổi.
-- Nhập thông tin dự án để xác định loại hồ sơ: ĐTM, GPMT, ĐKMT.
-- Hiển thị thẩm quyền, thời hạn thẩm định, căn cứ pháp lý và danh mục tài liệu cần chuẩn bị.
-- Checklist tài liệu có thể đánh dấu tiến độ ngay trên giao diện.
+## 🚀 Các chức năng chính
 
-## Cách mở dự án
+### 1. Tra cứu Văn bản pháp lý
+*   Tổng hợp các Luật, Nghị định, Thông tư và QCVN hiện hành trong ngành môi trường.
+*   Lọc văn bản nhanh chóng theo loại hình (Luật, Nghị định, Thông tư, QCVN) và trạng thái hiệu lực (Còn hiệu lực, Đã sửa đổi).
+*   Cảnh báo thông minh các bản cập nhật mới nhất (như Nghị định 48/2026, Văn bản hợp nhất 49/VBHN...).
 
-Mở trực tiếp file:
+### 2. Phân quyền Đăng nhập (Authentication)
+*   **Khi chưa đăng nhập:** Người dùng chỉ có quyền xem tab `Văn bản pháp lý`. Các tab nghiệp vụ chuyên sâu hơn sẽ bị khóa (🔒) để bảo vệ dữ liệu nội bộ công ty.
+*   **Khi đã đăng nhập:** Mở khóa toàn bộ tab chức năng và kích hoạt bảng lưu trữ dự án cá nhân.
+*   **Bảo mật:** Sử dụng cơ chế token JWT (JSON Web Token) được mã hóa và lưu trữ an toàn trong cookie `HttpOnly` giúp chống lại các cuộc tấn công XSS.
 
-```text
-moi_truong_portal.html
-```
+### 3. Phân loại dự án & Quản lý Hồ sơ (bố cục 3 cột hiện đại)
+*   **Cột 1 (Sidebar trái):** Quản lý danh sách dự án của riêng nhân viên đang đăng nhập. 
+    *   Hỗ trợ tạo mới (`➕ Tạo dự án mới`), xem chi tiết bằng cách click chọn, và xóa dự án (`🗑️`) kèm hộp thoại xác nhận.
+    *   Tích hợp tính năng phân trang (`1, 2, 3...`), hiển thị tối đa 5 dự án trên một trang để giao diện gọn gàng.
+*   **Cột 2 (Form ở giữa):** Nhập thông tin dự án bao gồm Tên dự án, Loại hình ngành nghề, Quy mô công suất, Lưu lượng nước thải/khí thải, Địa điểm và các điều kiện đặc thù khác.
+*   **Cột 3 (Kết quả bên phải):** Tự động tính toán loại hồ sơ cần lập (ĐTM, GPMT, ĐKMT), cơ quan phê duyệt cấp Bộ/Tỉnh/Huyện, thời hạn thẩm định, căn cứ pháp lý và danh mục tài liệu cần chuẩn bị.
+*   **Tự động Lưu trữ (Auto-Save):** 
+    *   Hệ thống tự động lưu hoặc cập nhật dự án lên cơ sở dữ liệu PostgreSQL mỗi khi bấm nút **Phân loại hồ sơ**.
+    *   Tự động lưu trạng thái checkbox tài liệu đã chuẩn bị trong checklist theo thời gian thực (Realtime).
 
-Nếu muốn chạy qua local server, có thể dùng một trong các cách sau tại thư mục dự án:
+### 4. So sánh kết quả quan trắc với QCVN
+*   **Bộ chọn quy chuẩn kép:** Lựa chọn dễ dàng giữa các loại môi trường (Nước mặt, Nước thải công nghiệp, Nước thải sinh hoạt, Nước ngầm, Không khí, Đất) và phân cấp cột giới hạn (Cột A, B, A1, A2, B1, B2, Loại 1, 2, 3) tương ứng.
+*   **Dán nhanh số liệu (Smart Paste):** Hỗ trợ copy bảng số liệu từ file Excel, Word, PDF của phòng thí nghiệm và dán vào ô nhập nhanh. Hệ thống sử dụng thuật toán chuẩn hóa không dấu tự động nhận diện chỉ tiêu và điền nhanh giá trị tương ứng.
+*   **Đánh giá vượt ngưỡng:** Tự động tô màu kết quả (Màu Xanh = Đạt, Màu Cam = Cảnh báo sát ngưỡng >80%, Màu Đỏ = Vượt ngưỡng kèm hệ số vượt bao nhiêu lần).
+*   **Bổ sung QCVN 03:2023/BTNMT:** Tích hợp đầy đủ các thông số giới hạn kim loại nặng của quy chuẩn chất lượng đất mới nhất.
+*   **In ấn/Xuất PDF chuẩn hóa:** Bộ style `@media print` ẩn đi toàn bộ giao diện điều hướng thừa, chỉ in ra một bản báo cáo đối chiếu QCVN sạch sẽ, chuyên nghiệp để gửi khách hàng hoặc lưu trữ.
 
-```bash
-python -m http.server 8000
-```
+---
 
-Sau đó mở:
+## 🛠 Công nghệ sử dụng
 
-```text
-http://localhost:8000/moi_truong_portal.html
-```
+*   **Frontend:** HTML5, CSS3 (Vanilla CSS), JavaScript (ES6+ thuần).
+*   **Backend:** Node.js, Express.js.
+*   **Database:** PostgreSQL (vử dụng kết nối Pool từ thư viện `pg`).
+*   **Security:** JWT (JSON Web Token), Cookie-based sessions, Bcryptjs (mã hóa mật khẩu).
 
-Hoặc dùng Node nếu máy có sẵn:
+---
 
-```bash
-npx serve .
-```
-
-## Cấu trúc thư mục
+## 📂 Cấu trúc thư mục dự án
 
 ```text
 .
-├── moi_truong_portal.html
-├── README.md
-└── assets
-    ├── css
-    │   └── styles.css
-    └── js
-        ├── app.js
-        ├── data
-        │   ├── classification-db.js
-        │   └── laws.js
-        ├── services
-        │   └── classification-rules.js
-        ├── ui
-        │   ├── classify-view.js
-        │   ├── laws-view.js
-        │   └── navigation.js
-        └── utils
-            └── dom.js
+├── config/
+│   └── db.js                  # Kết nối và xuất pg.Pool PostgreSQL
+├── middleware/
+│   └── auth.js                # Middleware xác thực JWT cookie bảo vệ API
+├── routes/
+│   ├── auth.js                # Định tuyến API đăng nhập, đăng xuất, phiên làm việc
+│   └── projects.js            # Định tuyến API CRUD dự án phân loại (phân trang)
+├── public/                    # Thư mục chứa tài nguyên frontend tĩnh
+│   ├── index.html             # Trang chủ chính (Đổi tên từ moi_truong_portal.html)
+│   └── assets/
+│       ├── css/
+│       │   └── styles.css     # Định nghĩa style toàn trang, layout 3 cột & print PDF
+│       └── js/
+│           ├── app.js         # Khởi tạo auth, quản lý giao diện trạng thái đăng nhập
+│           ├── data/
+│           │   ├── laws.js              # Database văn bản pháp lý hiển thị ở tab 1
+│           │   ├── classification-db.js # Database quy định quy mô ngành & mẫu hồ sơ
+│           │   └── qcvn-db.js           # Database giới hạn thông số QCVN (mới)
+│           ├── services/
+│           │   └── classification-rules.js # Logic tính toán phân hạng công suất
+│           ├── ui/
+│           │   ├── classify-view.js     # Điều khiển nhập form, checklist & auto-save dự án
+│           │   ├── laws-view.js         # Render danh sách văn bản và bộ lọc hiệu lực
+│           │   ├── navigation.js        # Điều khiển chuyển tab trang, chặn tab riêng tư
+│           │   └── qcvn-view.js         # Điều khiển đối chiếu QCVN, parser dán text & in PDF
+│           └── utils/
+│               └── dom.js               # Helper thao tác DOM
+├── .env                       # Khai báo biến môi trường (Database, Secret...)
+├── package.json               # Quản lý thư viện cài đặt
+├── init-db.js                 # Script tự động tạo DB, tạo bảng và seed tài khoản mẫu
+└── server.js                  # Điểm khởi chạy server backend (Express.js)
 ```
 
-## Vai trò từng file
+---
 
-`moi_truong_portal.html`  
-Chứa markup chính của ứng dụng, các khu vực giao diện, form nhập thông tin và danh sách script/style được load.
+## ⚙ Hướng dẫn Cài đặt & Khởi chạy
 
-`assets/css/styles.css`  
-Chứa toàn bộ style của ứng dụng: layout, card, filter, form, result, checklist và responsive.
+### Yêu cầu hệ thống:
+*   Máy đã cài đặt **Node.js** (Khuyên dùng v18+).
+*   Đang chạy dịch vụ **PostgreSQL** (Port mặc định 5432).
 
-`assets/js/app.js`  
-Entry point của ứng dụng. File này khởi tạo navigation, bộ lọc văn bản, form phân loại và render danh sách văn bản ban đầu.
-
-`assets/js/data/laws.js`  
-Chứa dữ liệu các văn bản pháp lý hiển thị ở tab "Văn bản pháp lý".
-
-`assets/js/data/classification-db.js`  
-Chứa database phân loại dự án, checklist hồ sơ, văn bản tham chiếu, thời hạn và label hiển thị.
-
-`assets/js/services/classification-rules.js`  
-Chứa các hàm xử lý logic có thể tái sử dụng, ví dụ lấy label công suất, tìm ngưỡng phân loại theo ngành và kiểm tra điều kiện nâng nhóm.
-
-`assets/js/ui/laws-view.js`  
-Quản lý render danh sách văn bản và xử lý các nút lọc.
-
-`assets/js/ui/navigation.js`  
-Quản lý chuyển tab và cập nhật label quy mô/công suất khi người dùng chọn ngành nghề.
-
-`assets/js/ui/classify-view.js`  
-Đọc dữ liệu từ form, gọi logic phân loại, render kết quả và xử lý checklist tài liệu.
-
-`assets/js/utils/dom.js`  
-Chứa helper DOM dùng chung, giúp code UI ngắn gọn hơn.
-
-## Luồng khởi chạy
-
-1. Trình duyệt load `moi_truong_portal.html`.
-2. CSS được load từ `assets/css/styles.css`.
-3. Các file data được load trước để tạo `window.AppData`.
-4. Các file service và UI được load tiếp theo.
-5. `assets/js/app.js` lắng nghe `DOMContentLoaded` và khởi tạo ứng dụng.
-
-## Cập nhật dữ liệu
-
-### Thêm hoặc sửa văn bản pháp lý
-
-Sửa file:
-
-```text
-assets/js/data/laws.js
+### Bước 1: Cấu hình cơ sở dữ liệu
+Mở file [.env](file:///.env) ở thư mục gốc của dự án và cập nhật thông số mật khẩu PostgreSQL của máy bạn:
+```ini
+DB_USER=postgres
+DB_PASSWORD=Mật_khẩu_Postgres_của_bạn
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=etc_legalhub
+JWT_SECRET=etc_legalhub_jwt_secret_key_2026
+PORT=3000
 ```
 
-Mỗi văn bản nằm trong mảng `LAWS`, với các trường chính:
-
-```js
-{
-  id: 'ma_van_ban',
-  type: 'luat',
-  year: 2026,
-  so: '48/2026/ND-CP',
-  ten: 'Tên văn bản',
-  hieuluc: '29/01/2026',
-  status: 'valid',
-  mo_ta: 'Mô tả ngắn',
-  dieu_khoang: ['Điều khoản liên quan'],
-  note: 'Ghi chú nếu có'
-}
-```
-
-Giá trị `type` đang được dùng để lọc:
-
-- `luat`
-- `nd`
-- `tt`
-- `qcvn`
-
-Giá trị `status` đang được dùng để hiển thị trạng thái:
-
-- `valid`
-- `amended`
-- `expired`
-
-### Cập nhật ngưỡng phân loại dự án
-
-Sửa file:
-
-```text
-assets/js/data/classification-db.js
-```
-
-Mỗi ngành nằm trong object `IND_DB`, ví dụ:
-
-```js
-do_thi: {
-  lbl: 'Khu đô thị, nhà ở (ha)',
-  t: [
-    { min: 300, hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục III', ref: 'NĐ 48/2026' },
-    { min: 50, hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'NĐ 48/2026' },
-    { min: 10, hs: 'GPMT', tq: 'cap_so', phu_luc: '-', ref: 'Điều 39' }
-  ]
-}
-```
-
-Lưu ý: các mốc `min` nên sắp xếp từ lớn đến nhỏ, vì logic sẽ chọn mốc đầu tiên mà quy mô dự án đạt ngưỡng.
-
-### Cập nhật checklist hồ sơ
-
-Sửa object `CHECKLIST` trong:
-
-```text
-assets/js/data/classification-db.js
-```
-
-Các nhóm hồ sơ hiện có:
-
-- `DTM`
-- `GPMT`
-- `DKMT`
-
-## Nguyên tắc khi sửa code
-
-- Dữ liệu tĩnh nên để trong `assets/js/data`.
-- Logic xử lý nên để trong `assets/js/services`.
-- Code thao tác DOM và render giao diện nên để trong `assets/js/ui`.
-- Helper dùng chung nên để trong `assets/js/utils`.
-- Hạn chế viết logic trực tiếp trong HTML. Nên dùng `data-*` attribute và `addEventListener`.
-
-## Kiểm tra nhanh
-
-Kiểm tra cú pháp JavaScript:
-
+### Bước 2: Cài đặt thư viện Node.js
+Mở terminal tại thư mục dự án và chạy:
 ```bash
-node --check assets/js/data/laws.js
-node --check assets/js/data/classification-db.js
-node --check assets/js/services/classification-rules.js
-node --check assets/js/ui/laws-view.js
-node --check assets/js/ui/navigation.js
-node --check assets/js/ui/classify-view.js
-node --check assets/js/app.js
+npm install
 ```
 
-Kiểm tra bằng trình duyệt:
+### Bước 3: Khởi tạo database và tạo tài khoản mẫu
+Chạy câu lệnh dưới đây để hệ thống tự động kết nối PostgreSQL tạo Database, bảng biểu, và nạp dữ liệu tài khoản nhân viên mặc định:
+```bash
+npm run init-db
+```
+*Màn hình sẽ hiển thị `--- KHỞI TẠO HOÀN TẤT ---` báo thành công.*
 
-1. Mở trang.
-2. Thử bấm các filter văn bản.
-3. Chuyển sang tab phân loại.
-4. Chọn một ngành nghề, nhập quy mô, bấm "Phân loại hồ sơ".
-5. Kiểm tra kết quả và checklist hiển thị đúng.
+### Bước 4: Chạy ứng dụng
+Khởi động máy chủ web:
+```bash
+npm start
+```
+Truy cập ứng dụng tại địa chỉ: **[http://localhost:3000](http://localhost:3000)**.
 
-## Ghi chú
+---
 
-Ứng dụng này mang tính hỗ trợ tra cứu và tham khảo nội bộ. Khi áp dụng vào hồ sơ thực tế, cần đối chiếu lại với văn bản pháp lý mới nhất và quy định của cơ quan có thẩm quyền tại thời điểm lập hồ sơ.
+## 🔑 Danh sách tài khoản mẫu (Nội bộ doanh nghiệp)
+
+Ứng dụng không thiết kế tính năng Đăng ký tài khoản vì giới hạn sử dụng trong nội bộ công ty. Các tài khoản dưới đây được tạo sẵn tự động:
+
+| Tên đăng nhập | Mật khẩu | Tên nhân viên | Vai trò |
+| :--- | :--- | :--- | :--- |
+| **admin** | `admin123` | Người quản trị | Quản trị viên |
+| **staff1** | `staff123` | Nhân viên 1 | Chuyên viên tư vấn |
+| **staff2** | `staff223` | Nhân viên 2 | Chuyên viên tư vấn |
+
+---
+
+## 📝 Hướng dẫn cập nhật và mở rộng dữ liệu
+
+*   **Để chỉnh sửa hoặc thêm văn bản pháp lý:** Thay đổi mảng `LAWS` trong file [public/assets/js/data/laws.js](file:///d:/Download/demo/public/assets/js/data/laws.js).
+*   **Để cập nhật các QCVN đối chiếu:** Sửa đổi hoặc thêm cấu trúc chỉ tiêu trong tệp [public/assets/js/data/qcvn-db.js](file:///d:/Download/demo/public/assets/js/data/qcvn-db.js). Mỗi chỉ tiêu cần có các thuộc tính:
+    *   `key`: Định danh (Ví dụ: `BOD5`, `COD`...).
+    *   `ten`: Tên hiển thị đầy đủ.
+    *   `don_vi`: Đơn vị đo (`mg/L`, `µg/m³`...).
+    *   `loai`: Loại kiểm tra (`max` để so sánh nhỏ hơn hoặc bằng giới hạn, `min` cho lớn hơn hoặc bằng giới hạn, `range` cho khoảng pH).
+    *   `gioi_han`: Ngưỡng số cho phép (với `max` hoặc `min`).
+    *   `min` & `max`: Ngưỡng cho khoảng (với `range`).
+*   **Bảo trì quy định phân loại dự án:** Cập nhật bảng tra cứu ngành nghề `IND_DB` và danh mục tài liệu cần chuẩn bị `CHECKLIST` tại tệp [public/assets/js/data/classification-db.js](file:///d:/Download/demo/public/assets/js/data/classification-db.js).
+
+---
+
+## ⚠ Ghi chú sử dụng
+Ứng dụng này phục vụ mục đích tra cứu nghiệp vụ, đối chiếu nhanh số liệu và lưu trữ hồ sơ công việc nội bộ của ETC. Khi lập hồ sơ chính thức gửi cơ quan chức năng, nhân viên cần đối chiếu trực tiếp lại với các văn bản pháp luật gốc có hiệu lực tại thời điểm nộp hồ sơ để đảm bảo tính pháp lý tuyệt đối.
