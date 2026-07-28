@@ -2,7 +2,11 @@
 (function (global) {
   'use strict';
 
-  const { QCVN_DATA } = global.AppData;
+  let QCVN_DATA = {};
+  let _loadedSamples = [];
+  let _currentSamplePage = 1;
+  let _qvUnsavedChanges = false;
+  let _qvCurrentSampleId = null;
 
   // Sub-types for each environmental category
   const SUB_TYPES = {
@@ -13,8 +17,10 @@
       { value: 'qcvn08_b2', text: 'Cột B2 - Các mục đích khác' }
     ],
     nuoc_thai_cn: [
-      { value: 'qcvn40_a', text: 'Cột A - Xả vào nguồn dùng cấp nước sinh hoạt' },
-      { value: 'qcvn40_b', text: 'Cột B - Xả vào nguồn không dùng cấp nước sinh hoạt' }
+      { value: 'qcvn40_a_low', text: 'Cột A - Lưu lượng xả ≤ 2000 m³/ngày' },
+      { value: 'qcvn40_a_high', text: 'Cột A - Lưu lượng xả > 2000 m³/ngày' },
+      { value: 'qcvn40_b_low', text: 'Cột B - Lưu lượng xả ≤ 2000 m³/ngày' },
+      { value: 'qcvn40_b_high', text: 'Cột B - Lưu lượng xả > 2000 m³/ngày' }
     ],
     nuoc_thai_sh: [
       { value: 'qcvn14_a', text: 'Cột A - Khu vực nhạy cảm' },
@@ -127,9 +133,9 @@
 
   function removeAccents(str) {
     return str.normalize('NFD')
-              .replace(/[\u0300-\u036f]/g, '')
-              .replace(/đ/g, 'd')
-              .replace(/Đ/g, 'D');
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D');
   }
 
   function matchKey(nameStr) {
@@ -151,7 +157,7 @@
         let nameStr = parts[0].trim();
         let valStr = parts[1].trim();
         nameStr = nameStr.replace(/^\d+[\.\/\)\-]\s*/, ''); // Strip line numbers
-        
+
         let val = parseFloat(valStr.replace(',', '.'));
         if (isNaN(val)) {
           for (let i = 1; i < parts.length; i++) {
@@ -246,7 +252,10 @@
       const currentIdx = paramIdx;
       const inp = document.getElementById(`inp-${key}-${currentIdx}`);
       if (inp) {
-        const handler = () => evaluate(key, currentIdx);
+        const handler = () => {
+          _qvUnsavedChanges = true;
+          evaluate(key, currentIdx);
+        };
         inp.addEventListener('change', handler);
         inp.addEventListener('input', handler);
       }
@@ -280,7 +289,7 @@
         if (p.loai === 'range') {
           if (val < p.min || val > p.max) {
             status = 'fail';
-            resEl.innerHTML = `<span class="result-fail">✗ Vượt ngưỡng</span><br><span style="font-size:11px;color:var(--text3)">Khoảng: ${p.min}–${p.max}</span>`;
+            resEl.innerHTML = `<span class="result-fail">✗ Vượt ngưỡng</span>`;
           } else {
             const distMin = (val - p.min) / (p.max - p.min);
             const distMax = (p.max - val) / (p.max - p.min);
@@ -293,7 +302,7 @@
           const ratio = p.gioi_han > 0 ? val / p.gioi_han : 1;
           if (val < p.gioi_han) {
             status = 'fail';
-            resEl.innerHTML = `<span class="result-fail">✗ Thấp hơn ngưỡng</span><br><span style="font-size:11px;color:var(--text3)">Cần ≥ ${p.gioi_han}</span>`;
+            resEl.innerHTML = `<span class="result-fail">✗ Thấp hơn ngưỡng</span>`;
           } else {
             status = ratio < 1.1 ? 'near' : 'pass';
             resEl.innerHTML = status === 'near'
@@ -372,6 +381,7 @@
   function clearValues() {
     const key = document.getElementById('qv-sub-type').value;
     const data = QCVN_DATA[key];
+    if (!data) return;
     let paramIdx = 0;
     for (const p of data.tham_so) {
       if (p.nhom) continue;
@@ -388,6 +398,13 @@
     const pasteArea = document.getElementById('qv-paste-area');
     if (pasteArea) pasteArea.value = '';
     document.getElementById('qv-summary').style.display = 'none';
+
+    _qvUnsavedChanges = false;
+    _qvCurrentSampleId = null;
+    document.getElementById('qv-sample-id').value = '';
+    document.getElementById('qv-name').value = '';
+
+    document.querySelectorAll('#saved-qcvn-samples-list .project-btn').forEach(btn => btn.classList.remove('active'));
   }
 
   function handleQuickPaste() {
@@ -403,9 +420,7 @@
     const data = QCVN_DATA[key];
     if (!data) return;
 
-    // Reset current values before parsing new ones
     clearValues();
-    // Re-fill the paste area content since clearValues wipes it
     pasteArea.value = text;
 
     const parsedValues = parsePastedText(text);
@@ -426,6 +441,7 @@
     });
 
     if (matchedCount > 0) {
+      _qvUnsavedChanges = true;
       alert(`Đã nhận diện và điền tự động ${matchedCount} thông số thành công!`);
     } else {
       alert('Không nhận diện được thông số nào. Vui lòng kiểm tra lại định dạng bảng số liệu dán vào.');
@@ -474,13 +490,11 @@
   }
 
   function exportQcvnPDF() {
-    // Inject dynamic print-specific header details before printing
     const key = document.getElementById('qv-sub-type').value;
     const data = QCVN_DATA[key];
     const tenMau = document.getElementById('qv-name').value || 'Mẫu không rõ tên';
     const now = new Date().toLocaleString('vi-VN');
 
-    // Create a temporary element for printing header
     let printHeader = document.getElementById('qv-print-header');
     if (!printHeader) {
       printHeader = document.createElement('div');
@@ -492,7 +506,7 @@
 
     printHeader.innerHTML = `
       <div style="text-align: center; margin-bottom: 24px; font-family: 'Be Vietnam Pro', sans-serif;">
-        <h2 style="font-family: 'Playfair Display', serif; font-size: 24px; color: #1D5C3A; margin-bottom: 4px;">ETC LEGALHUB — PHÒNG THÍ NGHIỆM VILAS 495</h2>
+        <h2 style="font-family: 'Playfair Display', serif; font-size: 24px; color: #1D5C3A; margin-bottom: 4px;">ETC — PHÒNG THÍ NGHIỆM</h2>
         <h3 style="font-size: 16px; font-weight: 600; color: #1A1917; margin-bottom: 16px; text-transform: uppercase;">BÁO CÁO ĐỐI CHIẾU KẾT QUẢ QUAN TRẮC VỚI QCVN</h3>
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; margin-bottom: 20px;">
           <tr>
@@ -516,22 +530,321 @@
       </div>
     `;
 
-    // Trigger standard browser print which supports save to PDF
     window.print();
   }
 
-  function initQcvnView() {
-    const typeSelect = document.getElementById('qv-type');
-    const parseBtn = document.getElementById('btn-parse-paste');
-    
-    if (typeSelect) {
-      typeSelect.addEventListener('change', updateQcvnSubTypes);
+  function loadQcvnSamples(page = 1) {
+    if (!global.CurrentUser) {
+      const sidebar = document.getElementById('qcvn-sidebar-container');
+      const grid = document.getElementById('qv-grid-container');
+      const btnSave = document.getElementById('btn-save-qcvn-sample');
+      if (sidebar) sidebar.style.display = 'none';
+      if (grid) grid.classList.remove('has-sidebar');
+      if (btnSave) btnSave.style.display = 'none';
+      return;
     }
+
+    _currentSamplePage = page;
+
+    const sidebar = document.getElementById('qcvn-sidebar-container');
+    const grid = document.getElementById('qv-grid-container');
+    const btnSave = document.getElementById('btn-save-qcvn-sample');
+    if (sidebar) sidebar.style.display = 'block';
+    if (grid) grid.classList.add('has-sidebar');
+    if (btnSave) btnSave.style.display = 'inline-block';
+
+    fetch(`/api/qcvns/samples?page=${page}&limit=5`)
+      .then(res => {
+        if (!res.ok) throw new Error('Không thể tải danh sách mẫu.');
+        return res.json();
+      })
+      .then(data => {
+        _loadedSamples = data.samples || [];
+        renderQcvnSamplesSidebar(_loadedSamples, data.pagination || { currentPage: 1, totalPages: 1 });
+      })
+      .catch(err => {
+        console.error('Lỗi tải danh sách mẫu QCVN:', err);
+      });
+  }
+
+  function renderQcvnSamplesSidebar(samples, pagination) {
+    const listContainer = document.getElementById('saved-qcvn-samples-list');
+    if (!listContainer) return;
+
+    if (samples.length === 0) {
+      listContainer.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">Chưa có mẫu nào</div>';
+      renderQcvnPagination(pagination);
+      return;
+    }
+
+    let html = '';
+    samples.forEach(s => {
+      const activeClass = _qvCurrentSampleId && parseInt(_qvCurrentSampleId) === s.id ? 'active' : '';
+      html += `
+        <div class="project-item">
+          <button class="project-btn ${activeClass}" onclick="AppQcvnView.selectQcvnSample(${s.id})">${s.name}</button>
+          <button class="btn-delete-project" onclick="AppQcvnView.deleteQcvnSample(${s.id})" title="Xóa kết quả mẫu">🗑️</button>
+        </div>
+      `;
+    });
+    listContainer.innerHTML = html;
+
+    renderQcvnPagination(pagination);
+  }
+
+  function renderQcvnPagination(pagination) {
+    const pagContainer = document.getElementById('qcvn-samples-pagination');
+    if (!pagContainer) return;
+
+    const totalPages = pagination.totalPages || 0;
+    const current = pagination.currentPage || 1;
+
+    if (totalPages <= 1) {
+      pagContainer.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    html += `<button class="pagination-btn" ${current === 1 ? 'disabled' : ''} onclick="AppQcvnView.loadQcvnSamples(${current - 1})">&lt;</button>`;
+
+    for (let i = 1; i <= totalPages; i++) {
+      html += `<button class="pagination-btn ${i === current ? 'active' : ''}" onclick="AppQcvnView.loadQcvnSamples(${i})">${i}</button>`;
+    }
+
+    html += `<button class="pagination-btn" ${current === totalPages ? 'disabled' : ''} onclick="AppQcvnView.loadQcvnSamples(${current + 1})">&gt;</button>`;
+
+    pagContainer.innerHTML = html;
+  }
+
+  function selectQcvnSample(id) {
+    const sample = _loadedSamples.find(s => s.id === id);
+    if (!sample) return;
+
+    if (_qvUnsavedChanges) {
+      if (!confirm('Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn mở mẫu này và ghi đè dữ liệu hiện tại không?')) {
+        return;
+      }
+    }
+
+    _qvUnsavedChanges = false;
+    _qvCurrentSampleId = sample.id;
+    document.getElementById('qv-sample-id').value = sample.id;
+    document.getElementById('qv-name').value = sample.name;
+
+    document.getElementById('qv-type').value = sample.type;
+
+    updateQcvnSubTypes();
+    document.getElementById('qv-sub-type').value = sample.sub_type;
+
+    buildQcvnTable();
+
+    const key = sample.sub_type;
+    const data = QCVN_DATA[key];
+    if (data) {
+      let paramIdx = 0;
+      data.tham_so.forEach(p => {
+        if (p.nhom) return;
+        const inp = document.getElementById(`inp-${key}-${paramIdx}`);
+        if (inp) {
+          if (sample.values && sample.values[p.key] !== undefined) {
+            inp.value = sample.values[p.key];
+            evaluate(key, paramIdx);
+          } else {
+            inp.value = '';
+            const res = document.getElementById(`res-${key}-${paramIdx}`);
+            const bar = document.getElementById(`bar-${key}-${paramIdx}`);
+            const row = document.getElementById(`row-${key}-${paramIdx}`);
+            if (res) res.innerHTML = '<span class="result-empty">—</span>';
+            if (bar) bar.innerHTML = '';
+            if (row) row.classList.remove('row-pass', 'row-fail', 'row-near');
+          }
+        }
+        paramIdx++;
+      });
+    }
+
+    document.querySelectorAll('#saved-qcvn-samples-list .project-btn').forEach(btn => btn.classList.remove('active'));
+    loadQcvnSamples(_currentSamplePage);
+  }
+
+  function saveQcvnSample() {
+    const name = document.getElementById('qv-name').value.trim();
+    if (!name) {
+      alert('Vui lòng nhập tên mẫu / vị trí để lưu kết quả mẫu!');
+      document.getElementById('qv-name').focus();
+      return;
+    }
+
+    const type = document.getElementById('qv-type').value;
+    const subType = document.getElementById('qv-sub-type').value;
+    const data = QCVN_DATA[subType];
+    if (!data) return;
+
+    const values = {};
+    let paramIdx = 0;
+    data.tham_so.forEach(p => {
+      if (p.nhom) return;
+      const inp = document.getElementById(`inp-${subType}-${paramIdx}`);
+      if (inp && inp.value !== '') {
+        values[p.key] = parseFloat(inp.value);
+      }
+      paramIdx++;
+    });
+
+    const payload = {
+      id: _qvCurrentSampleId,
+      name,
+      type,
+      sub_type: subType,
+      values
+    };
+
+    fetch('/api/qcvns/samples', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Không thể lưu kết quả mẫu.');
+        return res.json();
+      })
+      .then(result => {
+        alert(result.message || 'Đã lưu mẫu kết quả quan trắc thành công!');
+        _qvUnsavedChanges = false;
+        _qvCurrentSampleId = result.sample.id;
+        document.getElementById('qv-sample-id').value = result.sample.id;
+        loadQcvnSamples(_currentSamplePage);
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Đã xảy ra lỗi khi lưu mẫu kết quả quan trắc!');
+      });
+  }
+
+  function deleteQcvnSample(id) {
+    if (event) event.stopPropagation();
+
+    const sample = _loadedSamples.find(s => s.id === id);
+    const sampleName = sample ? sample.name : 'mẫu này';
+
+    if (!confirm(`Bạn có chắc chắn muốn xóa mẫu "${sampleName}"? Hành động này không thể khôi phục!`)) {
+      return;
+    }
+
+    fetch(`/api/qcvns/samples/${id}`, {
+      method: 'DELETE'
+    })
+      .then(res => {
+        if (!res.ok) throw new Error('Không thể xóa kết quả mẫu.');
+        return res.json();
+      })
+      .then(data => {
+        alert('Đã xóa mẫu kết quả quan trắc thành công!');
+        if (_qvCurrentSampleId && parseInt(_qvCurrentSampleId) === id) {
+          clearValues();
+        }
+        loadQcvnSamples(_currentSamplePage);
+      })
+      .catch(err => {
+        console.error(err);
+        alert('Đã xảy ra lỗi khi xóa mẫu kết quả quan trắc!');
+      });
+  }
+
+  function hasUnsavedChanges() {
+    return _qvUnsavedChanges;
+  }
+
+  function resetUnsavedChanges() {
+    _qvUnsavedChanges = false;
+  }
+
+  function initQcvnView() {
+    QCVN_DATA = global.AppData.QCVN_DATA || {};
+    const typeSelect = document.getElementById('qv-type');
+    const subTypeSelect = document.getElementById('qv-sub-type');
+    const parseBtn = document.getElementById('btn-parse-paste');
+    const saveBtn = document.getElementById('btn-save-qcvn-sample');
+    const newSampleBtn = document.getElementById('btn-new-qcvn-sample');
+    const nameInput = document.getElementById('qv-name');
+
+    if (typeSelect) {
+      let prevTypeVal = '';
+      typeSelect.addEventListener('focus', () => {
+        prevTypeVal = typeSelect.value;
+      });
+      typeSelect.addEventListener('change', () => {
+        if (_qvUnsavedChanges) {
+          if (!confirm('Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn chuyển đổi loại quy chuẩn và mất dữ liệu hiện tại không?')) {
+            typeSelect.value = prevTypeVal;
+            return;
+          }
+        }
+        _qvUnsavedChanges = false;
+        _qvCurrentSampleId = null;
+        document.getElementById('qv-sample-id').value = '';
+        document.getElementById('qv-name').value = '';
+        updateQcvnSubTypes();
+        prevTypeVal = typeSelect.value;
+      });
+    }
+
+    if (subTypeSelect) {
+      let prevSubTypeVal = '';
+      subTypeSelect.addEventListener('focus', () => {
+        prevSubTypeVal = subTypeSelect.value;
+      });
+      subTypeSelect.addEventListener('change', () => {
+        if (_qvUnsavedChanges) {
+          if (!confirm('Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn chuyển phân loại và mất dữ liệu hiện tại không?')) {
+            subTypeSelect.value = prevSubTypeVal;
+            return;
+          }
+        }
+        _qvUnsavedChanges = false;
+        _qvCurrentSampleId = null;
+        document.getElementById('qv-sample-id').value = '';
+        document.getElementById('qv-name').value = '';
+        buildQcvnTable();
+        prevSubTypeVal = subTypeSelect.value;
+      });
+    }
+
     if (parseBtn) {
       parseBtn.addEventListener('click', handleQuickPaste);
     }
-    
-    // Initial populate
+
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveQcvnSample);
+    }
+
+    if (newSampleBtn) {
+      newSampleBtn.addEventListener('click', () => {
+        if (_qvUnsavedChanges) {
+          if (!confirm('Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn tạo mẫu mới và xóa trắng bảng hiện tại không?')) {
+            return;
+          }
+        }
+        clearValues();
+      });
+    }
+
+    if (nameInput) {
+      nameInput.addEventListener('input', () => {
+        _qvUnsavedChanges = true;
+      });
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (_qvUnsavedChanges) {
+        const msg = 'Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn rời đi và mất dữ liệu này không?';
+        e.returnValue = msg;
+        return msg;
+      }
+    });
+
     updateQcvnSubTypes();
   }
 
@@ -544,7 +857,15 @@
     clearValues,
     handleQuickPaste,
     exportQcvn,
-    exportQcvnPDF
+    exportQcvnPDF,
+    loadQcvnSamples,
+    renderQcvnSamplesSidebar,
+    renderQcvnPagination,
+    selectQcvnSample,
+    saveQcvnSample,
+    deleteQcvnSample,
+    hasUnsavedChanges,
+    resetUnsavedChanges
   };
 
 })(window);

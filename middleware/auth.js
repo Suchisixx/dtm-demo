@@ -20,6 +20,16 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  requireAuth(req, res, () => {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Quyền truy cập bị từ chối! Bạn không có quyền Quản trị.' });
+    }
+    next();
+  });
+}
+
 module.exports = {
-  requireAuth
+  requireAuth,
+  requireAdmin
 };

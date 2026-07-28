@@ -3,6 +3,21 @@
   'use strict';
 
 function showPage(id,btn){
+  const activeBtn = document.querySelector('.nav-btn.active');
+  const fromQcvn = activeBtn && activeBtn.dataset.page === 'qcvn';
+  const toQcvn = id === 'qcvn';
+
+  if (fromQcvn && !toQcvn) {
+    if (global.AppQcvnView && typeof global.AppQcvnView.hasUnsavedChanges === 'function' && global.AppQcvnView.hasUnsavedChanges()) {
+      if (!confirm('Bạn có thay đổi chưa lưu trên bảng QCVN. Bạn có chắc chắn muốn rời đi mà không lưu không?')) {
+        return;
+      }
+      if (global.AppQcvnView.resetUnsavedChanges) {
+        global.AppQcvnView.resetUnsavedChanges();
+      }
+    }
+  }
+
   if (btn.classList.contains('tab-private') && !global.CurrentUser) {
     if (global.AppAuth && global.AppAuth.showLoginModal) {
       global.AppAuth.showLoginModal();

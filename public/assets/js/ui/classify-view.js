@@ -360,7 +360,25 @@
     document.getElementById('f-cap').value = project.form_data.cap;
     document.getElementById('f-nt').value = project.form_data.nt;
     document.getElementById('f-kt').value = project.form_data.kt;
-    document.getElementById('f-tinh').value = project.form_data.tinh;
+    
+    const tinhSelect = document.getElementById('f-tinh');
+    if (tinhSelect) {
+      const val = project.form_data.tinh || '';
+      let exists = false;
+      for (let i = 0; i < tinhSelect.options.length; i++) {
+        if (tinhSelect.options[i].value === val) {
+          exists = true;
+          break;
+        }
+      }
+      if (!exists && val) {
+        const newOpt = document.createElement('option');
+        newOpt.value = val;
+        newOpt.textContent = val;
+        tinhSelect.appendChild(newOpt);
+      }
+      tinhSelect.value = val;
+    }
     
     document.getElementById('ck-rung').checked = project.form_data.rung;
     document.getElementById('ck-lua').checked = project.form_data.lua;

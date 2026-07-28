@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 // Tất cả các tuyến dự án yêu cầu người dùng phải đăng nhập
 router.use(requireAuth);
@@ -67,9 +68,19 @@ router.post('/', async (req, res) => {
         return res.status(403).json({ error: 'Không tìm thấy dự án hoặc bạn không có quyền cập nhật!' });
       }
 
+      const project = updateRes.rows[0];
+      
+      // Ghi log bảo mật và truy vấn
+      await logAudit(userId, 'UPDATE_PROJECT', req, { id: project.id, name: project.name });
+      await db.query(
+        `INSERT INTO query_logs (user_id, query_type, input_params, output_result)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, 'classification', JSON.stringify(form_data), JSON.stringify(checklist_state || {})]
+      );
+
       return res.json({
         message: 'Cập nhật dự án thành công!',
-        project: updateRes.rows[0]
+        project: project
       });
     } else {
       // TẠO MỚI dự án
@@ -80,9 +91,19 @@ router.post('/', async (req, res) => {
         [userId, name, JSON.stringify(form_data), JSON.stringify(checklist_state || {})]
       );
 
+      const project = insertRes.rows[0];
+
+      // Ghi log bảo mật và truy vấn
+      await logAudit(userId, 'CREATE_PROJECT', req, { id: project.id, name: project.name });
+      await db.query(
+        `INSERT INTO query_logs (user_id, query_type, input_params, output_result)
+         VALUES ($1, $2, $3, $4)`,
+        [userId, 'classification', JSON.stringify(form_data), JSON.stringify(checklist_state || {})]
+      );
+
       return res.json({
         message: 'Lưu dự án thành công!',
-        project: insertRes.rows[0]
+        project: project
       });
     }
   } catch (error) {
@@ -106,9 +127,12 @@ router.delete('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Không tìm thấy dự án hoặc bạn không có quyền xóa!' });
     }
 
+    const deletedProject = deleteRes.rows[0];
+    await logAudit(userId, 'DELETE_PROJECT', req, { id: deletedProject.id, name: deletedProject.name });
+
     return res.json({
       message: 'Xóa dự án thành công!',
-      deletedProject: deleteRes.rows[0]
+      deletedProject: deletedProject
     });
   } catch (error) {
     console.error('Lỗi xóa dự án:', error);

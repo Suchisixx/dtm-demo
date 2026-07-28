@@ -17,6 +17,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Đăng ký các API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/projects'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/laws', require('./routes/laws'));
+app.use('/api/qcvns', require('./routes/qcvns'));
+
 
 // Tuyến fallback: Trả về trang chủ cho bất kỳ request nào không khớp
 app.get('*', (req, res) => {
@@ -25,8 +29,6 @@ app.get('*', (req, res) => {
 
 // Chạy server
 app.listen(PORT, () => {
-  console.log(`===================================================`);
-  console.log(`🚀 ETC LegalHub server đang hoạt động tại:`);
-  console.log(`👉 http://localhost:${PORT}`);
-  console.log(`===================================================`);
+  console.log(`ETC server đang hoạt động tại:`);
+  console.log(`http://localhost:${PORT}`);
 });

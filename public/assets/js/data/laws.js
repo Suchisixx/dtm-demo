@@ -16,6 +16,7 @@ const LAWS = [
     mo_ta: 'Bản hợp nhất Nghị định 08/2022 với toàn bộ sửa đổi: NĐ 05/2025, NĐ 48/2026, NĐ 110/2026. ĐÂY LÀ VĂN BẢN ĐỌC CHÍNH khi tra cứu ngưỡng phân loại dự án, hồ sơ GPMT, ĐKMT. Không cần đọc riêng từng NĐ sửa đổi.',
     dieu_khoang: ['Hợp nhất NĐ 08/2022 + NĐ 05/2025 + NĐ 48/2026 + NĐ 110/2026', 'Phụ lục III — Nhóm I (Bộ NNMT)', 'Phụ lục IV — Nhóm II (UBND tỉnh)', 'Phụ lục II — Ngành nghề nguy cơ ô nhiễm cao'],
     note: '⭐ QUAN TRỌNG NHẤT — Dùng làm nguồn nền thay cho NĐ 08/2022 bản gốc.',
+    link: 'https://www.google.com/search?q=Van+ban+hop+nhat+49/VBHN-BNNMT+site:luatmoitruong.vn'
   },
 
   // ══════════════════════════════════════════════════════════════
@@ -29,6 +30,7 @@ const LAWS = [
     mo_ta: 'Luật khung về BVMT, thay thế Luật BVMT 2014. Quy định phân loại dự án Nhóm I–IV, thẩm quyền thẩm định ĐTM, cấp GPMT, đăng ký môi trường. Nền tảng pháp lý của toàn bộ hệ thống.',
     dieu_khoang: ['Điều 25 — Tiêu chí phân loại Nhóm I (tuyệt đối + bổ sung)', 'Điều 26 — Tiêu chí phân loại Nhóm II, III, IV', 'Điều 35 — Thẩm quyền và thủ tục thẩm định ĐTM', 'Điều 37 — Trường hợp phải lập lại ĐTM', 'Điều 39 — Đối tượng phải có GPMT', 'Điều 43 — Thẩm quyền cấp GPMT', 'Điều 49 — Đối tượng đăng ký môi trường (Nhóm IV)'],
     note: 'Đã được sửa đổi bởi Luật 146/2025/QH15. Kiểm tra nội dung sửa đổi trước khi dùng.',
+    link: 'https://www.google.com/search?q=Luat+Bao+ve+moi+truong+2020+site:luatmoitruong.vn'
   },
   {
     id: 'luat_146_2025', type: 'luat', year: 2025, sortDate: '2025-06-27',

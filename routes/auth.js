@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { logAudit } = require('../utils/audit');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'etc_legalhub_jwt_secret_key_2026';
@@ -19,13 +20,15 @@ router.post('/login', async (req, res) => {
     const userRes = await db.query('SELECT * FROM users WHERE username = $1', [username.toLowerCase().trim()]);
     
     if (userRes.rowCount === 0) {
+      await logAudit(null, 'LOGIN_FAILED', req, { username });
       return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không chính xác!' });
     }
 
     const user = userRes.rows[0];
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password_hash);
     
     if (!isMatch) {
+      await logAudit(user.id, 'LOGIN_FAILED', req, { username });
       return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không chính xác!' });
     }
 
@@ -33,7 +36,8 @@ router.post('/login', async (req, res) => {
     const payload = {
       id: user.id,
       username: user.username,
-      fullName: user.full_name
+      fullName: user.full_name,
+      role: user.role
     };
     
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
@@ -45,12 +49,15 @@ router.post('/login', async (req, res) => {
       maxAge: 24 * 60 * 60 * 1000 // 24 giờ
     });
 
+    await logAudit(user.id, 'LOGIN', req);
+
     return res.json({
       message: 'Đăng nhập thành công!',
       user: {
         id: user.id,
         username: user.username,
-        fullName: user.full_name
+        fullName: user.full_name,
+        role: user.role
       }
     });
   } catch (error) {
@@ -60,7 +67,16 @@ router.post('/login', async (req, res) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
+  const token = req.cookies.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      await logAudit(decoded.id, 'LOGOUT', req);
+    } catch (e) {
+      // ignore
+    }
+  }
   res.clearCookie('token');
   return res.json({ message: 'Đăng xuất thành công!' });
 });
