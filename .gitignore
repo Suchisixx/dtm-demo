@@ -1,3 +1,17 @@
-node_modules 
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Environment files
 .env
-init-db.js
+backend/.env
+
+# Build outputs
+frontend/dist/
+backend/public/
+
+# OS/IDE files
+.DS_Store
+.vscode/
+.idea/
+*.log

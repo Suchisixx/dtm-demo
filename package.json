@@ -1,18 +1,15 @@
 {
-  "name": "etc-legalhub",
+  "name": "etc-legalhub-monorepo",
   "version": "1.0.0",
-  "description": "ETC Environmental Legal Hub App with Auth and Project Storage",
-  "main": "server.js",
+  "description": "ETC LegalHub Monorepo Controller",
   "scripts": {
-    "start": "node server.js",
-    "init-db": "node init-db.js"
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend": "npm start --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "dev": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
   },
-  "dependencies": {
-    "bcryptjs": "^2.4.3",
-    "cookie-parser": "^1.4.6",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "jsonwebtoken": "^9.0.2",
-    "pg": "^8.11.5"
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }
