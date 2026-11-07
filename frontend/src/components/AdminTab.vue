@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { IND_DB } from '../data/classification-db.js'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
@@ -405,6 +405,42 @@ const filteredLaws = computed(() => {
   })
 })
 
+// Phân trang Quản lý Quy chuẩn & Văn bản pháp lý
+const lawPageSize = ref(10)
+const lawCurrentPage = ref(1)
+const lawTotalPages = computed(() => Math.max(1, Math.ceil(filteredLaws.value.length / lawPageSize.value)))
+const paginatedLaws = computed(() => {
+  const start = (lawCurrentPage.value - 1) * lawPageSize.value
+  return filteredLaws.value.slice(start, start + lawPageSize.value)
+})
+watch([lawSearchQuery, lawFilterType, lawPageSize], () => {
+  lawCurrentPage.value = 1
+})
+
+// Phân trang Quản lý Dự án
+const projectPageSize = ref(10)
+const projectCurrentPage = ref(1)
+const projectTotalPages = computed(() => Math.max(1, Math.ceil(projects.value.length / projectPageSize.value)))
+const paginatedProjects = computed(() => {
+  const start = (projectCurrentPage.value - 1) * projectPageSize.value
+  return projects.value.slice(start, start + projectPageSize.value)
+})
+watch([projectPageSize], () => {
+  projectCurrentPage.value = 1
+})
+
+// Phân trang Quản lý Nhân viên
+const userPageSize = ref(10)
+const userCurrentPage = ref(1)
+const userTotalPages = computed(() => Math.max(1, Math.ceil(users.value.length / userPageSize.value)))
+const paginatedUsers = computed(() => {
+  const start = (userCurrentPage.value - 1) * userPageSize.value
+  return users.value.slice(start, start + userPageSize.value)
+})
+watch([userPageSize], () => {
+  userCurrentPage.value = 1
+})
+
 onMounted(() => {
   fetchUsers()
 })
@@ -448,7 +484,7 @@ onMounted(() => {
                 <tr v-if="users.length === 0">
                   <td colspan="5" style="text-align:center;color:var(--text3)">Chưa có tài khoản nào được tạo.</td>
                 </tr>
-                <tr v-for="u in users" :key="u.id">
+                <tr v-for="u in paginatedUsers" :key="u.id">
                   <td><strong>{{ u.username }}</strong></td>
                   <td>{{ u.full_name }}</td>
                   <td><span class="chip-status" :class="u.role === 'admin' ? 'valid' : 'amended'">{{ u.role.toUpperCase() }}</span></td>
@@ -464,6 +500,28 @@ onMounted(() => {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Phân trang Users -->
+          <div v-if="users.length > 0"
+            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
+            <div style="font-size:13px;color:var(--text2)">
+              Hiển thị <strong>{{ (userCurrentPage - 1) * userPageSize + 1 }}</strong> – <strong>{{ Math.min(userCurrentPage * userPageSize, users.length) }}</strong> / {{ users.length }} nhân viên
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="pagination-btn" :disabled="userCurrentPage === 1" @click="userCurrentPage--">‹</button>
+              <button v-for="pg in userTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === userCurrentPage }" @click="userCurrentPage = pg">{{ pg }}</button>
+              <button class="pagination-btn" :disabled="userCurrentPage === userTotalPages" @click="userCurrentPage++">›</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+              <span>Hiển thị:</span>
+              <select v-model.number="userPageSize"
+                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
+                <option :value="10">10 / trang</option>
+                <option :value="20">20 / trang</option>
+                <option :value="50">50 / trang</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -487,7 +545,7 @@ onMounted(() => {
                 <tr v-if="projects.length === 0">
                   <td colspan="5" style="text-align:center;color:var(--text3)">Chưa có dự án nào trên hệ thống.</td>
                 </tr>
-                <tr v-for="p in projects" :key="p.id">
+                <tr v-for="p in paginatedProjects" :key="p.id">
                   <td><strong>{{ p.name }}</strong></td>
                   <td>{{ p.owner_name }} ({{ p.owner_username }})</td>
                   <td>
@@ -504,6 +562,28 @@ onMounted(() => {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Phân trang Projects -->
+          <div v-if="projects.length > 0"
+            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
+            <div style="font-size:13px;color:var(--text2)">
+              Hiển thị <strong>{{ (projectCurrentPage - 1) * projectPageSize + 1 }}</strong> – <strong>{{ Math.min(projectCurrentPage * projectPageSize, projects.length) }}</strong> / {{ projects.length }} dự án
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="pagination-btn" :disabled="projectCurrentPage === 1" @click="projectCurrentPage--">‹</button>
+              <button v-for="pg in projectTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === projectCurrentPage }" @click="projectCurrentPage = pg">{{ pg }}</button>
+              <button class="pagination-btn" :disabled="projectCurrentPage === projectTotalPages" @click="projectCurrentPage++">›</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+              <span>Hiển thị:</span>
+              <select v-model.number="projectPageSize"
+                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
+                <option :value="10">10 / trang</option>
+                <option :value="20">20 / trang</option>
+                <option :value="50">50 / trang</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -544,7 +624,7 @@ onMounted(() => {
                 <tr v-if="filteredLaws.length === 0">
                   <td colspan="5" style="text-align:center;color:var(--text3)">Không tìm thấy văn bản phù hợp.</td>
                 </tr>
-                <tr v-for="l in filteredLaws" :key="l.id">
+                <tr v-for="l in paginatedLaws" :key="l.id">
                   <td><code>{{ l.id }}</code></td>
                   <td><span class="chip-status valid" style="background:#eaf2f8;color:#2980b9">{{ getLawTypeLabel(l.type) }}</span></td>
                   <td>
@@ -561,6 +641,28 @@ onMounted(() => {
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Phân trang Quy chuẩn & Văn bản pháp lý -->
+          <div v-if="filteredLaws.length > 0"
+            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
+            <div style="font-size:13px;color:var(--text2)">
+              Hiển thị <strong>{{ (lawCurrentPage - 1) * lawPageSize + 1 }}</strong> – <strong>{{ Math.min(lawCurrentPage * lawPageSize, filteredLaws.length) }}</strong> / {{ filteredLaws.length }} quy chuẩn & văn bản
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="pagination-btn" :disabled="lawCurrentPage === 1" @click="lawCurrentPage--">‹</button>
+              <button v-for="pg in lawTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === lawCurrentPage }" @click="lawCurrentPage = pg">{{ pg }}</button>
+              <button class="pagination-btn" :disabled="lawCurrentPage === lawTotalPages" @click="lawCurrentPage++">›</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+              <span>Hiển thị:</span>
+              <select v-model.number="lawPageSize"
+                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
+                <option :value="10">10 / trang</option>
+                <option :value="20">20 / trang</option>
+                <option :value="50">50 / trang</option>
+              </select>
+            </div>
           </div>
         </div>
 

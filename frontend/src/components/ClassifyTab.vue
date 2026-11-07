@@ -11,7 +11,7 @@ import { projectQcvnSamples } from '../utils/constants.js'
 const props = defineProps({
   loadProjectId: { type: Number, default: null }
 })
-const emit = defineEmits(['project-loaded', 'view-qcvn-sample'])
+const emit = defineEmits(['project-loaded', 'view-qcvn-sample', 'view-law'])
 
 // Form State
 const projectId = ref(null)
@@ -931,8 +931,13 @@ onMounted(() => {
               <span v-if="result.phuluc && result.phuluc !== '—'" class="chip chip-info">{{ result.phuluc }}</span>
             </div>
             
-            <div style="font-size:12px;color:var(--text3);padding:8px 12px;background:var(--surface2);border-radius:6px">
-              <strong style="color:var(--text2)">Căn cứ áp dụng:</strong> {{ result.ref }}
+            <div style="font-size:12px;color:var(--text3);padding:8px 12px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div>
+                <strong style="color:var(--text2)">Căn cứ áp dụng:</strong> {{ result.ref }}
+              </div>
+              <button v-if="result.ref_law_id" @click="emit('view-law', result.ref_law_id)" class="btn-clear" style="padding:2px 8px;font-size:11px;margin:0;width:auto;border-radius:4px" title="Xem chi tiết văn bản trong kho luật">
+                <i class="ti ti-file-text"></i> Tra cứu văn bản &rarr;
+              </button>
             </div>
             
             <div class="info-grid">
@@ -984,9 +989,14 @@ onMounted(() => {
           <!-- Law Applied List -->
           <div class="law-ref-block" style="margin-top:14px">
             <div class="law-ref-title">📖 Văn bản pháp lý áp dụng</div>
-            <div v-for="r in result.lr" :key="r.num" class="law-ref-item">
-              <div class="law-ref-num">{{ r.num }}</div>
-              <div class="law-ref-desc">{{ r.desc }}</div>
+            <div v-for="r in result.lr" :key="r.num" class="law-ref-item" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+              <div style="flex:1">
+                <div class="law-ref-num">{{ r.num }}</div>
+                <div class="law-ref-desc">{{ r.desc }}</div>
+              </div>
+              <button v-if="r.law_id" @click="emit('view-law', r.law_id)" class="btn-clear" style="padding:3px 8px;font-size:11px;margin:0;width:auto;white-space:nowrap;border-radius:4px;flex-shrink:0" title="Bấm để mở chi tiết văn bản này trong kho luật">
+                <i class="ti ti-external-link"></i> Xem luật &rarr;
+              </button>
             </div>
           </div>
 

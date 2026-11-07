@@ -13,6 +13,9 @@ function getLawIdFromSlug(slug) {
     .replace(/^quyet-dinh-/, 'qd_')
     .replace(/^nghi-quyet-/, 'nq_')
     .replace(/-/g, '_');
+
+  // Chuẩn hóa loại bỏ hậu tố thừa để ánh xạ về canonical ID chuẩn
+  id = id.replace(/_(nd_cp|tt_btnmt|tt_bnnmt|qh15|tt_bnnptnt)$/, '');
   return id;
 }
 
@@ -26,6 +29,46 @@ function getLawTypeFromSlug(slug) {
   if (slug.startsWith('quyet-dinh-')) return 'qd';
   if (slug.startsWith('nghi-quyet-')) return 'nq';
   return 'luat';
+}
+
+function cleanProvisionText(raw, docTitle = '', provisionTitle = '') {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw.trim();
+
+  // 1. Loại bỏ các chuỗi rác tiếng Anh đầu trang sinh ra từ trang tài liệu
+  text = text.replace(/For the complete documentation index, see llms\.txt\.\s*/gi, '');
+  text = text.replace(/This page is also available as Markdown\.\s*/gi, '');
+  text = text.replace(/CopyOn this page\s*/gi, '');
+  text = text.replace(/On this page\s*/gi, '');
+
+  // 2. Loại bỏ các thanh điều hướng Previous/Next và Last updated ở cuối trang
+  text = text.replace(/Previous[\s\S]*?Next[\s\S]*?(Last updated.*ago)?$/i, '');
+  text = text.replace(/Previous\s*.*Next\s*.*$/i, '');
+  text = text.replace(/Last updated\s+[0-9]+\s+[a-z\s]+ago\s*$/i, '');
+
+  // 3. Loại bỏ breadcrumbs dính liền tiêu đề ở đầu trang
+  const docBase = docTitle.replace(/\s*—.*$/, '').replace(/\s*[0-9]{4}.*$/, '').trim();
+  if (docBase && text.startsWith(docBase)) {
+    text = text.slice(docBase.length).trim();
+  }
+  if (docTitle && text.startsWith(docTitle.trim())) {
+    text = text.slice(docTitle.trim().length).trim();
+  }
+
+  // Loại bỏ tên chương lặp lại trước Điều (ví dụ: "Chương I. NHỮNG QUY ĐỊNH CHUNGĐiều 1...")
+  const chapMatch = text.match(/^(Chương\s+[IVXLCDM0-9]+[^\n.]*\.?\s*[A-ZÀ-Ỵ\s,]+)(?=Điều|\d+\.)/);
+  if (chapMatch) {
+    text = text.slice(chapMatch[0].length).trim();
+  }
+
+  // Loại bỏ tiêu đề điều khoản nếu lặp lại ngay đầu nội dung
+  if (provisionTitle && text.startsWith(provisionTitle.trim())) {
+    text = text.slice(provisionTitle.trim().length).trim();
+  }
+
+  // Loại bỏ các khoảng trắng dư thừa liên tiếp
+  text = text.replace(/[ \t]+/g, ' ').trim();
+  return text;
 }
 
 // 1. Fetch sitemap and extract page URLs and their last modified dates
@@ -96,10 +139,16 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
   let year = new Date().getFullYear();
   
   // Extract number from title, e.g. "48/2026/NĐ-CP"
-  const soRegex = /([0-9]+(?:\.[0-9]+)?\/[0-9]{4}\/[A-Z0-9-]+)/i;
+  const soRegex = /([0-9]+(?:\.[0-9]+)?\/[0-9]{4}\/[A-Za-z0-9Đđ\u00C0-\u1EF9\/-]+)/i;
   const soMatch = docTitle.match(soRegex);
-  if (soMatch) {
-    so = soMatch[0].toUpperCase();
+  if (id === 'luat_tai_nguyen_nuoc' || docTitle.includes('Tài nguyên nước')) {
+    so = '28/2023/QH15';
+    year = 2023;
+  } else if (id === 'luat_bvmt_2020' || id === 'luat_bao_ve_moi_truong' || docTitle.includes('Bảo vệ môi trường 2020')) {
+    so = '72/2020/QH14';
+    year = 2020;
+  } else if (soMatch) {
+    so = soMatch[0].trim();
   } else {
     // Fallback: try parsing slug
     const slugSo = slug.replace(/^(luat|nghi-dinh|thong-tu|quyet-dinh|qcvn|van-ban-hop-nhat|nghi-quyet)-/, '');
@@ -127,6 +176,9 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
       const subHtml = await subRes.text();
       const $sub = cheerio.load(subHtml);
       
+      // Loại bỏ các thành phần rác: breadcrumbs, pager, llms notice, table-of-contents
+      $sub('.llms-txt, .vp-doc-footer, .pager, .pager-container, nav, .table-of-contents, .outline, footer, .breadcrumb').remove();
+
       const subTitle = $sub('h1').first().text().trim() || $sub('title').text().split('|')[0].trim();
       
       let subContent = $sub('main').text().trim();
@@ -134,10 +186,11 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
         subContent = $sub('.markdown-section').text().trim() || $sub('article').text().trim();
       }
       
-      const cleanContent = subContent
-        .replace(/\s+/g, ' ')
-        .replace(/\n+/g, '\n')
-        .trim();
+      const cleanContent = cleanProvisionText(
+        subContent.replace(/\s+/g, ' ').replace(/\n+/g, '\n').trim(),
+        docTitle,
+        subTitle
+      );
         
       if (subTitle && cleanContent) {
         clauses.push({

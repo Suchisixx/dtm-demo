@@ -336,32 +336,32 @@ const CHECKLIST = {
 
 const LAW_REFS = {
   DTM: [
-    { num: 'Điều 25, Luật BVMT 2020', desc: 'Tiêu chí phân loại Nhóm I tuyệt đối: đất rừng phòng hộ/đặc dụng, đất lúa 2 vụ >10ha, biên giới, di sản thiên nhiên' },
-    { num: 'Điều 26, Luật BVMT 2020', desc: 'Tiêu chí phân loại Nhóm II — dựa trên quy mô, công suất theo Phụ lục III, IV NĐ 08/2022' },
-    { num: 'Điều 35, Luật BVMT 2020', desc: 'Thẩm quyền thẩm định ĐTM: Bộ NNMT (Nhóm I), UBND tỉnh (Nhóm II). Thời hạn 45/30 ngày làm việc' },
-    { num: 'Điều 37, Luật BVMT 2020', desc: 'Các trường hợp phải lập lại ĐTM: thay đổi quy mô, mở rộng, thay đổi công nghệ tăng ô nhiễm' },
-    { num: 'NĐ 48/2026, Điều 5', desc: '⭐ Ngưỡng diện tích mới: ≥300ha=lớn/Bộ NNMT; 50-300ha=TB/Sở; <50ha=nhỏ — thay thế ngưỡng cũ NĐ 08/2022' },
-    { num: 'NĐ 48/2026, Điều 7', desc: 'Phân cấp UBND tỉnh thẩm định ĐTM cho dự án đầu tư công không thuộc QH/TTg' },
-    { num: 'NĐ 48/2026, Điều 9 (bổ sung Điều 27a)', desc: 'Dự án phân kỳ đầu tư được lập ĐTM riêng từng giai đoạn — ĐTM sau thay thế ĐTM trước' },
-    { num: 'Phụ lục III, VBHN 49/2026', desc: 'Danh mục ngưỡng công suất Nhóm I theo từng ngành — đọc bản hợp nhất, không dùng NĐ 08/2022 gốc' },
-    { num: 'Phụ lục IV, VBHN 49/2026', desc: 'Danh mục ngưỡng công suất Nhóm II theo từng ngành — thẩm quyền UBND tỉnh/Sở TNMT' },
-    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', desc: '⭐ Mẫu đề cương ĐTM (Mẫu 01/ĐTM) — dùng mẫu cập nhật theo TT 09/2026 từ 29/01/2026' },
+    { num: 'Điều 25, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Tiêu chí phân loại Nhóm I tuyệt đối: đất rừng phòng hộ/đặc dụng, đất lúa 2 vụ >10ha, biên giới, di sản thiên nhiên' },
+    { num: 'Điều 26, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Tiêu chí phân loại Nhóm II — dựa trên quy mô, công suất theo Phụ lục III, IV NĐ 08/2022' },
+    { num: 'Điều 35, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Thẩm quyền thẩm định ĐTM: Bộ NNMT (Nhóm I), UBND tỉnh (Nhóm II). Thời hạn 45/30 ngày làm việc' },
+    { num: 'Điều 37, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Các trường hợp phải lập lại ĐTM: thay đổi quy mô, mở rộng, thay đổi công nghệ tăng ô nhiễm' },
+    { num: 'NĐ 48/2026, Điều 5', law_id: 'nd_48_2026', desc: '⭐ Ngưỡng diện tích mới: ≥300ha=lớn/Bộ NNMT; 50-300ha=TB/Sở; <50ha=nhỏ — thay thế ngưỡng cũ NĐ 08/2022' },
+    { num: 'NĐ 48/2026, Điều 7', law_id: 'nd_48_2026', desc: 'Phân cấp UBND tỉnh thẩm định ĐTM cho dự án đầu tư công không thuộc QH/TTg' },
+    { num: 'NĐ 48/2026, Điều 9 (bổ sung Điều 27a)', law_id: 'nd_48_2026', desc: 'Dự án phân kỳ đầu tư được lập ĐTM riêng từng giai đoạn — ĐTM sau thay thế ĐTM trước' },
+    { num: 'Phụ lục III, VBHN 49/2026', law_id: 'vbhn_49_2026', desc: 'Danh mục ngưỡng công suất Nhóm I theo từng ngành — đọc bản hợp nhất, không dùng NĐ 08/2022 gốc' },
+    { num: 'Phụ lục IV, VBHN 49/2026', law_id: 'vbhn_49_2026', desc: 'Danh mục ngưỡng công suất Nhóm II theo từng ngành — thẩm quyền UBND tỉnh/Sở TNMT' },
+    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', law_id: 'tt_09_2026', desc: '⭐ Mẫu đề cương ĐTM (Mẫu 01/ĐTM) — dùng mẫu cập nhật theo TT 09/2026 từ 29/01/2026' },
   ],
   GPMT: [
-    { num: 'Điều 39, Luật BVMT 2020', desc: 'Đối tượng phải có GPMT: dự án Nhóm I, II, III có phát sinh chất thải hoặc tiêu chí kèm theo' },
-    { num: 'Điều 40, Luật BVMT 2020', desc: 'Nội dung GPMT: nguồn thải, giới hạn xả thải, chương trình quan trắc tự động/định kỳ' },
-    { num: 'Điều 43, Luật BVMT 2020', desc: 'Thẩm quyền cấp GPMT: Bộ NNMT / Sở TNMT tỉnh / UBND huyện (thời hạn 45/30/15 ngày)' },
-    { num: 'NĐ 08/2022 (VBHN 49/2026), Điều 39–46', desc: 'Trình tự, hồ sơ đề nghị cấp GPMT — đọc bản hợp nhất VBHN 49/2026' },
-    { num: 'NĐ 48/2026, Điều 8', desc: '⭐ HTXLNT ≥50m³/ngày hoặc khí thải ≥20.000m³/h thay công nghệ → phải lập lại ĐTM/GPMT' },
-    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', desc: '⭐ Mẫu báo cáo đề xuất GPMT — dùng Mẫu 02 (dự án mới) hoặc Mẫu 03 (cơ sở vận hành) cập nhật TT 09/2026' },
-    { num: 'NĐ 53/2024/NĐ-CP', desc: 'Giấy phép khai thác tài nguyên nước — tài liệu bổ sung bắt buộc nếu dự án dùng nước mặt/ngầm' },
-    { num: 'Hợp đồng đấu nối nước thải vào hệ thống XLNT tập trung KCN (nếu trong KCN)', desc: 'Tài liệu bổ sung bắt buộc' },
+    { num: 'Điều 39, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Đối tượng phải có GPMT: dự án Nhóm I, II, III có phát sinh chất thải hoặc tiêu chí kèm theo' },
+    { num: 'Điều 40, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Nội dung GPMT: nguồn thải, giới hạn xả thải, chương trình quan trắc tự động/định kỳ' },
+    { num: 'Điều 43, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Thẩm quyền cấp GPMT: Bộ NNMT / Sở TNMT tỉnh / UBND huyện (thời hạn 45/30/15 ngày)' },
+    { num: 'NĐ 08/2022 (VBHN 49/2026), Điều 39–46', law_id: 'vbhn_49_2026', desc: 'Trình tự, hồ sơ đề nghị cấp GPMT — đọc bản hợp nhất VBHN 49/2026' },
+    { num: 'NĐ 48/2026, Điều 8', law_id: 'nd_48_2026', desc: '⭐ HTXLNT ≥50m³/ngày hoặc khí thải ≥20.000m³/h thay công nghệ → phải lập lại ĐTM/GPMT' },
+    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', law_id: 'tt_09_2026', desc: '⭐ Mẫu báo cáo đề xuất GPMT — dùng Mẫu 02 (dự án mới) hoặc Mẫu 03 (cơ sở vận hành) cập nhật TT 09/2026' },
+    { num: 'NĐ 53/2024/NĐ-CP', law_id: 'nd_53_2024', desc: 'Giấy phép khai thác tài nguyên nước — tài liệu bổ sung bắt buộc nếu dự án dùng nước mặt/ngầm' },
+    { num: 'Hợp đồng đấu nối nước thải vào hệ thống XLNT tập trung KCN (nếu trong KCN)', law_id: 'nd_08_2022', desc: 'Tài liệu bổ sung bắt buộc' },
   ],
   DKMT: [
-    { num: 'Điều 49, Luật BVMT 2020', desc: 'Đối tượng phải đăng ký môi trường: Nhóm IV — quy mô nhỏ, ít nguy cơ ô nhiễm' },
-    { num: 'Điều 50, Luật BVMT 2020', desc: 'Nội dung, thủ tục, thời hạn đăng ký môi trường (5 ngày làm việc)' },
-    { num: 'NĐ 08/2022 (VBHN 49/2026), Điều 49–56', desc: 'Trình tự đăng ký, cơ quan tiếp nhận: UBND xã, huyện theo ủy quyền' },
-    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', desc: '⭐ Mẫu đăng ký môi trường (Mẫu 01/ĐKMT, Phụ lục VI) — dùng mẫu cập nhật TT 09/2026' },
+    { num: 'Điều 49, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Đối tượng phải đăng ký môi trường: Nhóm IV — quy mô nhỏ, ít nguy cơ ô nhiễm' },
+    { num: 'Điều 50, Luật BVMT 2020', law_id: 'luat_bvmt_2020', desc: 'Nội dung, thủ tục, thời hạn đăng ký môi trường (5 ngày làm việc)' },
+    { num: 'NĐ 08/2022 (VBHN 49/2026), Điều 49–56', law_id: 'vbhn_49_2026', desc: 'Trình tự đăng ký, cơ quan tiếp nhận: UBND xã, huyện theo ủy quyền' },
+    { num: 'TT 02/2022 (sửa đổi bởi TT 09/2026)', law_id: 'tt_09_2026', desc: '⭐ Mẫu đăng ký môi trường (Mẫu 01/ĐKMT, Phụ lục VI) — dùng mẫu cập nhật TT 09/2026' },
   ],
 };
 
@@ -382,30 +382,35 @@ const LAW_CHANGE_WARNINGS = [
     icon: '📋',
     text: 'Từ 29/01/2026: dùng bản hợp nhất VBHN 49/2026 thay vì đọc riêng NĐ 08/2022 + NĐ 05/2025 + NĐ 48/2026.',
     ref: 'VBHN 49/VBHN-BNNMT (17/04/2026)',
+    law_id: 'vbhn_49_2026',
   },
   {
     applies_to: 'global',
     icon: '📝',
     text: 'Mẫu hồ sơ ĐTM, GPMT, ĐKMT đã được sửa đổi bởi TT 09/2026 (hiệu lực 29/01/2026). Không dùng biểu mẫu cũ của TT 02/2022 bản gốc.',
     ref: 'TT 09/2026/TT-BNNMT',
+    law_id: 'tt_09_2026',
   },
   {
     applies_to: 'do_thi',
     icon: '🏙️',
     text: 'Ngưỡng diện tích khu đô thị đã đổi theo NĐ 48/2026: ≥300ha → Bộ NNMT; 50–300ha → Sở TNMT. Khác hoàn toàn NĐ 08/2022 gốc.',
     ref: 'NĐ 48/2026, Điều 5',
+    law_id: 'nd_48_2026',
   },
   {
     applies_to: 'xl_nuoc_thai',
     icon: '💧',
     text: 'Thay thế công nghệ HTXLNT tăng lưu lượng ≥50m³/ngày → phải lập lại ĐTM hoặc GPMT (quy định mới từ NĐ 48/2026).',
     ref: 'NĐ 48/2026, Điều 8',
+    law_id: 'nd_48_2026',
   },
   {
     applies_to: 'khai_thac_ks',
     icon: '⛏️',
     text: 'Khai thác khoáng sản có liên quan trách nhiệm tái chế/EPR với một số loại bao bì sản phẩm (NĐ 110/2026 mới nhất).',
     ref: 'NĐ 110/2026/NĐ-CP (25/05/2026)',
+    law_id: 'nd_110_2026',
   },
 ];
 
@@ -594,13 +599,14 @@ function evaluateClassification(formData = {}) {
       icon: '♻️', type: 'warn',
       text: 'Sản phẩm/bao bì thuộc danh mục EPR: nhà sản xuất/nhập khẩu phải thực hiện trách nhiệm tái chế hoặc đóng góp tài chính vào quỹ tái chế theo NĐ 110/2026.',
       ref: 'NĐ 110/2026/NĐ-CP (25/05/2026)',
+      law_id: 'nd_110_2026',
     });
   }
 
   // BƯỚC 7: Cảnh báo luật thay đổi
   const lawWarnings = getLawChangeWarnings(nganh);
   lawWarnings.forEach(w => {
-    luyTien.push({ icon: w.icon, text: w.text, ref: w.ref });
+    luyTien.push({ icon: w.icon, text: w.text, ref: w.ref, law_id: w.law_id });
   });
 
   const industryNote = (IND_DB[nganh] && IND_DB[nganh].note) || null;
@@ -617,8 +623,18 @@ function evaluateClassification(formData = {}) {
   };
   const nhom = nhomMap[`${hs}_${tq}`] || 'Nhóm III';
 
+  let refLawId = 'luat_bvmt_2020';
+  if (ref) {
+    if (ref.includes('48/2026')) refLawId = 'nd_48_2026';
+    else if (ref.includes('49/2026') || ref.includes('VBHN')) refLawId = 'vbhn_49_2026';
+    else if (ref.includes('05/2025')) refLawId = 'nd_05_2025';
+    else if (ref.includes('08/2022')) refLawId = 'nd_08_2022';
+    else if (ref.includes('110/2026')) refLawId = 'nd_110_2026';
+    else if (ref.includes('BVMT')) refLawId = 'luat_bvmt_2020';
+  }
+
   return {
-    hs, tq, phuluc, ref, nhom,
+    hs, tq, phuluc, ref, ref_law_id: refLawId, nhom,
     coQuan, thoiHan,
     hi: HS_INFO[hs] || { icon: '📋', label: 'Hồ sơ môi trường', class: 'chip-gpmt', bg: '#EEF8F3' },
     cl: CHECKLIST[hs] || { bat_buoc: [], bo_sung: [] },

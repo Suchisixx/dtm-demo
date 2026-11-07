@@ -65,6 +65,7 @@ const checkAuth = async () => {
 const pendingTargetPage = ref(null)
 const pendingProjectId = ref(null)
 const pendingSampleId = ref(null)
+const pendingLawId = ref(null)
 
 const handleLoginSuccess = (user) => {
   currentUser.value = user
@@ -124,6 +125,12 @@ const handleViewQcvnSample = (sampleId) => {
   pendingSampleId.value = sampleId
   activePage.value = 'qcvn'
   window.history.pushState({ page: 'qcvn' }, '', '/qcvn')
+}
+
+const handleViewLaw = (lawId) => {
+  pendingLawId.value = lawId
+  activePage.value = 'laws'
+  window.history.pushState({ page: 'laws' }, '', '/laws')
 }
 
 // Watch currentUser changes. If logged out, redirect if on private page
@@ -187,7 +194,7 @@ onMounted(() => {
         </a>
 
         <a href="/dashboard" class="nav-btn" :class="{ active: activePage === 'dashboard' }" @click.prevent="handlePageChange('dashboard')">
-          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> 📊 Dashboard thống kê
+          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> Dashboard thống kê
         </a>
         
         <a href="/classify" class="nav-btn" :class="{ active: activePage === 'classify' }" @click.prevent="handlePageChange('classify')">
@@ -210,9 +217,9 @@ onMounted(() => {
 
     <!-- MAIN BODY -->
     <main style="flex: 1; padding: 24px 0;">
-      <LawsTab v-if="activePage === 'laws'" />
+      <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
       <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
-      <ClassifyTab v-else-if="activePage === 'classify'" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" />
+      <ClassifyTab v-else-if="activePage === 'classify'" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
       <QCVNTab v-else-if="activePage === 'qcvn'" :loadSampleId="pendingSampleId" @sample-loaded="pendingSampleId = null" />
       <MapTab v-else-if="activePage === 'map'" @view-project="handleViewProject" />
       <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />

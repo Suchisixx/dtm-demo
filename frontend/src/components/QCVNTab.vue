@@ -206,9 +206,10 @@ const parsePastedText = (text) => {
   return results
 }
 
+const sampleLimit = ref(10)
 const fetchSamples = async (page = 1) => {
   try {
-    const res = await fetch(`${API.QCVN_SAMPLES}?page=${page}&limit=5`)
+    const res = await fetch(`${API.QCVN_SAMPLES}?page=${page}&limit=${sampleLimit.value}`)
     if (res.status === 401) return
     const data = await res.json()
     loadedSamples.value = data.samples || []
@@ -218,6 +219,25 @@ const fetchSamples = async (page = 1) => {
     logger.error('Lỗi khi fetch samples:', err)
   }
 }
+
+// Phân trang bảng thông số quy chuẩn
+const paramPageSize = ref(20) // Options: 10, 20, 50, hoặc 999 (Tất cả)
+const paramCurrentPage = ref(1)
+
+const totalParamPages = computed(() => {
+  if (paramPageSize.value >= 999) return 1
+  return Math.max(1, Math.ceil(evaluatedParams.value.length / paramPageSize.value))
+})
+
+const paginatedParams = computed(() => {
+  if (paramPageSize.value >= 999) return evaluatedParams.value
+  const start = (paramCurrentPage.value - 1) * paramPageSize.value
+  return evaluatedParams.value.slice(start, start + paramPageSize.value)
+})
+
+watch([selectedType, selectedSubType, paramPageSize], () => {
+  paramCurrentPage.value = 1
+})
 
 const currentQcvn = computed(() => {
   return QCVN_DATA[selectedSubType.value] || null
@@ -754,8 +774,17 @@ watch(() => props.loadSampleId, async (newId) => {
             <button class="btn-delete-project" @click="handleDeleteSample(s.id)" title="Xóa kết quả mẫu">🗑️</button>
           </div>
         </div>
-        <!-- Phân trang -->
-        <div v-if="totalPages > 1" class="pagination-container" style="display:flex;justify-content:center;gap:6px;margin-top:16px">
+        <!-- Phân trang mẫu đã lưu -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--text3)">
+          <span>Hiển thị:</span>
+          <select v-model.number="sampleLimit" @change="fetchSamples(1)"
+            style="padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius);font-size:11px;background:var(--surface)">
+            <option :value="10">10 / trang</option>
+            <option :value="20">20 / trang</option>
+            <option :value="50">50 / trang</option>
+          </select>
+        </div>
+        <div v-if="totalPages > 1" class="pagination-container" style="display:flex;justify-content:center;gap:6px;margin-top:10px">
           <button class="pagination-btn" :disabled="currentPage === 1" @click="fetchSamples(currentPage - 1)">&lt;</button>
           <button v-for="page in totalPages" :key="page" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchSamples(page)">
             {{ page }}
@@ -882,6 +911,24 @@ watch(() => props.loadSampleId, async (newId) => {
 
         <!-- Table -->
         <div class="card" style="padding:0;overflow:hidden" v-if="currentQcvn">
+          <!-- Thanh điều khiển phân trang thông số trên -->
+          <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
+            <div style="font-size:12.5px;color:var(--text2)">
+              📋 Danh sách <strong>{{ evaluatedParams.filter(p => !p.nhom).length }}</strong> thông số quy chuẩn
+              <span v-if="paramPageSize < 999 && totalParamPages > 1"> (Trang {{ paramCurrentPage }}/{{ totalParamPages }})</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+              <span>Hiển thị thông số:</span>
+              <select v-model.number="paramPageSize"
+                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">
+                <option :value="10">10 / trang</option>
+                <option :value="20">20 / trang</option>
+                <option :value="50">50 / trang</option>
+                <option :value="999">Tất cả thông số</option>
+              </select>
+            </div>
+          </div>
+
           <div id="qv-table-wrap" style="overflow-x:auto">
             <table class="qcvn-table" style="table-layout:fixed;width:100%;min-width:750px">
               <thead>
@@ -895,7 +942,7 @@ watch(() => props.loadSampleId, async (newId) => {
                 </tr>
               </thead>
               <tbody>
-                <template v-for="(p, i) in evaluatedParams" :key="i">
+                <template v-for="(p, i) in paginatedParams" :key="i">
                   <tr v-if="p.nhom">
                     <td class="param-group-head" colspan="6">{{ p.nhom }}</td>
                   </tr>
@@ -937,6 +984,29 @@ watch(() => props.loadSampleId, async (newId) => {
                 </template>
               </tbody>
             </table>
+          </div>
+          
+          <!-- Thanh phân trang thông số dưới -->
+          <div v-if="paramPageSize < 999 && totalParamPages > 1" class="no-print"
+            style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;gap:10px">
+            <div style="font-size:12px;color:var(--text2)">
+              Hiển thị thông số <strong>{{ (paramCurrentPage - 1) * paramPageSize + 1 }}</strong> – <strong>{{ Math.min(paramCurrentPage * paramPageSize, evaluatedParams.length) }}</strong> / {{ evaluatedParams.length }} dòng
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <button class="pagination-btn" :disabled="paramCurrentPage === 1" @click="paramCurrentPage--">‹ Trước</button>
+              <button v-for="pg in totalParamPages" :key="pg" class="pagination-btn" :class="{ active: pg === paramCurrentPage }" @click="paramCurrentPage = pg">{{ pg }}</button>
+              <button class="pagination-btn" :disabled="paramCurrentPage === totalParamPages" @click="paramCurrentPage++">Sau ›</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
+              <span>Hiển thị:</span>
+              <select v-model.number="paramPageSize"
+                style="padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px">
+                <option :value="10">10 / trang</option>
+                <option :value="20">20 / trang</option>
+                <option :value="50">50 / trang</option>
+                <option :value="999">Tất cả</option>
+              </select>
+            </div>
           </div>
           
           <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">

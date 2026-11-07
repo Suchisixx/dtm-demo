@@ -258,7 +258,7 @@ async function initDatabase() {
     const createLawUpdateHistoryTable = `
       CREATE TABLE IF NOT EXISTS law_update_history (
         id SERIAL PRIMARY KEY,
-        law_id VARCHAR(100) REFERENCES laws(id) ON DELETE CASCADE,
+        law_id VARCHAR(100),
         action VARCHAR(50) NOT NULL,
         updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -266,6 +266,8 @@ async function initDatabase() {
       );
     `;
     await targetClient.query(createLawUpdateHistoryTable);
+    // Đảm bảo không bị ràng buộc ngoại khóa chặt chẽ khi xóa văn bản
+    await targetClient.query('ALTER TABLE law_update_history DROP CONSTRAINT IF EXISTS law_update_history_law_id_fkey;');
     console.log('✔ Bảng "law_update_history" đã sẵn sàng.');
 
     // Tạo bảng system_settings để lưu trữ các thiết lập hệ thống như tự động quét crawler

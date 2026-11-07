@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { API, NHOM_COLORS } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
@@ -68,7 +68,11 @@ const stats = ref({
 const healthFilter = ref('all') // 'all' | 'alert' | 'incomplete' | 'unmonitored'
 const searchQuery = ref('')
 const currentPage = ref(1)
-const pageSize = 8
+const pageSize = ref(10)
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
 
 const fetchDashboardStats = async () => {
   loading.value = true
@@ -184,11 +188,11 @@ const filteredProjects = computed(() => {
   return list
 })
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredProjects.value.length / pageSize)))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredProjects.value.length / pageSize.value)))
 
 const paginatedProjects = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredProjects.value.slice(start, start + pageSize)
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredProjects.value.slice(start, start + pageSize.value)
 })
 
 const setHealthFilter = (f) => {
@@ -770,24 +774,38 @@ const printDashboard = () => {
         </div>
 
         <!-- Phân trang bảng dự án -->
-        <div v-if="totalPages > 1" class="dash-pagination no-print">
-          <button
-            class="pagination-btn"
-            :disabled="currentPage === 1"
-            @click="currentPage--"
-          >
-            &lt; Trước
-          </button>
-          <span class="dash-page-info">
-            Trang <strong>{{ currentPage }}</strong> / {{ totalPages }} ({{ filteredProjects.length }} dự án)
-          </span>
-          <button
-            class="pagination-btn"
-            :disabled="currentPage === totalPages"
-            @click="currentPage++"
-          >
-            Sau &gt;
-          </button>
+        <div v-if="filteredProjects.length > 0" class="dash-pagination no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div style="font-size:13px;color:var(--text2)">
+            Hiển thị <strong>{{ (currentPage - 1) * pageSize + 1 }}</strong> – <strong>{{ Math.min(currentPage * pageSize, filteredProjects.length) }}</strong> / {{ filteredProjects.length }} dự án
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button
+              class="pagination-btn"
+              :disabled="currentPage === 1"
+              @click="currentPage--"
+            >
+              &lt; Trước
+            </button>
+            <span class="dash-page-info">
+              Trang <strong>{{ currentPage }}</strong> / {{ totalPages }}
+            </span>
+            <button
+              class="pagination-btn"
+              :disabled="currentPage === totalPages"
+              @click="currentPage++"
+            >
+              Sau &gt;
+            </button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+            <span>Hiển thị:</span>
+            <select v-model.number="pageSize"
+              style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
+              <option :value="10">10 / trang</option>
+              <option :value="20">20 / trang</option>
+              <option :value="50">50 / trang</option>
+            </select>
+          </div>
         </div>
       </div>
     </template>

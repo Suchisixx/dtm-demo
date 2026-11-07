@@ -10,9 +10,7 @@ const { BCRYPT_SALT_ROUNDS, ACTIONS } = require('../utils/constants');
 // Yêu cầu phân quyền Admin cho tất cả các định tuyến dưới đây
 router.use(requireAdmin);
 
-// =================================================================
 // 👥 QUẢN LÝ NHÂN VIÊN (ACCOUNTS CRUD)
-// =================================================================
 
 // GET /api/admin/users - Danh sách toàn bộ tài khoản
 router.get('/users', async (req, res) => {
@@ -85,29 +83,29 @@ router.put('/users/:id', async (req, res) => {
 
     const fields = ['username = $1', 'full_name = $2', 'role = $3'];
     const values = [cleanUsername, fullName, role];
-    
+
     if (password && password.trim() !== '') {
       const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
       fields.push(`password_hash = $${fields.length + 1}`);
       values.push(hashedPassword);
     }
-    
+
     values.push(targetId);
-    
+
     const result = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length} RETURNING id, username, full_name, role, created_at`,
       values
     );
-    
+
     const updatedUser = result.rows[0];
     const password_changed = !!(password && password.trim() !== '');
-    
-    await logAudit(req.user.id, ACTIONS.UPDATE_USER, req, { 
-      target_id: updatedUser.id, 
-      target_username: updatedUser.username, 
-      password_changed 
+
+    await logAudit(req.user.id, ACTIONS.UPDATE_USER, req, {
+      target_id: updatedUser.id,
+      target_username: updatedUser.username,
+      password_changed
     });
-    
+
     return res.json({
       message: password_changed ? 'Cập nhật tài khoản và mật khẩu thành công!' : 'Cập nhật thông tin tài khoản thành công!',
       user: updatedUser
@@ -149,9 +147,7 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// =================================================================
 // 📂 QUẢN LÝ DỰ ÁN (PROJECT MANAGEMENT)
-// =================================================================
 
 // GET /api/admin/projects - Xem toàn bộ dự án của tất cả tài khoản
 router.get('/projects', async (req, res) => {
