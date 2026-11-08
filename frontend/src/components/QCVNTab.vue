@@ -698,324 +698,402 @@ watch(() => props.loadSampleId, async (newId) => {
     emit('sample-loaded')
   }
 }, { immediate: true })
+const showSamplesDrawer = ref(false)
+const showQuickPaste = ref(false)
 </script>
 
 <template>
-  <div id="qcvn" class="page container">
+  <div id="qcvn" class="page container fade-up">
     <!-- Printable Header (Print Only) -->
     <div class="print-only-header" v-if="currentQcvn">
       <div style="text-align: center; margin-bottom: 24px; font-family: 'Be Vietnam Pro', sans-serif;">
-        <h2 style="font-family: 'Playfair Display', serif; font-size: 24px; color: #1D5C3A; margin-bottom: 4px;">ETC — PHÒNG THÍ NGHIỆM</h2>
-        <h3 style="font-size: 16px; font-weight: 600; color: #1A1917; margin-bottom: 16px; text-transform: uppercase;">BÁO CÁO ĐỐI CHIẾU KẾT QUẢ QUAN TRẮC VỚI QCVN</h3>
+        <h2 style="font-size: 22px; font-weight: 700; color: #286B4F; margin-bottom: 4px;">ETC LEGALHUB — BÁO CÁO QUAN TRẮC MÔI TRƯỜNG</h2>
+        <h3 style="font-size: 15px; font-weight: 600; color: #192A21; margin-bottom: 16px; text-transform: uppercase;">BẢNG ĐỐI CHIẾU KẾT QUẢ QUAN TRẮC VỚI QUY CHUẨN KỸ THUẬT QUỐC GIA (QCVN)</h3>
         <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; margin-bottom: 20px;">
           <tbody>
             <tr>
-              <th style="width: 150px; padding: 4px 0; color: #6B6760;">Tên mẫu / Vị trí:</th>
-              <td style="padding: 4px 0; font-weight: 600; color: #1A1917;">{{ sampleName || 'Mẫu không rõ tên' }}</td>
+              <th style="width: 150px; padding: 4px 0; color: #526158;">Tên mẫu / Vị trí:</th>
+              <td style="padding: 4px 0; font-weight: 600; color: #192A21;">{{ sampleName || 'Mẫu không rõ tên' }}</td>
             </tr>
             <tr>
-              <th style="padding: 4px 0; color: #6B6760;">Quy chuẩn đối chiếu:</th>
-              <td style="padding: 4px 0; font-weight: 600; color: #1A1917;">{{ currentQcvn.ten }}</td>
+              <th style="padding: 4px 0; color: #526158;">Quy chuẩn đối chiếu:</th>
+              <td style="padding: 4px 0; font-weight: 600; color: #192A21;">{{ currentQcvn.ten }}</td>
             </tr>
             <tr>
-              <th style="padding: 4px 0; color: #6B6760;">Áp dụng cho:</th>
-              <td style="padding: 4px 0; color: #1A1917;">{{ currentQcvn.ap_dung }}</td>
+              <th style="padding: 4px 0; color: #526158;">Áp dụng cho:</th>
+              <td style="padding: 4px 0; color: #192A21;">{{ currentQcvn.ap_dung }}</td>
             </tr>
             <tr v-if="linkedProject">
-              <th style="padding: 4px 0; color: #6B6760;">Dự án liên kết:</th>
-              <td style="padding: 4px 0; font-weight: 600; color: #1A1917;">{{ linkedProject.ten_du_an }}</td>
+              <th style="padding: 4px 0; color: #526158;">Dự án liên kết:</th>
+              <td style="padding: 4px 0; font-weight: 600; color: #192A21;">{{ linkedProject.ten_du_an }}</td>
             </tr>
             <tr v-if="linkedProject && linkedProject.loai_ho_so">
-              <th style="padding: 4px 0; color: #6B6760;">Loại hồ sơ / Nhóm:</th>
-              <td style="padding: 4px 0; color: #1A1917;">{{ linkedProject.loai_ho_so }} — {{ linkedProject.nhom_du_an || '' }}</td>
+              <th style="padding: 4px 0; color: #526158;">Loại hồ sơ / Nhóm:</th>
+              <td style="padding: 4px 0; color: #192A21;">{{ linkedProject.loai_ho_so }} — {{ linkedProject.nhom_du_an || '' }}</td>
             </tr>
             <tr v-if="linkedProject && (linkedProject.tinh_thanh || linkedProject.dia_chi_hien_thi)">
-              <th style="padding: 4px 0; color: #6B6760;">Địa chỉ dự án:</th>
-              <td style="padding: 4px 0; color: #1A1917;">{{ linkedProject.dia_chi_hien_thi || linkedProject.tinh_thanh }}</td>
+              <th style="padding: 4px 0; color: #526158;">Địa chỉ dự án:</th>
+              <td style="padding: 4px 0; color: #192A21;">{{ linkedProject.dia_chi_hien_thi || linkedProject.tinh_thanh }}</td>
             </tr>
             <tr>
-              <th style="padding: 4px 0; color: #6B6760;">Thời gian xuất báo cáo:</th>
-              <td style="padding: 4px 0; color: #1A1917;">{{ new Date().toLocaleString('vi-VN') }}</td>
+              <th style="padding: 4px 0; color: #526158;">Thời gian xuất báo cáo:</th>
+              <td style="padding: 4px 0; color: #192A21;">{{ new Date().toLocaleString('vi-VN') }}</td>
             </tr>
           </tbody>
         </table>
-        <hr style="border: 0; border-top: 1px solid #E2DDD6; margin-bottom: 20px;"/>
+        <hr style="border: 0; border-top: 1px solid #E5EBE6; margin-bottom: 20px;"/>
       </div>
     </div>
 
-    <div class="section-head no-print">So sánh kết quả quan trắc với QCVN</div>
-    <div class="section-desc no-print">Nhập giá trị đo được hoặc dán bảng số liệu từ phòng thí nghiệm để tự động đối chiếu với ngưỡng quy chuẩn</div>
-
-    <div class="note-box no-print">
-      ⚠️ <strong>Lưu ý về lộ trình chuyển tiếp (áp dụng cho dự án nộp hồ sơ sau 01/09/2025):</strong> Hệ thống sử dụng QCVN 40:2025, QCVN 14:2025 và QCVN 05:2023 — là các phiên bản mới nhất có hiệu lực, thay thế các phiên bản 2011, 2008, 2013 tương ứng. Chỉ số NH4+ tính theo N. Màu <span style="color:#A82020;font-weight:700">ĐỎ</span> = vượt ngưỡng, <span style="color:#8B6010;font-weight:700">CAM</span> = &gt;80% ngưỡng (cảnh báo), <span style="color:#1A6B3A;font-weight:700">XANH</span> = đạt. Hãy luôn đối chiếu lại với văn bản gốc khi xuất hồ sơ chính thức.
+    <!-- PAGE HEADER -->
+    <div class="page-header no-print">
+      <div>
+        <h2 class="section-head">Đối chiếu Kết quả Quan trắc với QCVN</h2>
+        <p class="section-desc">
+          Nhập số liệu đo đạc hoặc dán nhanh bảng kết quả phân tích phòng thí nghiệm để tự động đánh giá mức độ tuân thủ quy chuẩn kỹ thuật quốc gia.
+        </p>
+      </div>
     </div>
 
-    <div class="qcvn-grid has-sidebar">
-      <!-- COLUMN 1: SAVED SAMPLES SIDEBAR -->
-      <div class="projects-sidebar no-print" id="qcvn-sidebar-container" style="display: block;">
-        <button class="btn-new-project" @click="clearValues"
-          style="width:100%;padding:10px;background:var(--accent2);color:var(--accent);border:1px dashed var(--accent);border-radius:var(--radius);font-weight:600;font-size:13px;cursor:pointer;margin-bottom:16px;transition:all 0.15s">
-          ➕ Tạo mẫu mới
+    <!-- TRANSITION NOTICE -->
+    <div class="notice-banner no-print">
+      <i class="ti ti-info-circle"></i>
+      <span>
+        <strong>Lộ trình áp dụng quy chuẩn mới:</strong> Hệ thống áp dụng <strong>QCVN 40:2025/BTNMT</strong> (Nước thải công nghiệp), <strong>QCVN 14:2025/BTNMT</strong> (Nước thải sinh hoạt) và <strong>QCVN 05:2023/BTNMT</strong> (Không khí xung quanh). Trạng thái đánh giá: <strong style="color:var(--success)">Đạt chuẩn</strong>, <strong style="color:var(--warn)">Cảnh báo (&gt;80% ngưỡng)</strong>, <strong style="color:var(--red)">Vượt ngưỡng</strong>.
+      </span>
+    </div>
+
+    <!-- TOP WORKSPACE SAMPLE BAR -->
+    <div class="workspace-bar no-print">
+      <div class="workspace-bar-left">
+        <span style="font-size:12.5px;color:var(--text3);font-weight:500">Mẫu đang kiểm tra:</span>
+        <div class="workspace-current-badge" :class="{ 'is-saved': !!sampleId }">
+          <i class="ti" :class="sampleId ? 'ti-flask-2' : 'ti-plus'"></i>
+          <span>{{ sampleId ? (sampleName || 'Mẫu đã lưu') : 'Mẫu mới (chưa lưu)' }}</span>
+        </div>
+        <span v-if="linkedProject" class="chip chip-info">
+          <i class="ti ti-link"></i> {{ linkedProject.ten_du_an }}
+        </span>
+      </div>
+
+      <div class="workspace-bar-actions">
+        <button type="button" class="btn-secondary btn-sm" @click="showQuickPaste = !showQuickPaste">
+          <i class="ti ti-clipboard-text"></i>
+          <span>{{ showQuickPaste ? 'Ẩn khung dán nhanh' : 'Dán nhanh từ Excel / Lab' }}</span>
         </button>
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
-          Mẫu đã lưu
+        <button type="button" class="btn-secondary btn-sm" @click="clearValues">
+          <i class="ti ti-plus"></i>
+          <span>Tạo mẫu mới</span>
+        </button>
+        <button type="button" class="btn-primary btn-sm" @click="showSamplesDrawer = true">
+          <i class="ti ti-folders"></i>
+          <span>Mẫu đã lưu ({{ loadedSamples.length }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- COLLAPSIBLE QUICK PASTE PANEL -->
+    <div v-if="showQuickPaste" class="card no-print fade-up" style="background:var(--surface);border-color:var(--accent)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="card-title" style="font-size:13.5px">
+          <i class="ti ti-clipboard-data"></i>
+          <span>Dán nhanh bảng số liệu từ Phòng thí nghiệm (Excel / Word / PDF)</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div v-if="loadedSamples.length === 0" style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">
-            Chưa có mẫu nào
+        <button type="button" class="drawer-close-btn" style="width:26px;height:26px" @click="showQuickPaste = false">
+          <i class="ti ti-x"></i>
+        </button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
+        Sao chép các dòng thông số kèm kết quả (VD: <code>pH: 7.2</code>, <code>BOD5 18 mg/l</code>, <code>TSS: 24</code>) vào ô bên dưới để tự động điền bảng.
+      </div>
+      <textarea v-model="pasteArea" rows="3"
+        placeholder="Ví dụ:&#13;pH: 7.2&#13;BOD5: 12 mg/l&#13;TSS: 15&#13;Asen: 0.008 mg/l"
+        style="font-family:monospace;font-size:13px;background:var(--bg)"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px">
+        <button type="button" class="btn-secondary btn-sm" @click="pasteArea = ''">Xóa ô dán</button>
+        <button type="button" class="btn-primary btn-sm" @click="handleQuickPaste">
+          <i class="ti ti-bolt"></i>
+          <span>Tự động nhận diện &amp; điền bảng</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- CONFIGURATION & PROJECT LINKING CARD -->
+    <div class="card no-print" style="padding:18px 22px;margin-bottom:16px">
+      <!-- Row 1: Project Link -->
+      <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <label class="form-label" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <i class="ti ti-link" style="color:var(--accent)"></i>
+          <span>Liên kết với hồ sơ dự án (tùy chọn)</span>
+        </label>
+        <div v-if="linkedProject"
+             style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:var(--accent2);border:1px solid var(--success-border);border-radius:var(--radius)">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:13.5px;color:var(--accent)">{{ linkedProject.ten_du_an }}</div>
+            <div v-if="linkedProject.loai_ho_so" style="font-size:12px;color:var(--text2);margin-top:2px">
+              {{ linkedProject.loai_ho_so }} · {{ linkedProject.nhom_du_an || '' }} · {{ linkedProject.tinh_thanh || linkedProject.dia_chi_hien_thi || '' }}
+            </div>
+            <div v-if="autoMatchMessage" style="font-size:11.5px;color:var(--accent);font-weight:500;margin-top:4px;display:flex;align-items:center;gap:4px">
+              <i class="ti ti-sparkles"></i> {{ autoMatchMessage }}
+            </div>
           </div>
-          <div v-for="s in loadedSamples" :key="s.id" class="project-item">
-            <button class="project-btn" :class="{ active: sampleId === s.id }" @click="selectSample(s)" style="text-align:left">
-              <span>{{ s.name }}</span>
-              <span v-if="s.project_name" style="display:block;font-size:10px;color:var(--text3);font-weight:normal;margin-top:2px">
-                🔗 {{ s.project_name }}
-              </span>
-            </button>
-            <button class="btn-delete-project" @click="handleDeleteSample(s.id)" title="Xóa kết quả mẫu">🗑️</button>
+          <button type="button" class="btn-secondary btn-sm" @click="unlinkProject" title="Gỡ liên kết dự án">
+            <i class="ti ti-unlink"></i>
+            <span>Gỡ liên kết</span>
+          </button>
+        </div>
+        <div v-else ref="projectSearchRef" style="position:relative">
+          <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
+          <input type="text" v-model="projectSearchQuery"
+                 @input="searchProjects(projectSearchQuery)"
+                 @focus="projectSearchQuery.length >= 2 && searchProjects(projectSearchQuery)"
+                 placeholder="Nhập tên dự án đã lưu để gắn mẫu quan trắc này vào hồ sơ..."
+                 style="padding-left:34px" />
+          <div v-if="showProjectDropdown"
+               style="position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow-md);max-height:240px;overflow-y:auto;z-index:50">
+            <div v-for="p in projectSearchResults" :key="p.id"
+                 @click="selectLinkedProject(p)"
+                 style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px">
+              <div style="font-weight:600;color:var(--text)">{{ p.ten_du_an }}</div>
+              <div style="font-size:11.5px;color:var(--text3);margin-top:2px">
+                {{ p.loai_ho_so }} · {{ p.nhom_du_an }} · {{ p.tinh_thanh || p.dia_chi_hien_thi }}
+              </div>
+            </div>
           </div>
         </div>
-        <!-- Phân trang mẫu đã lưu -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:11px;color:var(--text3)">
-          <span>Hiển thị:</span>
-          <select v-model.number="sampleLimit" @change="fetchSamples(1)"
-            style="padding:2px 6px;border:1px solid var(--border);border-radius:var(--radius);font-size:11px;background:var(--surface)">
-            <option :value="10">10 / trang</option>
-            <option :value="20">20 / trang</option>
-            <option :value="50">50 / trang</option>
+      </div>
+
+      <!-- Row 2: QCVN Selection & Actions -->
+      <div class="qcvn-toolbar">
+        <div class="form-group" style="min-width:230px">
+          <label class="form-label">Loại hình quy chuẩn (QCVN)</label>
+          <select v-model="selectedType">
+            <option value="nuoc_mat">Nước mặt (QCVN 08-MT:2015)</option>
+            <option value="nuoc_thai_cn">Nước thải công nghiệp (QCVN 40:2025)</option>
+            <option value="nuoc_thai_sh">Nước thải sinh hoạt (QCVN 14:2025)</option>
+            <option value="nuoc_duoi_dat">Nước dưới đất (QCVN 09-MT:2015)</option>
+            <option value="khong_khi">Không khí xung quanh (QCVN 05:2023)</option>
+            <option value="dat">Chất lượng đất (QCVN 03:2023)</option>
           </select>
         </div>
-        <div v-if="totalPages > 1" class="pagination-container" style="display:flex;justify-content:center;gap:6px;margin-top:10px">
-          <button class="pagination-btn" :disabled="currentPage === 1" @click="fetchSamples(currentPage - 1)">&lt;</button>
-          <button v-for="page in totalPages" :key="page" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchSamples(page)">
-            {{ page }}
+
+        <div class="form-group" style="min-width:220px" v-show="SUB_TYPES[selectedType] && SUB_TYPES[selectedType].length > 1">
+          <label class="form-label">Cột / Phân vùng tiếp nhận</label>
+          <select v-model="selectedSubType">
+            <option v-for="item in (SUB_TYPES[selectedType] || [])" :key="item.value" :value="item.value">{{ item.text }}</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="min-width:190px">
+          <label class="form-label">Mã mẫu / Vị trí lấy mẫu</label>
+          <input type="text" v-model="sampleName" placeholder="VD: NM-01, NT-01, KK-01..." />
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn-primary" @click="saveSample">
+            <i class="ti ti-device-floppy"></i>
+            <span>Lưu kết quả mẫu</span>
           </button>
-          <button class="pagination-btn" :disabled="currentPage === totalPages" @click="fetchSamples(currentPage + 1)">&gt;</button>
+          <button type="button" class="btn-secondary" @click="exportPDF">
+            <i class="ti ti-printer"></i>
+            <span>Xuất PDF / In</span>
+          </button>
+          <button type="button" class="btn-secondary" @click="exportTxt">
+            <i class="ti ti-download"></i>
+            <span>Xuất Text</span>
+          </button>
+          <button type="button" class="btn-ghost" @click="clearValues" title="Xóa trắng số liệu đang nhập">
+            <i class="ti ti-eraser"></i>
+            <span>Làm mới</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI SUMMARY STRIP -->
+    <div class="kpi-grid" v-if="summary.total > 0">
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Thông số đã nhập</span>
+          <div class="kpi-icon"><i class="ti ti-list-numbers"></i></div>
+        </div>
+        <div class="kpi-value">{{ summary.total }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Đạt quy chuẩn</span>
+          <div class="kpi-icon"><i class="ti ti-circle-check"></i></div>
+        </div>
+        <div class="kpi-value" style="color:var(--success)">{{ summary.pass }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Cảnh báo (&gt;80% ngưỡng)</span>
+          <div class="kpi-icon warn"><i class="ti ti-alert-triangle"></i></div>
+        </div>
+        <div class="kpi-value" style="color:var(--warn)">{{ summary.near }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Vượt ngưỡng QCVN</span>
+          <div class="kpi-icon danger"><i class="ti ti-circle-x"></i></div>
+        </div>
+        <div class="kpi-value" style="color:var(--red)">{{ summary.fail }}</div>
+      </div>
+    </div>
+
+    <!-- FULL-WIDTH PARAMETERS DATA TABLE -->
+    <div class="card" style="padding:0;overflow:hidden" v-if="currentQcvn">
+      <!-- Top Table Bar -->
+      <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
+        <div style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px">
+          <i class="ti ti-table" style="color:var(--accent);font-size:16px"></i>
+          <span>Danh mục <strong>{{ evaluatedParams.filter(p => !p.nhom).length }}</strong> chỉ tiêu theo <strong>{{ currentQcvn.ten }}</strong></span>
+          <span v-if="paramPageSize < 999 && totalParamPages > 1" style="color:var(--text3)">(Trang {{ paramCurrentPage }}/{{ totalParamPages }})</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
+          <span>Hiển thị:</span>
+          <select v-model.number="paramPageSize" style="width:140px;height:32px;font-size:12.5px">
+            <option :value="10">10 thông số / trang</option>
+            <option :value="20">20 thông số / trang</option>
+            <option :value="50">50 thông số / trang</option>
+            <option :value="999">Tất cả thông số</option>
+          </select>
         </div>
       </div>
 
-      <!-- COLUMN 2: WORKSPACE -->
-      <div class="qcvn-workspace-content" style="flex:1;min-width:0">
-        <!-- Liên kết dự án (tùy chọn) -->
-        <div class="card no-print" style="padding:16px 22px;margin-bottom:16px">
-          <label class="form-label" style="display:block;margin-bottom:8px">
-            🔗 Liên kết với dự án (không bắt buộc)
-          </label>
-          <div v-if="linkedProject" 
-               style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--accent2);border:1px solid var(--accent);border-radius:var(--radius)">
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:700;font-size:13.5px;color:var(--accent);word-break:break-word;line-height:1.4">{{ linkedProject.ten_du_an }}</div>
-              <div v-if="linkedProject.loai_ho_so" style="font-size:11.5px;color:var(--text2);margin-top:3px;line-height:1.4">
-                {{ linkedProject.loai_ho_so }} — {{ linkedProject.nhom_du_an || '' }} — {{ linkedProject.tinh_thanh || linkedProject.dia_chi_hien_thi || '' }}
-              </div>
-              <div v-if="autoMatchMessage" style="font-size:11px;color:var(--accent);font-weight:600;margin-top:5px;display:flex;align-items:center;gap:4px;line-height:1.4">
-                ⚡ {{ autoMatchMessage }}
-              </div>
-            </div>
-            <button @click="unlinkProject" 
-                    style="background:none;border:none;font-size:16px;cursor:pointer;color:var(--text3);padding:4px;flex-shrink:0"
-                    title="Gỡ liên kết">✕</button>
+      <div id="qv-table-wrap" style="overflow-x:auto">
+        <table class="qcvn-table" style="width:100%;min-width:780px">
+          <thead>
+            <tr>
+              <th style="width:30%">Thông số ô nhiễm</th>
+              <th style="width:12%">Đơn vị</th>
+              <th style="width:16%">Giá trị giới hạn</th>
+              <th style="width:14%">Kết quả đo</th>
+              <th style="width:14%">Kết luận</th>
+              <th style="width:14%">Tỉ lệ so với ngưỡng</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="(p, i) in paginatedParams" :key="i">
+              <tr v-if="p.nhom">
+                <td class="param-group-head" colspan="6">{{ p.nhom }}</td>
+              </tr>
+
+              <tr v-else :class="{ 'row-pass': p.status === 'pass', 'row-fail': p.status === 'fail', 'row-near': p.status === 'near' }">
+                <td style="font-weight:500;color:var(--text)">{{ p.ten }}</td>
+                <td style="color:var(--text3);font-size:12.5px">{{ p.don_vi }}</td>
+                <td>
+                  <span class="limit-val">
+                    {{ p.loai === 'range' ? `${p.min} – ${p.max}` : p.loai === 'min' ? `≥ ${p.gioi_han}` : (p.note || `≤ ${p.gioi_han}`) }}
+                  </span>
+                </td>
+                <td>
+                  <input type="number" step="any" min="0" v-model.number="measuredValues[p.key]" placeholder="—" class="no-print" />
+                  <span class="print-only">{{ p.value !== undefined && p.value !== null && !isNaN(p.value) ? p.value : '—' }}</span>
+                </td>
+                <td>
+                  <span v-if="p.status === 'empty'" class="result-empty">—</span>
+                  <span v-else-if="p.status === 'pass'" class="result-pass">{{ p.label || '✓ Đạt' }}</span>
+                  <span v-else-if="p.status === 'near'" class="result-near">{{ p.label || 'Cảnh báo' }}</span>
+                  <span v-else-if="p.status === 'fail'" class="result-fail">{{ p.label || '✗ Vượt ngưỡng' }}</span>
+                </td>
+                <td>
+                  <div v-if="p.status !== 'empty' && typeof p.ratio === 'number' && !isNaN(p.ratio)" style="display:flex;align-items:center;gap:8px">
+                    <span class="ratio-bar">
+                      <span class="ratio-fill" :style="{ width: p.fillWidth + '%', background: p.fillColor }"></span>
+                    </span>
+                    <span style="font-size:11.5px;color:var(--text2);font-weight:500">{{ Number.isFinite(p.ratio) ? p.ratio.toFixed(2) + 'x' : '∞' }}</span>
+                  </div>
+                  <div v-else-if="p.status !== 'empty' && p.loai === 'range'" style="display:flex;align-items:center;gap:8px">
+                    <span class="ratio-bar">
+                      <span class="ratio-fill" :style="{ width: p.fillWidth + '%', background: p.fillColor }"></span>
+                    </span>
+                    <span style="font-size:11px;color:var(--text3)">[{{ p.min }}–{{ p.max }}]</span>
+                  </div>
+                  <span v-else style="color:var(--text3)">—</span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bottom Table Pagination -->
+      <div v-if="paramPageSize < 999 && totalParamPages > 1" class="no-print"
+           style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface);flex-wrap:wrap;gap:10px">
+        <div style="font-size:12.5px;color:var(--text2)">
+          Hiển thị dòng <strong>{{ (paramCurrentPage - 1) * paramPageSize + 1 }}</strong> – <strong>{{ Math.min(paramCurrentPage * paramPageSize, evaluatedParams.length) }}</strong> / {{ evaluatedParams.length }}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button type="button" class="pagination-btn" :disabled="paramCurrentPage === 1" @click="paramCurrentPage--">‹ Trước</button>
+          <button v-for="pg in totalParamPages" :key="pg" type="button" class="pagination-btn" :class="{ active: pg === paramCurrentPage }" @click="paramCurrentPage = pg">{{ pg }}</button>
+          <button type="button" class="pagination-btn" :disabled="paramCurrentPage === totalParamPages" @click="paramCurrentPage++">Sau ›</button>
+        </div>
+      </div>
+
+      <!-- Footer note -->
+      <div style="padding:12px 20px;border-top:1px solid var(--border);background:var(--bg);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <span class="no-print">Nhập giá trị vào cột "Kết quả đo" — kết luận đối chiếu được tính toán theo thời gian thực.</span>
+        <span>Áp dụng: {{ currentQcvn.ap_dung }}</span>
+      </div>
+    </div>
+
+    <!-- SLIDE-OVER DRAWER: SAVED SAMPLES -->
+    <div v-if="showSamplesDrawer" class="drawer-overlay no-print" @click.self="showSamplesDrawer = false">
+      <div class="drawer-panel drawer-sm">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <i class="ti ti-flask-2" style="color:var(--accent)"></i>
+            <span>Danh sách Mẫu quan trắc đã lưu</span>
           </div>
-          <div v-else ref="projectSearchRef" style="position:relative">
-            <input type="text" v-model="projectSearchQuery" 
-                   @input="searchProjects(projectSearchQuery)"
-                   @focus="projectSearchQuery.length >= 2 && searchProjects(projectSearchQuery)"
-                   placeholder="Gõ tên dự án để tìm kiếm..."
-                   style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text);background:var(--surface)" />
-            <div v-if="showProjectDropdown" 
-                 style="position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow);max-height:240px;overflow-y:auto;z-index:50">
-              <div v-for="p in projectSearchResults" :key="p.id"
-                   @click="selectLinkedProject(p)"
-                   style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px;transition:background 0.1s"
-                   @mouseenter="$event.target.style.background='var(--surface2)'"
-                   @mouseleave="$event.target.style.background='transparent'">
-                <div style="font-weight:600">{{ p.ten_du_an }}</div>
-                <div style="font-size:11px;color:var(--text3);margin-top:2px">
-                  {{ p.loai_ho_so }} — {{ p.nhom_du_an }} — {{ p.tinh_thanh || p.dia_chi_hien_thi }}
+          <button type="button" class="drawer-close-btn" @click="showSamplesDrawer = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <button type="button" class="btn-primary" style="width:100%;margin-bottom:16px"
+                  @click="clearValues(); showSamplesDrawer = false">
+            <i class="ti ti-plus"></i>
+            <span>Tạo mẫu quan trắc mới</span>
+          </button>
+
+          <div v-if="loadedSamples.length === 0" style="text-align:center;padding:36px 16px;color:var(--text3);font-size:13px">
+            Chưa có mẫu quan trắc nào được lưu.
+          </div>
+
+          <div v-else style="display:flex;flex-direction:column;gap:8px">
+            <div v-for="s in loadedSamples" :key="s.id" class="project-item">
+              <button type="button" class="project-btn" :class="{ active: sampleId === s.id }"
+                      @click="selectSample(s); showSamplesDrawer = false">
+                <div>{{ s.name }}</div>
+                <div v-if="s.project_name" style="font-size:11.5px;color:var(--text3);font-weight:400;margin-top:2px;display:flex;align-items:center;gap:4px">
+                  <i class="ti ti-link"></i>
+                  <span>{{ s.project_name }}</span>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Paste quick numbers -->
-        <div class="card no-print" style="padding:18px 22px;margin-bottom:16px">
-          <div class="form-group" style="margin-bottom:0">
-            <label class="form-label" style="display:block">
-              <span style="display:block;margin-bottom:4px">📋 Dán nhanh bảng kết quả từ Lab (Excel / PDF / Word)</span>
-              <span style="font-size:11px;text-transform:none;color:var(--text3);font-weight:normal;display:block">Hệ thống sẽ tự nhận diện thông số và điền vào bảng</span>
-            </label>
-            <textarea v-model="pasteArea" rows="3"
-              placeholder="Ví dụ:&#13;pH: 7.2&#13;BOD5: 12 mg/l&#13;TSS: 15&#13;Asen: 0.008 mg/l"
-              style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:monospace;font-size:13px;resize:vertical;background:var(--bg);margin-top:6px"></textarea>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px">
-              <button class="btn-classify" @click="handleQuickPaste"
-                style="width:auto;margin:0;padding:6px 16px;font-size:12px">⚡ Tự động điền bảng</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Toolbar -->
-        <div class="card no-print" style="padding:18px 22px;margin-bottom:16px">
-          <div class="qcvn-toolbar">
-            <div class="form-group" style="min-width:220px">
-              <label class="form-label">Loại môi trường</label>
-              <select v-model="selectedType">
-                <option value="nuoc_mat">💧 Nước mặt (QCVN 08-MT:2015)</option>
-                <option value="nuoc_thai_cn">🏭 Nước thải công nghiệp (QCVN 40:2025)</option>
-                <option value="nuoc_thai_sh">🏠 Nước thải sinh hoạt (QCVN 14:2025)</option>
-                <option value="nuoc_duoi_dat">🚰 Nước dưới đất (QCVN 09-MT:2015)</option>
-                <option value="khong_khi">🌬️ Không khí xung quanh (QCVN 05:2023)</option>
-                <option value="dat">🌱 Chất lượng đất (QCVN 03:2023)</option>
-              </select>
-            </div>
-
-            <div class="form-group" style="min-width:220px" v-show="SUB_TYPES[selectedType] && SUB_TYPES[selectedType].length > 1">
-              <label class="form-label">Cột / Phân loại</label>
-              <select v-model="selectedSubType">
-                <option v-for="item in (SUB_TYPES[selectedType] || [])" :key="item.value" :value="item.value">{{ item.text }}</option>
-              </select>
-            </div>
-            
-            <div class="form-group" style="min-width:180px">
-              <label class="form-label">Tên mẫu / Vị trí</label>
-              <input type="text" v-model="sampleName" placeholder="VD: NM-01, NT-01..." />
-            </div>
-            
-            <div style="display:flex;gap:8px;padding-bottom:1px;flex-wrap:wrap;align-items:flex-end">
-              <button class="btn-export" @click="exportPDF">📄 Xuất PDF / In</button>
-              <button class="btn-export" @click="exportTxt">⬇ Xuất File Text</button>
-              <button class="btn-clear" @click="clearValues">🗑 Xoá số liệu</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Summary -->
-        <div class="summary-row" v-if="summary.total > 0">
-          <div class="summary-box">
-            <div class="summary-num" style="color:var(--text)">{{ summary.total }}</div>
-            <div class="summary-label">Tổng thông số</div>
-          </div>
-          <div class="summary-box">
-            <div class="summary-num" style="color:#1A6B3A">{{ summary.pass }}</div>
-            <div class="summary-label">Đạt chuẩn</div>
-          </div>
-          <div class="summary-box">
-            <div class="summary-num" style="color:#8B6010">{{ summary.near }}</div>
-            <div class="summary-label">Cảnh báo (&gt;80%)</div>
-          </div>
-          <div class="summary-box">
-            <div class="summary-num" style="color:#A82020">{{ summary.fail }}</div>
-            <div class="summary-label">Vượt ngưỡng</div>
-          </div>
-        </div>
-
-        <!-- Table -->
-        <div class="card" style="padding:0;overflow:hidden" v-if="currentQcvn">
-          <!-- Thanh điều khiển phân trang thông số trên -->
-          <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
-            <div style="font-size:12.5px;color:var(--text2)">
-              📋 Danh sách <strong>{{ evaluatedParams.filter(p => !p.nhom).length }}</strong> thông số quy chuẩn
-              <span v-if="paramPageSize < 999 && totalParamPages > 1"> (Trang {{ paramCurrentPage }}/{{ totalParamPages }})</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
-              <span>Hiển thị thông số:</span>
-              <select v-model.number="paramPageSize"
-                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px;cursor:pointer">
-                <option :value="10">10 / trang</option>
-                <option :value="20">20 / trang</option>
-                <option :value="50">50 / trang</option>
-                <option :value="999">Tất cả thông số</option>
-              </select>
+              </button>
+              <button type="button" class="btn-delete-project" @click="handleDeleteSample(s.id)" title="Xóa mẫu">
+                <i class="ti ti-trash"></i>
+              </button>
             </div>
           </div>
 
-          <div id="qv-table-wrap" style="overflow-x:auto">
-            <table class="qcvn-table" style="table-layout:fixed;width:100%;min-width:750px">
-              <thead>
-                <tr>
-                  <th style="width:28%">Thông số</th>
-                  <th style="width:10%">Đơn vị</th>
-                  <th style="width:16%">Giới hạn cho phép</th>
-                  <th style="width:14%">Kết quả đo</th>
-                  <th style="width:16%">Đánh giá</th>
-                  <th style="width:16%">Tỉ lệ/ngưỡng</th>
-                </tr>
-              </thead>
-              <tbody>
-                <template v-for="(p, i) in paginatedParams" :key="i">
-                  <tr v-if="p.nhom">
-                    <td class="param-group-head" colspan="6">{{ p.nhom }}</td>
-                  </tr>
-                  
-                  <tr v-else :class="{ 'row-pass': p.status === 'pass', 'row-fail': p.status === 'fail', 'row-near': p.status === 'near' }">
-                    <td style="font-weight:500;line-height:1.45">{{ p.ten }}</td>
-                    <td style="color:var(--text3)">{{ p.don_vi }}</td>
-                    <td>
-                      <span class="limit-val">
-                        {{ p.loai === 'range' ? `${p.min} – ${p.max}` : p.loai === 'min' ? `≥ ${p.gioi_han}` : (p.note || `≤ ${p.gioi_han}`) }}
-                      </span>
-                    </td>
-                    <td>
-                      <input type="number" step="any" min="0" v-model.number="measuredValues[p.key]" placeholder="—" class="no-print" style="width:100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-weight: 500; text-align: center;" />
-                      <span class="print-only">{{ p.value !== undefined && p.value !== null && !isNaN(p.value) ? p.value : '—' }}</span>
-                    </td>
-                    <td>
-                      <span v-if="p.status === 'empty'" class="result-empty">—</span>
-                      <span v-else-if="p.status === 'pass'" class="result-pass">{{ p.label || '✓ Đạt' }}</span>
-                      <span v-else-if="p.status === 'near'" class="result-near">{{ p.label || '⚠ Gần giới hạn' }}</span>
-                      <span v-else-if="p.status === 'fail'" class="result-fail">{{ p.label || '✗ Vượt' }}</span>
-                    </td>
-                    <td>
-                      <div v-if="p.status !== 'empty' && typeof p.ratio === 'number' && !isNaN(p.ratio)" style="display:flex; flex-direction:column; gap:2px">
-                        <span style="font-size:11px;color:var(--text3)">{{ Number.isFinite(p.ratio) ? p.ratio.toFixed(2) + 'x' : '∞' }}</span>
-                        <span class="ratio-bar">
-                          <span class="ratio-fill" :style="{ width: p.fillWidth + '%', background: p.fillColor }"></span>
-                        </span>
-                      </div>
-                      <div v-else-if="p.status !== 'empty' && p.loai === 'range'" style="display:flex; flex-direction:column; gap:2px">
-                        <span style="font-size:11px;color:var(--text3)">Khoảng chuẩn [{{ p.min }} - {{ p.max }}]</span>
-                        <span class="ratio-bar">
-                          <span class="ratio-fill" :style="{ width: p.fillWidth + '%', background: p.fillColor }"></span>
-                        </span>
-                      </div>
-                      <span v-else>—</span>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:12px;color:var(--text2)">
+            <span>Số lượng hiển thị:</span>
+            <select v-model.number="sampleLimit" @change="fetchSamples(1)" style="width:100px;height:30px;font-size:12px">
+              <option :value="10">10 / trang</option>
+              <option :value="20">20 / trang</option>
+              <option :value="50">50 / trang</option>
+            </select>
           </div>
-          
-          <!-- Thanh phân trang thông số dưới -->
-          <div v-if="paramPageSize < 999 && totalParamPages > 1" class="no-print"
-            style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid var(--border);background:var(--surface2);flex-wrap:wrap;gap:10px">
-            <div style="font-size:12px;color:var(--text2)">
-              Hiển thị thông số <strong>{{ (paramCurrentPage - 1) * paramPageSize + 1 }}</strong> – <strong>{{ Math.min(paramCurrentPage * paramPageSize, evaluatedParams.length) }}</strong> / {{ evaluatedParams.length }} dòng
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <button class="pagination-btn" :disabled="paramCurrentPage === 1" @click="paramCurrentPage--">‹ Trước</button>
-              <button v-for="pg in totalParamPages" :key="pg" class="pagination-btn" :class="{ active: pg === paramCurrentPage }" @click="paramCurrentPage = pg">{{ pg }}</button>
-              <button class="pagination-btn" :disabled="paramCurrentPage === totalParamPages" @click="paramCurrentPage++">Sau ›</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)">
-              <span>Hiển thị:</span>
-              <select v-model.number="paramPageSize"
-                style="padding:3px 6px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px">
-                <option :value="10">10 / trang</option>
-                <option :value="20">20 / trang</option>
-                <option :value="50">50 / trang</option>
-                <option :value="999">Tất cả</option>
-              </select>
-            </div>
-          </div>
-          
-          <div style="padding:12px 20px;border-top:1px solid var(--border);font-size:11px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-            <span class="no-print">💡 Nhập giá trị vào cột "Kết quả đo" — đánh giá cập nhật ngay khi nhập</span>
-            <div class="no-print" style="display:flex;gap:8px;align-items:center">
-              <button class="btn-classify" @click="saveSample"
-                style="width:auto;margin:0;padding:6px 16px;font-size:12px">💾 Lưu kết quả mẫu</button>
-            </div>
-            <span style="font-style:italic">{{ currentQcvn.ap_dung }}</span>
+
+          <div v-if="totalPages > 1" class="pagination-container">
+            <button type="button" class="pagination-btn" :disabled="currentPage === 1" @click="fetchSamples(currentPage - 1)">&lt;</button>
+            <button v-for="page in totalPages" :key="page" type="button" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchSamples(page)">
+              {{ page }}
+            </button>
+            <button type="button" class="pagination-btn" :disabled="currentPage === totalPages" @click="fetchSamples(currentPage + 1)">&gt;</button>
           </div>
         </div>
       </div>

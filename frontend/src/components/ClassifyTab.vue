@@ -720,6 +720,8 @@ watch(() => props.loadProjectId, async (newId) => {
   }
 }, { immediate: true })
 
+const showProjectsDrawer = ref(false)
+
 onMounted(() => {
   fetchProjects()
   initMap()
@@ -727,53 +729,58 @@ onMounted(() => {
 </script>
 
 <template>
-  <div id="classify" class="page container">
-    <div class="section-head">Phân loại dự án & Xác định hồ sơ</div>
-    <div class="section-desc">Nhập thông tin hoặc chọn địa điểm trên bản đồ để tự động xác định loại hồ sơ, thẩm quyền, phụ lục áp dụng và danh mục tài liệu nộp</div>
+  <div id="classify" class="page container fade-up">
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div>
+        <h2 class="section-head">Phân loại Dự án &amp; Xác định Hồ sơ Môi trường</h2>
+        <p class="section-desc">
+          Nhập thông số kỹ thuật và định vị tọa độ GIS để tự động xác định nhóm dự án, loại hồ sơ (ĐTM / GPMT / ĐKMT), cơ quan thẩm quyền và danh mục tài liệu.
+        </p>
+      </div>
+    </div>
 
-    <div class="classify-grid has-sidebar">
-      <!-- COLUMN 1: SAVED PROJECTS LIST -->
-      <div class="projects-sidebar" id="projects-sidebar-container" style="display: block;">
-        <button class="btn-new-project" @click="createNewProject"
-          style="width:100%;padding:10px;background:var(--accent2);color:var(--accent);border:1px dashed var(--accent);border-radius:var(--radius);font-weight:600;font-size:13px;cursor:pointer;margin-bottom:16px;transition:all 0.15s">
-          ➕ Tạo dự án mới
-        </button>
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">
-          Dự án đã lưu
-        </div>
-        <div id="saved-projects-list" style="display:flex;flex-direction:column;gap:8px">
-          <div v-if="projects.length === 0" style="font-size:12px;color:var(--text3);text-align:center;padding:20px 0">
-            Chưa có dự án nào
-          </div>
-          <div v-for="p in projects" :key="p.id" class="project-item">
-            <button class="project-btn" :class="{ active: projectId === p.id }" @click="selectProject(p)">
-              {{ p.name }}
-            </button>
-            <button class="btn-delete-project" @click="handleDeleteProject(p.id)" title="Xóa dự án">🗑️</button>
-          </div>
-        </div>
-        <!-- Phân trang -->
-        <div v-if="totalPages > 1" id="projects-pagination" class="pagination-container" style="display:flex;justify-content:center;gap:6px;margin-top:16px">
-          <button class="pagination-btn" :disabled="currentPage === 1" @click="fetchProjects(currentPage - 1)">&lt;</button>
-          <button v-for="page in totalPages" :key="page" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchProjects(page)">
-            {{ page }}
-          </button>
-          <button class="pagination-btn" :disabled="currentPage === totalPages" @click="fetchProjects(currentPage + 1)">&gt;</button>
+    <!-- TOP WORKSPACE PROJECT BAR -->
+    <div class="workspace-bar">
+      <div class="workspace-bar-left">
+        <span style="font-size:12.5px;color:var(--text3);font-weight:500">Hồ sơ đang làm việc:</span>
+        <div class="workspace-current-badge" :class="{ 'is-saved': !!projectId }">
+          <i class="ti" :class="projectId ? 'ti-folder-check' : 'ti-file-plus'"></i>
+          <span>{{ projectId ? (name || 'Dự án đã lưu') : 'Dự án mới (chưa lưu)' }}</span>
         </div>
       </div>
 
-      <!-- FORM -->
+      <div class="workspace-bar-actions">
+        <button type="button" class="btn-secondary btn-sm" @click="createNewProject">
+          <i class="ti ti-plus"></i>
+          <span>Tạo dự án mới</span>
+        </button>
+        <button type="button" class="btn-primary btn-sm" @click="showProjectsDrawer = true">
+          <i class="ti ti-folders"></i>
+          <span>Dự án đã lưu ({{ projects.length }})</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2-COLUMN CLASSIFY STUDIO -->
+    <div class="classify-studio-grid">
+      <!-- LEFT COLUMN: INPUT FORM -->
       <div class="form-section">
-        <div class="form-group">
-          <label class="form-label">Tên dự án *</label>
-          <input type="text" v-model="name" placeholder="Nhập tên dự án..." required />
+        <div class="form-block-title">
+          <i class="ti ti-building-factory-2"></i>
+          <span>1. Thông tin định danh &amp; Ngành nghề</span>
         </div>
-        
+
         <div class="form-group">
-          <label class="form-label">Loại hình dự án *</label>
+          <label class="form-label">Tên dự án đầu tư *</label>
+          <input type="text" v-model="name" placeholder="Nhập tên dự án đầy đủ..." required />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Loại hình sản xuất / kinh doanh *</label>
           <select v-model="nganh">
-            <option value="">Chọn ngành nghề</option>
-            <optgroup label="🏭 Công nghiệp chế biến">
+            <option value="">Chọn ngành nghề dự án...</option>
+            <optgroup label="Công nghiệp chế biến & Chế tạo">
               <option value="che_bien_go">Chế biến gỗ / Sản xuất MDF, ván sàn</option>
               <option value="xi_mang">Xi măng, clinker, vật liệu xây dựng</option>
               <option value="thep">Luyện kim, sản xuất thép, phôi thép</option>
@@ -785,7 +792,7 @@ onMounted(() => {
               <option value="cao_su_cb">Cao su chế biến (mủ khô)</option>
               <option value="duoc_pham">Dược phẩm, mỹ phẩm</option>
             </optgroup>
-            <optgroup label="🏗️ Hạ tầng & Đô thị">
+            <optgroup label="Hạ tầng kỹ thuật & Đô thị">
               <option value="kcn">Khu công nghiệp / KCX / Khu kinh tế</option>
               <option value="do_thi">Khu đô thị, nhà ở, chung cư</option>
               <option value="trung_tam_tm">Trung tâm thương mại, văn phòng</option>
@@ -793,11 +800,11 @@ onMounted(() => {
               <option value="cang_bien">Cảng biển, bến cảng</option>
               <option value="thuy_dien">Thủy điện, điện mặt trời, điện gió</option>
             </optgroup>
-            <optgroup label="🏥 Y tế & Dịch vụ">
+            <optgroup label="Y tế, Du lịch & Dịch vụ">
               <option value="benh_vien">Bệnh viện, phòng khám, cơ sở y tế</option>
               <option value="khach_san">Khách sạn, resort, khu du lịch</option>
             </optgroup>
-            <optgroup label="🌾 Nông — Lâm — Ngư">
+            <optgroup label="Nông — Lâm — Thủy sản">
               <option value="nuoi_thuy_san">Nuôi trồng thủy sản (ao, lồng bè)</option>
               <option value="chan_nuoi">Chăn nuôi gia súc, gia cầm</option>
               <option value="nao_vet">Nạo vét luồng hàng hải, kênh rạch</option>
@@ -807,58 +814,67 @@ onMounted(() => {
 
         <div class="form-group">
           <label class="form-label">{{ capacityLabel }}</label>
-          <input type="number" v-model="capacity" min="0" step="1" placeholder="Nhập con số..." />
+          <input type="number" v-model="capacity" min="0" step="1" placeholder="Nhập quy mô công suất..." />
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Lưu lượng nước thải phát sinh (m³/ngày)</label>
-          <input type="number" v-model="nt" min="0" step="10" placeholder="0 nếu chưa xác định" />
+        <div class="form-block-title" style="margin-top:20px">
+          <i class="ti ti-droplet-half-2"></i>
+          <span>2. Quy mô phát thải</span>
         </div>
 
-        <div class="form-group">
-          <label class="form-label">Lưu lượng khí thải (m³/giờ)</label>
-          <input type="number" v-model="kt" min="0" step="100" placeholder="0 nếu chưa xác định" />
+        <div class="form-grid-2">
+          <div class="form-group">
+            <label class="form-label">Nước thải (m³/ngày)</label>
+            <input type="number" v-model="nt" min="0" step="10" placeholder="0 nếu chưa xác định" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Khí thải (m³/giờ)</label>
+            <input type="number" v-model="kt" min="0" step="100" placeholder="0 nếu chưa xác định" />
+          </div>
+        </div>
+
+        <div class="form-block-title" style="margin-top:20px">
+          <i class="ti ti-map-pin"></i>
+          <span>3. Vị trí địa lý (GIS) &amp; Yếu tố nhạy cảm</span>
         </div>
 
         <!-- Vị trí dự án (GIS) — 3 bước -->
-        <div class="form-group" style="border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--surface)">
-          <label class="form-label" style="font-size:14px;margin-bottom:12px">📍 Vị trí & Địa bàn dự án</label>
-
-          <!-- BƯỚC 1: Thu hẹp khu vực -->
+        <div class="form-group" style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:var(--bg)">
           <div style="margin-bottom:12px">
-            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Bước 1 — Chọn địa bàn hành chính (sau sáp nhập)</div>
-            
-            <!-- 1a: Cascading Searchable Selects sau sáp nhập (Tỉnh/TP -> Phường/Xã) -->
-            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">
+              Bước 1 — Chọn đơn vị hành chính (sau sáp nhập)
+            </div>
+
+            <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
               <div>
-                <label style="font-size:11px;color:var(--text2);margin-bottom:3px;display:block;font-weight:500">Tỉnh / Thành phố:</label>
+                <label style="font-size:11.5px;color:var(--text2);margin-bottom:4px;display:block;font-weight:500">Tỉnh / Thành phố</label>
                 <SearchableSelect
                   v-model="selectedProvince"
                   :options="divisions"
-                  placeholder="Chọn Tỉnh / Thành phố..."
-                  search-placeholder="🔍 Gõ tìm Tỉnh/TP..."
+                  placeholder="Chọn Tỉnh/TP..."
+                  search-placeholder="Gõ tìm Tỉnh/TP..."
                   @change="onProvinceSelect"
                 />
               </div>
               <div>
-                <label style="font-size:11px;color:var(--text2);margin-bottom:3px;display:block;font-weight:500">Phường / Xã (sau sáp nhập):</label>
+                <label style="font-size:11.5px;color:var(--text2);margin-bottom:4px;display:block;font-weight:500">Phường / Xã</label>
                 <SearchableSelect
                   v-model="selectedWard"
                   :options="wardList"
                   :disabled="!selectedProvince"
-                  placeholder="Chọn Phường / Xã..."
-                  search-placeholder="🔍 Gõ tìm Phường/Xã..."
+                  placeholder="Chọn Phường/Xã..."
+                  search-placeholder="Gõ tìm Phường/Xã..."
                   @change="onWardSelect"
                 />
               </div>
             </div>
-            
-            <!-- 1b: Tìm kiếm tự do -->
+
             <div style="position:relative">
-              <label style="font-size:11px;color:var(--text2);margin-bottom:3px;display:block;font-weight:500">Hoặc tìm địa chỉ tự do:</label>
-              <input type="text" v-model="addressSearch" @input="searchAddress" placeholder="Nhập số nhà, tên đường, khu vực..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px;box-sizing:border-box" />
-              <div v-if="addressResults.length" style="position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--border);border-radius:0 0 6px 6px;z-index:1000;max-height:200px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,0.1)">
-                <div v-for="(item, i) in addressResults" :key="i" @click="selectAddressResult(item)" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" @mouseenter="$event.target.style.background='var(--surface2)'" @mouseleave="$event.target.style.background='white'">
+              <label style="font-size:11.5px;color:var(--text2);margin-bottom:4px;display:block;font-weight:500">Hoặc tìm kiếm tọa độ địa chỉ</label>
+              <input type="text" v-model="addressSearch" @input="searchAddress" placeholder="Nhập số nhà, tên đường, KCN..." />
+              <div v-if="addressResults.length" style="position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:0 0 var(--radius) var(--radius);z-index:1000;max-height:200px;overflow:auto;box-shadow:var(--shadow-md)">
+                <div v-for="(item, i) in addressResults" :key="i" @click="selectAddressResult(item)"
+                     style="padding:8px 12px;font-size:12.5px;cursor:pointer;border-bottom:1px solid var(--border)">
                   {{ item.display_name }}
                 </div>
               </div>
@@ -866,80 +882,100 @@ onMounted(() => {
           </div>
 
           <!-- BƯỚC 2: Xác nhận vị trí trên bản đồ -->
-          <div style="margin-bottom:10px">
-            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Bước 2 — Click hoặc kéo marker để xác nhận vị trí</div>
-            <div id="mini-map" style="height:220px;border-radius:6px;border:1px solid var(--border);background:var(--surface2)"></div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+              Bước 2 — Chấm hoặc kéo ghim trên bản đồ
+            </div>
+            <div id="mini-map" style="height:210px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface2)"></div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-              <div style="display:flex;gap:12px;font-size:11px;color:var(--text3)">
-                <span>Lat: <strong style="color:var(--text)">{{ latitude.toFixed(6) }}</strong></span>
-                <span>Lng: <strong style="color:var(--text)">{{ longitude.toFixed(6) }}</strong></span>
+              <div style="display:flex;gap:12px;font-size:11.5px;color:var(--text3)">
+                <span>Vĩ độ: <strong style="color:var(--text)">{{ latitude.toFixed(6) }}</strong></span>
+                <span>Kinh độ: <strong style="color:var(--text)">{{ longitude.toFixed(6) }}</strong></span>
               </div>
-              <span v-if="locationConfirmed" style="font-size:11px;color:#27ae60;font-weight:600">✅ Đã xác nhận vị trí</span>
-              <span v-else style="font-size:11px;color:var(--warn)">⚠️ Chưa xác nhận</span>
+              <span v-if="locationConfirmed" style="font-size:11.5px;color:var(--success);font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                <i class="ti ti-circle-check"></i> Đã xác nhận tọa độ
+              </span>
+              <span v-else style="font-size:11.5px;color:var(--warn);display:inline-flex;align-items:center;gap:4px">
+                <i class="ti ti-alert-circle"></i> Chưa ghim vị trí
+              </span>
             </div>
           </div>
 
-          <!-- BƯỚC 3: Địa chỉ hiển thị (tự động điền, cho phép sửa) -->
+          <!-- BƯỚC 3: Địa chỉ hiển thị -->
           <div>
-            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Bước 3 — Địa chỉ hiển thị</div>
-            <input type="text" v-model="diaChiHienThi" placeholder="Địa chỉ sẽ tự động điền khi xác nhận vị trí..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;box-sizing:border-box" />
-            <span style="font-size:11px;color:var(--text3);display:block;margin-top:4px;line-height:1.4">💡 Bạn có thể sửa tay nếu kết quả tự động không chính xác</span>
+            <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+              Bước 3 — Địa chỉ ghi nhận trong hồ sơ
+            </div>
+            <input type="text" v-model="diaChiHienThi" placeholder="Địa chỉ tự động điền hoặc nhập thủ công..." />
           </div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Điều kiện đặc biệt</label>
+          <label class="form-label">Điều kiện môi trường đặc thù</label>
           <div class="check-grid">
-            <label class="check-item"><input type="checkbox" v-model="rung"> Đất rừng PH/ĐD</label>
-            <label class="check-item"><input type="checkbox" v-model="lua"> Đất lúa &gt;10 ha</label>
-            <label class="check-item"><input type="checkbox" v-model="bg"> Vùng biên giới 50km</label>
-            <label class="check-item"><input type="checkbox" v-model="kcn"> Trong KCN có ĐTM</label>
-            <label class="check-item"><input type="checkbox" v-model="phanky"> Dự án phân kỳ</label>
-            <label class="check-item"><input type="checkbox" v-model="morongdt"> Mở rộng dự án cũ</label>
-            <label class="check-item"><input type="checkbox" v-model="ctnh"> Phát sinh CTNH</label>
-            <label class="check-item"><input type="checkbox" v-model="dtcong"> Đầu tư công</label>
+            <label class="check-item"><input type="checkbox" v-model="rung"> Đất rừng PH / Đặc dụng</label>
+            <label class="check-item"><input type="checkbox" v-model="lua"> Chuyển đất lúa &gt;10 ha</label>
+            <label class="check-item"><input type="checkbox" v-model="bg"> Vùng biên giới / Di sản</label>
+            <label class="check-item"><input type="checkbox" v-model="kcn"> Trong KCN đã có ĐTM</label>
+            <label class="check-item"><input type="checkbox" v-model="phanky"> Đầu tư phân kỳ</label>
+            <label class="check-item"><input type="checkbox" v-model="morongdt"> Mở rộng dự án hiện hữu</label>
+            <label class="check-item"><input type="checkbox" v-model="ctnh"> Có phát sinh CTNH</label>
+            <label class="check-item"><input type="checkbox" v-model="dtcong"> Dự án đầu tư công</label>
           </div>
         </div>
 
-        <button class="btn-classify" @click="handleClassify(true)">Phân loại hồ sơ →</button>
+        <button type="button" class="btn-classify" style="width:100%;margin-top:6px" @click="handleClassify(true)">
+          <i class="ti ti-calculator"></i>
+          <span>Phân loại &amp; Xác định hồ sơ</span>
+        </button>
       </div>
 
-      <!-- RESULT -->
+      <!-- RIGHT COLUMN: CLASSIFICATION RESULT -->
       <div class="result-area" id="result-area">
-        <div v-if="!result" class="result-empty">
-          <div style="font-size:40px;margin-bottom:12px">📋</div>
-          <div style="font-weight:500;color:var(--text2);margin-bottom:6px">Nhập thông tin dự án</div>
-          <div style="font-size:13px">Điền form bên trái và nhấn <strong>Phân loại</strong><br>để xem kết quả chi tiết</div>
+        <div v-if="!result" class="result-empty-card">
+          <div class="kpi-icon" style="width:48px;height:48px;font-size:24px;margin:0 auto 14px">
+            <i class="ti ti-file-analytics"></i>
+          </div>
+          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">Chưa có dữ liệu phân loại</div>
+          <div style="font-size:13px;color:var(--text3);max-width:340px;margin:0 auto">
+            Điền thông số dự án ở biểu mẫu bên trái và nhấn <strong>Phân loại &amp; Xác định hồ sơ</strong> để hệ thống phân tích kết quả.
+          </div>
         </div>
 
         <div v-else class="fade-up">
+          <!-- Executive Summary Card -->
           <div class="result-hero">
             <div class="result-main">
-              <div class="result-icon" :style="{ background: result.hi.bg }">{{ result.hi.icon }}</div>
-              <div>
+              <div class="result-icon">
+                <i class="ti ti-shield-check"></i>
+              </div>
+              <div style="flex:1;min-width:0">
                 <div class="result-label">{{ result.hi.label }}</div>
-                <div class="result-sub">{{ result.nhom }} theo NĐ 08/2022 (cập nhật NĐ 48/2026)</div>
+                <div class="result-sub">{{ result.nhom }} — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026)</div>
               </div>
             </div>
-            
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
               <span class="chip" :class="result.hi.class">{{ result.hs }}</span>
               <span class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' }">
-                {{ result.coQuan }}
+                <i class="ti ti-building-bank"></i> {{ result.coQuan }}
               </span>
-              <span class="chip chip-gray">⏱ {{ result.thoiHan }}</span>
+              <span class="chip chip-gray">
+                <i class="ti ti-clock"></i> {{ result.thoiHan }}
+              </span>
               <span v-if="result.phuluc && result.phuluc !== '—'" class="chip chip-info">{{ result.phuluc }}</span>
             </div>
-            
-            <div style="font-size:12px;color:var(--text3);padding:8px 12px;background:var(--surface2);border-radius:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+
+            <div style="font-size:12.5px;color:var(--text2);padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
               <div>
-                <strong style="color:var(--text2)">Căn cứ áp dụng:</strong> {{ result.ref }}
+                <strong style="color:var(--text)">Căn cứ pháp lý trực tiếp:</strong> {{ result.ref }}
               </div>
-              <button v-if="result.ref_law_id" @click="emit('view-law', result.ref_law_id)" class="btn-clear" style="padding:2px 8px;font-size:11px;margin:0;width:auto;border-radius:4px" title="Xem chi tiết văn bản trong kho luật">
-                <i class="ti ti-file-text"></i> Tra cứu văn bản &rarr;
+              <button v-if="result.ref_law_id" type="button" class="btn-secondary btn-sm" @click="emit('view-law', result.ref_law_id)">
+                <i class="ti ti-scale"></i>
+                <span>Xem điều khoản</span>
               </button>
             </div>
-            
+
             <div class="info-grid">
               <div class="info-box">
                 <div class="info-box-label">Loại hồ sơ</div>
@@ -952,7 +988,7 @@ onMounted(() => {
               <div class="info-box">
                 <div class="info-box-label">Thẩm quyền</div>
                 <div class="info-box-val" :class="{ 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' }">
-                  {{ result.tq === 'cap_bo' ? 'Bộ NNMT' : result.tq === 'cap_so' ? 'Sở TNMT' : 'UBND Huyện/Xã' }}
+                  {{ result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'Sở NN&MT / Tỉnh' : 'UBND Cấp Xã/Huyện' }}
                 </div>
               </div>
               <div class="info-box">
@@ -964,38 +1000,51 @@ onMounted(() => {
 
           <!-- Warnings adjusted Group -->
           <div v-if="result.nangNhom.length" class="upgrade-box">
-            <div class="upgrade-title">⚡ Điều chỉnh nhóm tự động</div>
+            <div class="upgrade-title">
+              <i class="ti ti-alert-triangle"></i>
+              <span>Điều chỉnh nâng nhóm tự động</span>
+            </div>
             <div v-for="n in result.nangNhom" :key="n.text" class="upgrade-item">
-              {{ n.icon }} {{ n.text }} <span style="font-size:10px;font-style:italic">({{ n.ref }})</span>
+              • {{ n.text }} <span style="font-size:11.5px;color:var(--text3)">({{ n.ref }})</span>
             </div>
           </div>
 
           <!-- Sensitive Areas warnings -->
-          <div v-for="c in result.cauNhom" :key="c.text" :class="c.type === 'warn' ? 'upgrade-box' : 'phanlky-box'" style="margin-top:10px">
-            <div :class="c.type === 'warn' ? 'upgrade-title' : 'phanlky-title'">{{ c.icon }} Lưu ý quan trọng</div>
+          <div v-for="c in result.cauNhom" :key="c.text" :class="c.type === 'warn' ? 'upgrade-box' : 'phanlky-box'">
+            <div :class="c.type === 'warn' ? 'upgrade-title' : 'phanlky-title'">
+              <i class="ti" :class="c.type === 'warn' ? 'ti-alert-circle' : 'ti-info-circle'"></i>
+              <span>Lưu ý pháp lý quan trọng</span>
+            </div>
             <div :class="c.type === 'warn' ? 'upgrade-item' : 'phanlky-text'">
-              {{ c.text }} <span style="font-size:10px;font-style:italic">({{ c.ref }})</span>
+              {{ c.text }} <span style="font-size:11.5px;color:var(--text3)">({{ c.ref }})</span>
             </div>
           </div>
 
           <!-- Info Extra -->
-          <div v-for="i in result.infoExtra" :key="i.text" class="phanlky-box" style="margin-top:10px">
-            <div class="phanlky-title">{{ i.icon }} Gợi ý nghiệp vụ</div>
+          <div v-for="i in result.infoExtra" :key="i.text" class="phanlky-box">
+            <div class="phanlky-title">
+              <i class="ti ti-bulb"></i>
+              <span>Hướng dẫn nghiệp vụ</span>
+            </div>
             <div class="phanlky-text">
-              {{ i.text }} <span style="font-size:10px;font-style:italic">({{ i.ref }})</span>
+              {{ i.text }} <span style="font-size:11.5px;color:var(--text3)">({{ i.ref }})</span>
             </div>
           </div>
 
           <!-- Law Applied List -->
-          <div class="law-ref-block" style="margin-top:14px">
-            <div class="law-ref-title">📖 Văn bản pháp lý áp dụng</div>
-            <div v-for="r in result.lr" :key="r.num" class="law-ref-item" style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+          <div class="law-ref-block">
+            <div class="law-ref-title">
+              <i class="ti ti-book" style="color:var(--accent)"></i>
+              <span>Hệ thống văn bản pháp lý áp dụng</span>
+            </div>
+            <div v-for="r in result.lr" :key="r.num" class="law-ref-item" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-direction:row">
               <div style="flex:1">
                 <div class="law-ref-num">{{ r.num }}</div>
                 <div class="law-ref-desc">{{ r.desc }}</div>
               </div>
-              <button v-if="r.law_id" @click="emit('view-law', r.law_id)" class="btn-clear" style="padding:3px 8px;font-size:11px;margin:0;width:auto;white-space:nowrap;border-radius:4px;flex-shrink:0" title="Bấm để mở chi tiết văn bản này trong kho luật">
-                <i class="ti ti-external-link"></i> Xem luật &rarr;
+              <button v-if="r.law_id" type="button" class="btn-secondary btn-sm" @click="emit('view-law', r.law_id)">
+                <span>Tra cứu</span>
+                <i class="ti ti-arrow-up-right"></i>
               </button>
             </div>
           </div>
@@ -1003,26 +1052,31 @@ onMounted(() => {
           <!-- Document checklist -->
           <div class="checklist-block" v-if="result.cl">
             <div class="checklist-title">
-              📋 Danh mục tài liệu cần chuẩn bị
-              <span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:auto">
-                {{ totalDocsCount }} tài liệu
+              <i class="ti ti-checklist" style="color:var(--accent)"></i>
+              <span>Danh mục tài liệu cần chuẩn bị</span>
+              <span class="chip chip-gray" style="margin-left:auto">
+                {{ checkedTotalCount }}/{{ totalDocsCount }} hoàn tất ({{ progressPercent }}%)
               </span>
             </div>
-            
-            <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin:4px 0 8px">
+
+            <div class="progress-bar" style="margin:0 0 14px">
+              <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
+            </div>
+
+            <div style="font-size:11.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin:4px 0 8px">
               Tài liệu bắt buộc
             </div>
             <div v-for="(item, i) in result.cl.bat_buoc" :key="'req-'+i" class="cl-item" @click="toggleChecklistItem(i)">
               <div class="cl-box" :class="{ done: checklistState[i] }"></div>
               <div>
                 <div class="cl-text" :class="{ done: checklistState[i] }">{{ item }}</div>
-                <div class="cl-required">BẮT BUỘC</div>
+                <div class="cl-required">Bắt buộc</div>
               </div>
             </div>
 
             <template v-if="result.cl.bo_sung && result.cl.bo_sung.length">
-              <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 8px">
-                Tài liệu bổ sung (tuỳ trường hợp)
+              <div style="font-size:11.5px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.04em;margin:16px 0 8px">
+                Tài liệu bổ sung (tùy trường hợp)
               </div>
               <div v-for="(item, i) in result.cl.bo_sung" :key="'opt-'+i" class="cl-item" @click="toggleChecklistItem(result.cl.bat_buoc.length + i)">
                 <div class="cl-box" :class="{ done: checklistState[result.cl.bat_buoc.length + i] }"></div>
@@ -1031,57 +1085,87 @@ onMounted(() => {
                 </div>
               </div>
             </template>
-
-            <!-- Progress bar -->
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
-            </div>
-            <div class="progress-label">{{ checkedTotalCount }}/{{ totalDocsCount }} tài liệu đã chuẩn bị</div>
           </div>
 
           <!-- Lịch sử quan trắc QCVN -->
-          <div v-if="projectId" class="card" style="margin-top:16px;padding:16px 20px">
-            <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:12px">
-              🔬 Lịch sử quan trắc
+          <div v-if="projectId" class="card" style="margin-bottom:0">
+            <div class="card-title" style="margin-bottom:12px">
+              <i class="ti ti-flask-2"></i>
+              <span>Mẫu quan trắc QCVN liên kết với dự án</span>
             </div>
-            <div v-if="qcvnHistory.length === 0" style="font-size:12px;color:var(--text3);text-align:center;padding:16px 0">
-              Chưa có dữ liệu quan trắc cho dự án này
+            <div v-if="qcvnHistory.length === 0" style="font-size:13px;color:var(--text3);text-align:center;padding:18px 0">
+              Chưa có mẫu quan trắc nào được liên kết với dự án này.
             </div>
             <div v-else style="display:flex;flex-direction:column;gap:8px">
               <div v-for="h in qcvnHistory" :key="h.id"
                    @click="handleViewQcvnSample(h.id)"
-                   style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface2);border-radius:var(--radius);cursor:pointer;transition:background 0.15s"
-                   @mouseenter="$event.target.style.background='var(--border)'"
-                   @mouseleave="$event.target.style.background='var(--surface2)'">
+                   style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer">
                 <div style="flex:1;min-width:0;padding-right:12px">
-                  <div style="font-weight:600;font-size:13px;word-break:break-word;line-height:1.4">{{ h.name }}</div>
-                  <div style="font-size:11px;color:var(--text3);margin-top:2px">
-                    {{ new Date(h.created_at).toLocaleDateString('vi-VN') }}
+                  <div style="font-weight:600;font-size:13.5px;color:var(--text)">{{ h.name }}</div>
+                  <div style="font-size:11.5px;color:var(--text3);margin-top:2px">
+                    Ngày lưu: {{ new Date(h.created_at).toLocaleDateString('vi-VN') }}
                   </div>
                 </div>
-                <span :style="{
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  background: h.trang_thai_tong_quat === 'vuot_nguong' ? '#FDECEA' : h.trang_thai_tong_quat === 'canh_bao' ? '#FFF8EC' : '#E6F7EF',
-                  color: h.trang_thai_tong_quat === 'vuot_nguong' ? '#A82020' : h.trang_thai_tong_quat === 'canh_bao' ? '#8B6010' : '#1A6B3A'
-                }">
-                  {{ h.trang_thai_tong_quat === 'vuot_nguong' ? '✗ Vượt ngưỡng' : h.trang_thai_tong_quat === 'canh_bao' ? '⚠ Cảnh báo' : '✓ Đạt' }}
+                <span class="chip-status" :class="h.trang_thai_tong_quat === 'vuot_nguong' ? 'expired' : h.trang_thai_tong_quat === 'canh_bao' ? 'amended' : 'valid'">
+                  {{ h.trang_thai_tong_quat === 'vuot_nguong' ? 'Vượt ngưỡng' : h.trang_thai_tong_quat === 'canh_bao' ? 'Cảnh báo' : 'Đạt chuẩn' }}
                 </span>
               </div>
-              <div v-if="qcvnHistoryTotalPages > 1" style="display:flex;justify-content:center;gap:6px;margin-top:8px">
-                <button class="pagination-btn" :disabled="qcvnHistoryPage === 1" @click="fetchQcvnHistory(projectId, qcvnHistoryPage - 1)">&lt;</button>
-                <button v-for="pg in qcvnHistoryTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === qcvnHistoryPage }" @click="fetchQcvnHistory(projectId, pg)">{{ pg }}</button>
-                <button class="pagination-btn" :disabled="qcvnHistoryPage === qcvnHistoryTotalPages" @click="fetchQcvnHistory(projectId, qcvnHistoryPage + 1)">&gt;</button>
+              <div v-if="qcvnHistoryTotalPages > 1" class="pagination-container">
+                <button type="button" class="pagination-btn" :disabled="qcvnHistoryPage === 1" @click="fetchQcvnHistory(projectId, qcvnHistoryPage - 1)">&lt;</button>
+                <button v-for="pg in qcvnHistoryTotalPages" :key="pg" type="button" class="pagination-btn" :class="{ active: pg === qcvnHistoryPage }" @click="fetchQcvnHistory(projectId, pg)">{{ pg }}</button>
+                <button type="button" class="pagination-btn" :disabled="qcvnHistoryPage === qcvnHistoryTotalPages" @click="fetchQcvnHistory(projectId, qcvnHistoryPage + 1)">&gt;</button>
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
 
-          <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:12px;padding:8px;background:var(--surface2);border-radius:6px">
-            Kết quả mang tính tham khảo. Căn cứ: Luật BVMT 2020 • NĐ 08/2022 • NĐ 05/2025 • NĐ 48/2026 • TT 02/2022.
+    <!-- SLIDE-OVER DRAWER: SAVED PROJECTS -->
+    <div v-if="showProjectsDrawer" class="drawer-overlay" @click.self="showProjectsDrawer = false">
+      <div class="drawer-panel drawer-sm">
+        <div class="drawer-header">
+          <div class="drawer-title">
+            <i class="ti ti-folders" style="color:var(--accent)"></i>
+            <span>Danh sách Dự án đã lưu ({{ projects.length }})</span>
+          </div>
+          <button type="button" class="drawer-close-btn" @click="showProjectsDrawer = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <div class="drawer-body">
+          <button type="button" class="btn-primary" style="width:100%;margin-bottom:16px"
+                  @click="createNewProject(); showProjectsDrawer = false">
+            <i class="ti ti-plus"></i>
+            <span>Khởi tạo dự án mới</span>
+          </button>
+
+          <div v-if="projects.length === 0" style="text-align:center;padding:36px 16px;color:var(--text3);font-size:13px">
+            Chưa có dự án nào được lưu trong tài khoản.
+          </div>
+
+          <div v-else style="display:flex;flex-direction:column;gap:8px">
+            <div v-for="p in projects" :key="p.id" class="project-item">
+              <button type="button" class="project-btn" :class="{ active: projectId === p.id }"
+                      @click="selectProject(p); showProjectsDrawer = false">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <i class="ti ti-folder" style="color:var(--accent)"></i>
+                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
+                </div>
+              </button>
+              <button type="button" class="btn-delete-project" @click="handleDeleteProject(p.id)" title="Xóa dự án">
+                <i class="ti ti-trash"></i>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="totalPages > 1" class="pagination-container">
+            <button type="button" class="pagination-btn" :disabled="currentPage === 1" @click="fetchProjects(currentPage - 1)">&lt;</button>
+            <button v-for="page in totalPages" :key="page" type="button" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchProjects(page)">
+              {{ page }}
+            </button>
+            <button type="button" class="pagination-btn" :disabled="currentPage === totalPages" @click="fetchProjects(currentPage + 1)">&gt;</button>
           </div>
         </div>
       </div>

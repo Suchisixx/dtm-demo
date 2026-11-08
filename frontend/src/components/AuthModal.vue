@@ -22,7 +22,7 @@ const handleLogin = async () => {
         password: password.value
       })
     })
-    
+
     const data = await res.json()
     if (res.ok && (data.user || data.success)) {
       emit('login-success', data.user)
@@ -39,13 +39,23 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="modal-overlay">
+  <div class="modal-overlay" @click.self="emit('close')">
     <div class="modal-card fade-up">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--accent);margin:0">Đăng nhập hệ thống</h3>
-        <button @click="emit('close')"
-          style="background:transparent;border:none;font-size:24px;cursor:pointer;color:var(--text3);line-height:1">&times;</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="kpi-icon" style="width:32px;height:32px;font-size:16px">
+            <i class="ti ti-shield-lock"></i>
+          </div>
+          <div>
+            <h3 style="font-size:16px;font-weight:600;color:var(--text);margin:0;line-height:1.3">Đăng nhập hệ thống</h3>
+            <div style="font-size:12px;color:var(--text3)">ETC LegalHub Workspace</div>
+          </div>
+        </div>
+        <button type="button" class="drawer-close-btn" @click="emit('close')" aria-label="Đóng">
+          <i class="ti ti-x"></i>
+        </button>
       </div>
+
       <form @submit.prevent="handleLogin" id="login-form">
         <div class="form-group">
           <label class="form-label">Tên đăng nhập</label>
@@ -53,11 +63,16 @@ const handleLogin = async () => {
         </div>
         <div class="form-group">
           <label class="form-label">Mật khẩu</label>
-          <input type="password" v-model="password" placeholder="Nhập mật khẩu..." required
-            style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)" />
+          <input type="password" v-model="password" placeholder="Nhập mật khẩu..." required />
         </div>
-        <div v-if="errorMsg" style="color:var(--red);font-size:13px;margin-bottom:12px;">{{ errorMsg }}</div>
-        <button type="submit" class="btn-classify" style="margin-top:8px">Đăng nhập</button>
+        <div v-if="errorMsg" style="color:var(--red);background:var(--red-bg);border:1px solid var(--danger-border);padding:8px 12px;border-radius:var(--radius);font-size:12.5px;margin-bottom:14px;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-alert-circle"></i>
+          <span>{{ errorMsg }}</span>
+        </div>
+        <button type="submit" class="btn-classify" style="width:100%;margin-top:4px">
+          <i class="ti ti-login"></i>
+          <span>Đăng nhập</span>
+        </button>
       </form>
     </div>
   </div>

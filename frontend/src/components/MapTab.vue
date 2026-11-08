@@ -1,16 +1,27 @@
 <template>
-  <div class="page">
+  <div class="page fade-up">
     <div class="container">
-      <div class="section-head">
-        <h2>Bản đồ dự án</h2>
-        <p class="section-desc">Xem tổng quan vị trí các dự án trên bản đồ số GIS</p>
+      <!-- PAGE HEADER -->
+      <div class="page-header">
+        <div>
+          <h2 class="section-head">Bản đồ Không gian Dự án (GIS Workspace)</h2>
+          <p class="section-desc">
+            Trực quan hóa vị trí địa lý các dự án đầu tư, phân loại nhóm rủi ro môi trường và trạng thái quan trắc trên nền bản đồ số.
+          </p>
+        </div>
       </div>
-      
-      <div class="map-card card">
-        <div class="filter-bar">
-          <div class="form-group">
-            <label class="form-label">Nhóm dự án</label>
-            <select v-model="filterNhom" class="filter-select">
+
+      <div class="card map-workspace-card">
+        <!-- FILTER BAR -->
+        <div class="map-toolbar">
+          <div style="position:relative;min-width:220px;flex:1;max-width:320px">
+            <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
+            <input type="text" v-model="searchQuery" placeholder="Tìm nhanh tên dự án..." style="padding-left:32px;height:36px" />
+          </div>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap">Nhóm dự án:</label>
+            <select v-model="filterNhom" style="width:150px;height:36px">
               <option value="">Tất cả nhóm</option>
               <option value="Nhóm I">Nhóm I</option>
               <option value="Nhóm II">Nhóm II</option>
@@ -18,51 +29,42 @@
               <option value="Nhóm IV">Nhóm IV</option>
             </select>
           </div>
-          
-          <div class="form-group">
-            <label class="form-label">Tỉnh thành</label>
-            <select v-model="filterTinh" class="filter-select">
-              <option value="">Tất cả tỉnh thành</option>
-              <option v-for="tinh in uniqueProvinces" :key="tinh" :value="tinh">
-                {{ tinh }}
-              </option>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap">Tỉnh / Thành:</label>
+            <select v-model="filterTinh" style="width:180px;height:36px">
+              <option value="">Tất cả địa phương</option>
+              <option v-for="tinh in uniqueProvinces" :key="tinh" :value="tinh">{{ tinh }}</option>
             </select>
           </div>
 
-          <div class="filter-status">
-            Hiển thị <strong>{{ filteredProjects.length }}</strong> / {{ projects.length }} dự án
+          <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+            <span class="chip chip-gray">
+              <i class="ti ti-map-pin" style="color:var(--accent)"></i>
+              Hiển thị <strong>{{ filteredProjects.length }}</strong> / {{ projects.length }} dự án
+            </span>
           </div>
         </div>
 
-        <div v-if="error" class="error-msg">
-          {{ error }}
+        <div v-if="error" style="padding:12px 16px;background:var(--red-bg);color:var(--red);border-bottom:1px solid var(--danger-border);font-size:13px">
+          <i class="ti ti-alert-circle"></i> {{ error }}
         </div>
-        
+
+        <!-- SPLIT WORKSPACE: SIDEBAR LIST + LARGE MAP -->
         <div class="map-layout">
-          <div class="map-container">
-            <div id="gis-map" class="map-view"></div>
-            
-            <div class="map-legend">
-              <div class="legend-title">Phân loại dự án</div>
-              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM cấp Tỉnh)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT)</div>
-            </div>
-          </div>
-
-          <!-- Danh sách dự án nổi bật bên cạnh bản đồ -->
+          <!-- Left Sidebar: Project List -->
           <div class="projects-list-side">
             <div class="side-header">
-              <span>Danh sách dự án ({{ filteredProjects.length }})</span>
+              <span>Danh sách dự án định vị ({{ filteredProjects.length }})</span>
             </div>
             <div class="side-scroll">
               <div v-if="filteredProjects.length === 0" class="empty-side">
+                <i class="ti ti-map-off" style="font-size:24px;display:block;margin-bottom:6px"></i>
                 Không tìm thấy dự án phù hợp với bộ lọc.
               </div>
-              <div 
-                v-for="p in filteredProjects" 
-                :key="p.id" 
+              <div
+                v-for="p in filteredProjects"
+                :key="p.id"
                 class="project-mini-card"
                 :class="{ active: selectedProjectId === p.id }"
                 @click="focusProject(p)"
@@ -75,10 +77,33 @@
                 </div>
                 <div class="p-title">{{ p.ten_du_an }}</div>
                 <div class="p-meta">
-                  <span>📍 {{ p.dia_chi || p.tinh || 'Chưa rõ địa chỉ' }}</span>
+                  <i class="ti ti-map-pin" style="color:var(--text3)"></i>
+                  <span>{{ p.dia_chi || p.tinh || 'Chưa rõ địa chỉ' }}</span>
                 </div>
-                <div class="p-user">👤 {{ p.user_name }}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+                  <span class="p-user">
+                    <i class="ti ti-user"></i> {{ p.user_name }}
+                  </span>
+                  <button type="button" class="btn-ghost btn-sm" style="height:24px;padding:0 8px;font-size:11px"
+                          @click.stop="emit('view-project', p.id)">
+                    <span>Mở hồ sơ</span>
+                    <i class="ti ti-arrow-right"></i>
+                  </button>
+                </div>
               </div>
+            </div>
+          </div>
+
+          <!-- Right Area: Interactive GIS Map -->
+          <div class="map-container">
+            <div id="gis-map" class="map-view"></div>
+
+            <div class="map-legend">
+              <div class="legend-title">Chú giải nhóm dự án</div>
+              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM / GPMT)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT / ĐKMT)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Miễn)</div>
             </div>
           </div>
         </div>
@@ -91,6 +116,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { DEFAULT_LAT, DEFAULT_LNG, DEFAULT_ZOOM, NHOM_COLORS, ESRI_TILE_URL, ESRI_ATTRIBUTION, API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
+import { normalizeString } from '../utils/string-helpers.js'
 
 const emit = defineEmits(['view-project'])
 
@@ -98,6 +124,7 @@ const projects = ref([])
 const error = ref('')
 const filterNhom = ref('')
 const filterTinh = ref('')
+const searchQuery = ref('')
 const selectedProjectId = ref(null)
 
 let map = null
@@ -110,10 +137,12 @@ const uniqueProvinces = computed(() => {
 })
 
 const filteredProjects = computed(() => {
+  const q = normalizeString(searchQuery.value.trim())
   return projects.value.filter(p => {
     const matchNhom = !filterNhom.value || p.nhom_du_an === filterNhom.value
     const matchTinh = !filterTinh.value || p.tinh === filterTinh.value
-    return matchNhom && matchTinh && p.latitude && p.longitude
+    const matchSearch = !q || normalizeString(p.ten_du_an || '').includes(q) || normalizeString(p.dia_chi || '').includes(q)
+    return matchNhom && matchTinh && matchSearch && p.latitude && p.longitude
   })
 })
 
@@ -127,17 +156,16 @@ const updateMapMarkers = (shouldFit = true) => {
 
   filteredProjects.value.forEach(p => {
     const color = getNhomColor(p.nhom_du_an)
-    
-    // SVG Pin Marker nổi bật, rõ ràng trên nền bản đồ
+
     const iconHtml = `
       <div class="gis-pin" style="--pin-color: ${color}">
         <svg viewBox="0 0 24 36" width="28" height="38">
-          <path fill="${color}" stroke="#ffffff" stroke-width="1.8" d="M12 0C5.38 0 0 5.38 0 12c0 9 12 24 12 24s12-15 12-24c0-6.62-5.38-12-12-12z" filter="drop-shadow(0 3px 6px rgba(0,0,0,0.4))"/>
+          <path fill="${color}" stroke="#ffffff" stroke-width="1.8" d="M12 0C5.38 0 0 5.38 0 12c0 9 12 24 12 24s12-15 12-24c0-6.62-5.38-12-12-12z" filter="drop-shadow(0 3px 6px rgba(0,0,0,0.35))"/>
           <circle cx="12" cy="12" r="4.5" fill="#ffffff"/>
         </svg>
       </div>
     `
-    
+
     const customIcon = window.L.divIcon({
       html: iconHtml,
       className: 'custom-gis-pin-icon',
@@ -147,39 +175,37 @@ const updateMapMarkers = (shouldFit = true) => {
     })
 
     const marker = window.L.marker([p.latitude, p.longitude], { icon: customIcon })
-    
+
     const popupContent = `
-      <div style="min-width:240px;max-width:280px;font-family:'Be Vietnam Pro',sans-serif;padding:6px 4px">
-        <div style="font-weight:700;font-size:14.5px;margin-bottom:6px;color:#1a1917;line-height:1.4">${p.ten_du_an || 'Chưa có tên'}</div>
-        <div style="font-size:12px;color:#666;margin-bottom:8px;line-height:1.4">📍 ${p.dia_chi || p.tinh || 'Chưa có địa chỉ'}</div>
+      <div style="min-width:240px;max-width:280px;font-family:'Be Vietnam Pro',sans-serif;padding:4px 2px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#192A21;line-height:1.4">${p.ten_du_an || 'Chưa có tên'}</div>
+        <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4">${p.dia_chi || p.tinh || 'Chưa có địa chỉ'}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <span style="background:${color};color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.nhom_du_an}</span>
-          <span style="background:#e8f4fd;color:#0366d6;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so}</span>
+          <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so}</span>
         </div>
-        <div style="font-size:12px;margin-bottom:4px;line-height:1.4"><strong>Thẩm quyền:</strong> ${p.co_quan || '—'}</div>
-        <div style="font-size:12px;margin-bottom:8px;line-height:1.4"><strong>Người tạo:</strong> ${p.user_name || 'Ẩn danh'}</div>
+        <div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Thẩm quyền:</strong> ${p.co_quan || '—'}</div>
+        <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4"><strong style="color:#192A21">Phụ trách:</strong> ${p.user_name || '—'}</div>
         ${p.quan_trac_gan_nhat_trang_thai ? `
         <div style="font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px;line-height:1.4">
-          <strong>Quan trắc:</strong>
-          <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#FDECEA' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#FFF8EC' : '#E6F7EF'};color:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#A82020' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#8B6010' : '#1A6B3A'}">
-            ${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '✗ Vượt' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '⚠ Cảnh báo' : '✓ Đạt'}
+          <strong style="color:#192A21">Quan trắc:</strong>
+          <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#FDF0F0' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#FCF6EC' : '#EAF5EF'};color:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#D65B5B' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#D99A38' : '#25845B'}">
+            ${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? 'Vượt ngưỡng' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? 'Cảnh báo' : 'Đạt chuẩn'}
           </span>
-          <span style="font-size:10px;color:#999">${new Date(p.quan_trac_gan_nhat_ngay).toLocaleDateString('vi-VN')}</span>
         </div>` : ''}
         <div style="margin-top:10px">
-          <button onclick="window.__gisViewProject(${p.id})" style="background:#1b4332;color:#fff;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;width:100%;text-align:center;transition:background 0.15s">
-            📋 Xem chi tiết & Hồ sơ
+          <button onclick="window.__gisViewProject(${p.id})" style="background:#286B4F;color:#fff;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;width:100%;text-align:center;font-family:inherit">
+            Mở chi tiết hồ sơ dự án →
           </button>
         </div>
       </div>
     `
-    
+
     marker.bindPopup(popupContent)
     clusterGroup.addLayer(marker)
     markerMap.set(p.id, marker)
   })
 
-  // Tự động căn chỉnh góc nhìn (fitBounds) khi có dự án
   if (shouldFit && filteredProjects.value.length > 0) {
     if (filteredProjects.value.length === 1) {
       const p = filteredProjects.value[0]
@@ -199,11 +225,11 @@ const focusProject = (p) => {
   if (marker) {
     setTimeout(() => {
       marker.openPopup()
-    }, 1000)
+    }, 900)
   }
 }
 
-watch([filterNhom, filterTinh], () => {
+watch([filterNhom, filterTinh, searchQuery], () => {
   updateMapMarkers(true)
 })
 
@@ -220,20 +246,24 @@ const fetchData = async () => {
   }
 }
 
+const handleWindowResize = () => {
+  if (map) map.invalidateSize()
+}
+
 onMounted(() => {
   window.__gisViewProject = (id) => {
     emit('view-project', id)
   }
+  window.addEventListener('resize', handleWindowResize)
 
   nextTick(() => {
     if (!window.L) {
-      error.value = 'Leaflet library is not loaded'
+      error.value = 'Thư viện bản đồ Leaflet chưa sẵn sàng'
       return
     }
 
     map = window.L.map('gis-map').setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM)
 
-    // Esri World Street Map — Bản đồ địa lý sắc nét, hoàn toàn miễn phí, không watermark
     window.L.tileLayer(ESRI_TILE_URL, {
       attribution: ESRI_ATTRIBUTION,
       maxZoom: 19
@@ -258,6 +288,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleWindowResize)
   if (map) {
     map.remove()
   }
@@ -266,135 +297,46 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.map-card {
-  display: flex;
-  flex-direction: column;
+.map-workspace-card {
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
+  margin-bottom: 0;
 }
 
-.filter-bar {
+.map-toolbar {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 16px;
-  background: var(--surface2, #f8f9fa);
-  border-bottom: 1px solid var(--border, #dee2e6);
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
-}
-
-.form-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-}
-
-.form-label {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text, #333);
-}
-
-.filter-select {
-  padding: 7px 12px;
-  border: 1px solid var(--border, #ccc);
-  border-radius: var(--radius, 6px);
-  background: var(--surface, #fff);
-  color: var(--text, #333);
-  font-size: 13px;
-}
-
-.filter-status {
-  margin-left: auto;
-  font-size: 13px;
-  color: var(--text2, #666);
-}
-
-.error-msg {
-  padding: 12px;
-  background: var(--warn-bg, #fdecea);
-  color: var(--red, #e74c3c);
-  text-align: center;
-  border-bottom: 1px solid var(--border, #ccc);
 }
 
 .map-layout {
   display: flex;
-  height: calc(100vh - 270px);
-  min-height: 480px;
+  height: calc(100vh - 235px);
+  min-height: 540px;
 }
 
-.map-container {
-  position: relative;
-  flex: 1;
-  height: 100%;
-}
-
-.map-view {
-  width: 100%;
-  height: 100%;
-  background: #f0f0f0;
-  position: relative;
-}
-
-.map-legend {
-  position: absolute;
-  bottom: 24px;
-  right: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 12px 14px;
-  border-radius: 8px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.15);
-  z-index: 1000;
-  pointer-events: none;
-  border: 1px solid #e0e0e0;
-}
-
-.legend-title {
-  font-weight: 700;
-  margin-bottom: 8px;
-  font-size: 12px;
-  color: var(--text, #333);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  margin-bottom: 5px;
-  color: var(--text2, #555);
-}
-
-.legend-item:last-child {
-  margin-bottom: 0;
-}
-
-.color-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-/* Sidebar danh sách dự án */
 .projects-list-side {
-  width: 300px;
-  border-left: 1px solid var(--border, #eee);
-  background: var(--surface, #fff);
+  width: 320px;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .side-header {
   padding: 12px 16px;
-  font-weight: 700;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border, #eee);
-  background: var(--surface2, #fafafa);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .side-scroll {
@@ -407,30 +349,29 @@ onUnmounted(() => {
 }
 
 .empty-side {
-  font-size: 12px;
-  color: var(--text3, #999);
+  font-size: 12.5px;
+  color: var(--text3);
   text-align: center;
-  padding: 30px 10px;
+  padding: 36px 12px;
 }
 
 .project-mini-card {
-  padding: 10px 12px;
-  border: 1px solid var(--border, #eee);
-  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   cursor: pointer;
-  background: var(--surface, #fff);
-  transition: all 0.15s;
+  background: var(--surface);
+  transition: all 0.15s ease;
 }
 
 .project-mini-card:hover {
-  border-color: var(--accent, #1b4332);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border-color: var(--accent);
+  background: var(--surface-hover);
 }
 
 .project-mini-card.active {
-  border-color: var(--accent, #1b4332);
-  background: #f4fbf7;
+  border-color: var(--accent);
+  background: var(--accent2);
 }
 
 .p-header {
@@ -440,60 +381,115 @@ onUnmounted(() => {
 }
 
 .p-nhom-badge {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 10.5px;
+  font-weight: 600;
   color: #fff;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
 }
 
 .p-hs-badge {
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
-  background: #eef2f5;
-  color: #495057;
-  padding: 2px 6px;
+  background: var(--surface2);
+  color: var(--text2);
+  padding: 2px 7px;
   border-radius: 4px;
+  border: 1px solid var(--border);
 }
 
 .p-title {
   font-weight: 600;
-  font-size: 13px;
-  color: var(--text, #222);
-  line-height: 1.3;
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.35;
   margin-bottom: 4px;
 }
 
 .p-meta {
-  font-size: 11.5px;
-  color: var(--text3, #777);
-  margin-bottom: 4px;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
+  font-size: 12px;
+  color: var(--text2);
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  line-height: 1.4;
 }
 
 .p-user {
+  font-size: 11.5px;
+  color: var(--text3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-container {
+  position: relative;
+  flex: 1;
+  height: 100%;
+}
+
+.map-view {
+  width: 100%;
+  height: 100%;
+  background: var(--surface2);
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 20px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 1000;
+  pointer-events: none;
+  border: 1px solid var(--border);
+}
+
+.legend-title {
+  font-weight: 600;
+  margin-bottom: 8px;
   font-size: 11px;
-  color: var(--text3, #888);
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: var(--text);
+}
+
+.legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
 @media (max-width: 900px) {
   .map-layout {
-    flex-direction: column;
+    flex-direction: column-reverse;
     height: auto;
   }
   .map-container {
-    height: 400px;
+    height: 440px;
   }
   .projects-list-side {
     width: 100%;
-    border-left: none;
+    border-right: none;
     border-top: 1px solid var(--border);
-    max-height: 250px;
+    max-height: 280px;
   }
 }
 </style>

@@ -13,12 +13,13 @@ const laws = ref([])
 const searchQuery = ref('')
 const currentFilter = ref('all')
 const selectedLaw = ref(null)
+const viewMode = ref('table') // 'table' | 'cards'
 
 // Phân trang
-const pageSize = ref(10)
+const pageSize = ref(15)
 const currentPage = ref(1)
 
-// Accordion và tìm kiếm điều khoản trong modal chi tiết
+// Accordion và tìm kiếm điều khoản trong drawer chi tiết
 const expandedProvisions = ref(new Set())
 const provisionSearchQuery = ref('')
 
@@ -43,19 +44,16 @@ const collapseAllProvisions = () => {
   expandedProvisions.value.clear()
 }
 
-// Theo dõi khi đổi văn bản được chọn để reset trạng thái mở rộng
 watch(selectedLaw, (newLaw) => {
   expandedProvisions.value.clear()
   provisionSearchQuery.value = ''
   if (newLaw && Array.isArray(newLaw.dieu_khoang)) {
-    // Nếu có ít mục (<= 2), mặc định mở ra; nếu nhiều mục (> 2), thu gọn để giao diện gọn gàng
     if (newLaw.dieu_khoang.length <= 2) {
       newLaw.dieu_khoang.forEach((_, idx) => expandedProvisions.value.add(idx))
     }
   }
 })
 
-// Danh sách điều khoản kèm chỉ số gốc đã lọc theo từ khóa tìm kiếm trong modal
 const filteredProvisionsWithIndex = computed(() => {
   if (!selectedLaw.value || !Array.isArray(selectedLaw.value.dieu_khoang)) return []
   const q = normalizeString(provisionSearchQuery.value.trim())
@@ -102,17 +100,12 @@ onMounted(() => {
   fetchLaws()
 })
 
-
-
-// Helper: dieu_khoang item can be a plain string OR an object {tieu_de, noi_dung}
-// This normalizes it to a display-friendly title string
 const getProvisionTitle = (d) => {
   if (typeof d === 'string') return d
   if (d && typeof d === 'object' && d.tieu_de) return d.tieu_de
   return String(d)
 }
 
-// Helper: get full content for detail view
 const getProvisionContent = (d) => {
   if (typeof d === 'string') return null
   if (d && typeof d === 'object' && d.noi_dung) return d.noi_dung
@@ -130,9 +123,9 @@ const getLawSortTime = (law) => {
 
 const getTypeLabel = (type) => {
   return {
-    luat: 'LUẬT',
-    nd: 'NGHỊ ĐỊNH',
-    tt: 'THÔNG TƯ',
+    luat: 'Luật',
+    nd: 'Nghị định',
+    tt: 'Thông tư',
     qcvn: 'QCVN',
     vbhn: 'VBHN'
   }[type] || type.toUpperCase()
@@ -141,26 +134,24 @@ const getTypeLabel = (type) => {
 const getStatusLabel = (status) => {
   return {
     valid: 'Còn hiệu lực',
-    amended: 'Đã sửa đổi (đọc kết hợp)',
+    amended: 'Đã sửa đổi',
     expired: 'Hết hiệu lực'
   }[status] || status
 }
 
 const filteredLaws = computed(() => {
   const term = normalizeString(searchQuery.value.trim())
-  
+
   return laws.value.filter(l => {
-    // 1. Filter by category
     if (currentFilter.value !== 'all') {
       if (currentFilter.value === 'hieuluc' && l.status !== 'valid') return false
       if (currentFilter.value === 'suadoi' && l.status !== 'amended') return false
       if (currentFilter.value !== 'hieuluc' && currentFilter.value !== 'suadoi' && l.type !== currentFilter.value) return false
     }
 
-    // 2. Filter by search input (ten, so, type)
     if (term) {
       const matchesText = normalizeString(l.ten).includes(term) || normalizeString(l.so).includes(term)
-      
+
       let matchesType = false
       if (l.type === 'luat' && ('luat'.includes(term) || searchQuery.value.toLowerCase().includes('luật'))) matchesType = true
       if (l.type === 'nd' && ('nghi dinh'.includes(term) || 'nd'.includes(term) || searchQuery.value.toLowerCase().includes('nghị định'))) matchesType = true
@@ -239,15 +230,15 @@ const getDirectLawLink = (l) => {
     if (l.id.includes('dautu')) return `${LAW_BASE_URL}luat-dau-tu-2020`
     return `${LAW_BASE_URL}luat-${cleanNum}`
   }
-  
+
   if (l.type === 'nd') {
     return `${LAW_BASE_URL}nghi-dinh-${cleanNum}`
   }
-  
+
   if (l.type === 'tt') {
     return `${LAW_BASE_URL}thong-tu-${cleanNum}`
   }
-  
+
   if (l.type === 'qcvn') {
     let qSlug = cleanNum
     if (!qSlug.startsWith('qcvn')) {
@@ -255,7 +246,7 @@ const getDirectLawLink = (l) => {
     }
     return `${LAW_BASE_URL}${qSlug}`
   }
-  
+
   if (l.type === 'vbhn') {
     return `${LAW_BASE_URL}van-ban-hop-nhat-${cleanNum}`
   }
@@ -265,310 +256,381 @@ const getDirectLawLink = (l) => {
 </script>
 
 <template>
-  <div id="laws" class="page active container">
-    <div class="section-head">Hệ thống văn bản pháp lý môi trường</div>
-    <div class="section-desc">Tổng hợp Luật, Nghị định, Thông tư và QCVN còn hiệu lực áp dụng trong công tác tư vấn môi trường</div>
-
-    <div class="stats-row">
-      <div class="stat-box">
-        <div class="stat-num">{{ laws.filter(l => l.type === 'luat').length }}</div>
-        <div class="stat-label">Luật / Bộ luật</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-num">{{ laws.filter(l => l.type === 'nd').length }}</div>
-        <div class="stat-label">Nghị định</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-num">{{ laws.filter(l => l.type === 'tt').length }}</div>
-        <div class="stat-label">Thông tư</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-num">{{ laws.filter(l => l.type === 'qcvn').length }}</div>
-        <div class="stat-label">QCVN đang theo dõi</div>
+  <div id="laws" class="page active container fade-up">
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div>
+        <h2 class="section-head">Thư viện Văn bản Pháp lý Môi trường</h2>
+        <p class="section-desc">
+          Hệ thống tra cứu Luật, Nghị định, Văn bản hợp nhất, Thông tư và Quy chuẩn kỹ thuật quốc gia (QCVN) phục vụ tư vấn môi trường.
+        </p>
       </div>
     </div>
 
+    <!-- KPI SUMMARY ROW -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Luật / Bộ luật</span>
+          <div class="kpi-icon"><i class="ti ti-book"></i></div>
+        </div>
+        <div class="kpi-value">{{ laws.filter(l => l.type === 'luat').length }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Nghị định &amp; VBHN</span>
+          <div class="kpi-icon info"><i class="ti ti-gavel"></i></div>
+        </div>
+        <div class="kpi-value">{{ laws.filter(l => l.type === 'nd' || l.type === 'vbhn').length }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Thông tư hướng dẫn</span>
+          <div class="kpi-icon warn"><i class="ti ti-file-certificate"></i></div>
+        </div>
+        <div class="kpi-value">{{ laws.filter(l => l.type === 'tt').length }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-top">
+          <span class="kpi-label">Quy chuẩn (QCVN)</span>
+          <div class="kpi-icon"><i class="ti ti-flask-2"></i></div>
+        </div>
+        <div class="kpi-value">{{ laws.filter(l => l.type === 'qcvn').length }}</div>
+      </div>
+    </div>
+
+    <!-- LEGAL NOTICE BANNER -->
     <div class="notice-banner">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-      </svg>
-      <span><strong>Thay đổi quan trọng:</strong> NĐ 08/2022 hiện không nên đọc riêng bản gốc. Chuỗi cập nhật mới gồm NĐ 05/2025, NĐ 48/2026, NĐ 110/2026 và bản hợp nhất 49/VBHN-BNNMT ngày 17/04/2026.</span>
+      <i class="ti ti-info-circle"></i>
+      <span>
+        <strong>Lưu ý áp dụng pháp lý:</strong> Nghị định 08/2022/NĐ-CP hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP và Văn bản hợp nhất 49/VBHN-BNNMT.
+      </span>
     </div>
 
-    <div class="legal-update-panel">
-      <div class="legal-update-head">
-        <div>
-          <div class="legal-update-title">Trạng thái cập nhật cơ sở pháp lý</div>
-          <div class="legal-update-sub">Đồng bộ tự động qua cơ sở dữ liệu PostgreSQL của hệ thống ETC LegalHub.</div>
+    <!-- UNIFIED SEARCH & FILTER TOOLBAR -->
+    <div class="card" style="padding:16px 20px;margin-bottom:16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <div style="position:relative;flex:1;min-width:260px">
+          <i class="ti ti-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:16px"></i>
+          <input type="text" v-model="searchQuery"
+                 placeholder="Tìm theo số hiệu, tên văn bản hoặc nội dung (ví dụ: 72/2020, Nghị định 48, QCVN 40...)"
+                 style="padding-left:36px" />
         </div>
-      </div>
-      <div class="legal-update-grid">
-        <div class="legal-update-item">
-          <strong>Đã bổ sung</strong>
-          <span>NĐ 110/2026, VBHN 49/VBHN-BNNMT và TT 09/2026 để phản ánh chuỗi cập nhật mới nhất của NĐ 08/2022 và TT 02/2022.</span>
-        </div>
-        <div class="legal-update-item">
-          <strong>Còn thiếu văn bản pháp lý nào</strong>
-          <span>Còn thiếu các thông tư bổ sung của tuyến TT 02/2022 như TT 07/2025/TT-BTNMT, TT 07/2025/TT-BNNMT và thông tư ngưng hiệu lực TT 04/2023/TT-BTNMT trên luatmoitruong.vn.</span>
-        </div>
-        <div class="legal-update-item">
-          <strong>Lưu ý</strong>
-          <span>Engine phân loại hiện vẫn cần rà lại theo VBHN 49 và NĐ 110; phần checklist/mẫu hồ sơ cần rà lại theo tuyến TT 02/2022 đã sửa đổi.</span>
-        </div>
-      </div>
-    </div>
 
-    <!-- Thanh tìm kiếm văn bản pháp lý -->
-    <div style="margin-bottom:20px">
-      <input type="text" v-model="searchQuery"
-        placeholder="🔍 Nhập số hiệu, tên hoặc loại văn bản cần tìm (ví dụ: 72/2020, Nghị định 48, Thông tư...)"
-        style="width:100%;padding:12px 18px;border:1px solid var(--border);border-radius:var(--radius-lg);font-size:14px;background:var(--surface);color:var(--text);box-shadow:var(--shadow);outline:none;transition:border-color 0.15s" />
-    </div>
-
-    <div class="filter-bar">
-      <button class="filter-btn" :class="{ on: currentFilter === 'all' }" @click="currentFilter = 'all'">Tất cả</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'luat' }" @click="currentFilter = 'luat'">Luật</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'nd' }" @click="currentFilter = 'nd'">Nghị định</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'vbhn' }" @click="currentFilter = 'vbhn'">VBHN</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'tt' }" @click="currentFilter = 'tt'">Thông tư</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'qcvn' }" @click="currentFilter = 'qcvn'">QCVN</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'hieuluc' }" @click="currentFilter = 'hieuluc'">Còn hiệu lực</button>
-      <button class="filter-btn" :class="{ on: currentFilter === 'suadoi' }" @click="currentFilter = 'suadoi'">Đã sửa đổi</button>
-    </div>
-
-    <!-- Thanh phân trang trên -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;background:var(--surface);padding:10px 16px;border-radius:var(--radius);border:1px solid var(--border)">
-      <div style="font-size:13px;color:var(--text2)">
-        Tìm thấy <strong>{{ filteredLaws.length }}</strong> văn bản & quy chuẩn
-        <span v-if="filteredLaws.length > 0"> (Trang {{ currentPage }}/{{ totalPages }})</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
-        <label for="laws-page-size-top" style="font-weight:500">Hiển thị:</label>
-        <select id="laws-page-size-top" v-model.number="pageSize"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer">
-          <option :value="10">10 / trang</option>
-          <option :value="20">20 / trang</option>
-          <option :value="50">50 / trang</option>
-        </select>
-      </div>
-    </div>
-
-    <div id="law-list">
-      <div v-if="filteredLaws.length === 0" style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text3)">
-        Không tìm thấy văn bản pháp lý nào phù hợp.
-      </div>
-      
-      <div v-for="(l, i) in paginatedLaws" :key="l.id" 
-           class="law-card fade-up" :class="{ expired: l.status === 'expired' }" 
-           style="display: flex; flex-direction: column; justify-content: space-between">
-        <div>
-          <div class="law-accent" :class="l.status"></div>
-          <div style="padding-left:12px">
-            <div class="law-meta">
-              <div class="law-year">{{ l.year }}</div>
-              <div class="law-content">
-                <div class="law-status">
-                  <div class="status-dot" :class="l.status"></div>
-                  <span class="status-label">{{ getStatusLabel(l.status) }}</span>
-                  <span class="chip chip-gray" style="margin-left:4px">{{ getTypeLabel(l.type) }}</span>
-                </div>
-                <div class="law-title">{{ l.ten }}</div>
-                <div class="law-number">{{ l.so }} — Hiệu lực: {{ l.hieuluc }}</div>
-                <div class="law-desc">{{ l.mo_ta }}</div>
-                <div v-if="l.note" style="font-size:12px;color:var(--warn);margin-bottom:8px;padding:6px 10px;background:var(--warn-bg);border-radius:5px;border-left:3px solid #D4860A">
-                  ⚡ {{ l.note }}
-                </div>
-                <div class="law-provisions">
-                  <span v-for="(d, idx) in (l.dieu_khoang || []).slice(0, 3)" :key="idx" class="provision">{{ getProvisionTitle(d) }}</span>
-                  <span v-if="(l.dieu_khoang || []).length > 3" class="provision" style="background:var(--surface2);color:var(--text3)">
-                    +{{ l.dieu_khoang.length - 3 }} điều khoản khác
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg)">
+            <button type="button" @click="viewMode = 'table'"
+                    :style="{
+                      height: '36px', padding: '0 12px', border: 'none', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit',
+                      background: viewMode === 'table' ? 'var(--accent)' : 'transparent',
+                      color: viewMode === 'table' ? '#fff' : 'var(--text2)'
+                    }">
+              <i class="ti ti-list"></i>
+              <span>Bảng</span>
+            </button>
+            <button type="button" @click="viewMode = 'cards'"
+                    :style="{
+                      height: '36px', padding: '0 12px', border: 'none', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit',
+                      background: viewMode === 'cards' ? 'var(--accent)' : 'transparent',
+                      color: viewMode === 'cards' ? '#fff' : 'var(--text2)'
+                    }">
+              <i class="ti ti-layout-grid"></i>
+              <span>Thẻ</span>
+            </button>
           </div>
         </div>
-        <div style="padding-left:12px; margin-top:16px; display:flex; justify-content:flex-end">
-          <button class="btn-classify" style="width:auto; margin:0; padding:6px 14px; font-size:13px; display:flex; align-items:center; gap:6px" @click="selectedLaw = l">
-            Xem chi tiết
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div class="filter-bar">
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'all' }" @click="currentFilter = 'all'">Tất cả</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'luat' }" @click="currentFilter = 'luat'">Luật</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'nd' }" @click="currentFilter = 'nd'">Nghị định</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'vbhn' }" @click="currentFilter = 'vbhn'">VBHN</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'tt' }" @click="currentFilter = 'tt'">Thông tư</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'qcvn' }" @click="currentFilter = 'qcvn'">QCVN</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'hieuluc' }" @click="currentFilter = 'hieuluc'">Còn hiệu lực</button>
+          <button type="button" class="filter-btn" :class="{ on: currentFilter === 'suadoi' }" @click="currentFilter = 'suadoi'">Đã sửa đổi</button>
+        </div>
+
+        <div style="font-size:12.5px;color:var(--text2)">
+          Tìm thấy <strong style="color:var(--text)">{{ filteredLaws.length }}</strong> văn bản
+        </div>
+      </div>
+    </div>
+
+    <!-- EMPTY STATE -->
+    <div v-if="filteredLaws.length === 0" class="card" style="text-align:center;padding:48px 20px;color:var(--text3)">
+      <i class="ti ti-file-off" style="font-size:32px;display:block;margin-bottom:8px"></i>
+      <div>Không tìm thấy văn bản pháp lý nào phù hợp với bộ lọc hiện tại.</div>
+    </div>
+
+    <!-- TABLE VIEW (DEFAULT) -->
+    <div v-else-if="viewMode === 'table'" class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table class="saas-table" style="min-width:820px">
+          <thead>
+            <tr>
+              <th style="width:165px">Số hiệu &amp; Năm</th>
+              <th>Tên văn bản &amp; Nội dung trọng tâm</th>
+              <th style="width:110px">Phân loại</th>
+              <th style="width:135px">Trạng thái</th>
+              <th style="width:120px">Điều khoản</th>
+              <th style="width:120px;text-align:right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="l in paginatedLaws" :key="l.id" style="cursor:pointer" @click="selectedLaw = l">
+              <td>
+                <div class="law-number">{{ l.so }}</div>
+                <div style="font-size:11.5px;color:var(--text3);margin-top:2px">
+                  Năm {{ l.year }} · {{ l.hieuluc || 'Đang áp dụng' }}
+                </div>
+              </td>
+              <td>
+                <div class="law-title">{{ l.ten }}</div>
+                <div v-if="l.mo_ta" style="font-size:12.5px;color:var(--text2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">
+                  {{ l.mo_ta }}
+                </div>
+              </td>
+              <td>
+                <span class="chip chip-gray">{{ getTypeLabel(l.type) }}</span>
+              </td>
+              <td>
+                <span class="chip-status" :class="l.status">
+                  <span class="status-dot" :class="l.status"></span>
+                  <span>{{ getStatusLabel(l.status) }}</span>
+                </span>
+              </td>
+              <td style="font-size:12.5px;color:var(--text2)">
+                <span v-if="l.dieu_khoang && l.dieu_khoang.length">
+                  <strong>{{ l.dieu_khoang.length }}</strong> mục
+                </span>
+                <span v-else style="color:var(--text3)">—</span>
+              </td>
+              <td style="text-align:right" @click.stop>
+                <button type="button" class="btn-secondary btn-sm" @click="selectedLaw = l">
+                  <span>Chi tiết</span>
+                  <i class="ti ti-chevron-right"></i>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- CARDS VIEW (OPTIONAL) -->
+    <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px">
+      <div v-for="l in paginatedLaws" :key="l.id"
+           class="law-card" :class="{ expired: l.status === 'expired' }"
+           style="margin-bottom:0;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer"
+           @click="selectedLaw = l">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="chip chip-gray">{{ getTypeLabel(l.type) }}</span>
+              <span class="law-number">{{ l.so }}</span>
+            </div>
+            <span class="chip-status" :class="l.status">
+              <span class="status-dot" :class="l.status"></span>
+              {{ getStatusLabel(l.status) }}
+            </span>
+          </div>
+          <div class="law-title">{{ l.ten }}</div>
+          <div v-if="l.mo_ta" class="law-desc" style="margin-top:4px">{{ l.mo_ta }}</div>
+          <div v-if="l.dieu_khoang && l.dieu_khoang.length" class="law-provisions">
+            <span v-for="(d, idx) in l.dieu_khoang.slice(0, 2)" :key="idx" class="provision">{{ getProvisionTitle(d) }}</span>
+            <span v-if="l.dieu_khoang.length > 2" class="provision">+{{ l.dieu_khoang.length - 2 }} điều khoản</span>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text3)">Hiệu lực: {{ l.hieuluc || l.year }}</span>
+          <button type="button" class="btn-secondary btn-sm" @click.stop="selectedLaw = l">
+            <span>Xem chi tiết</span>
+            <i class="ti ti-arrow-right"></i>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Thanh phân trang dưới -->
+    <!-- BOTTOM PAGINATION -->
     <div v-if="filteredLaws.length > 0"
-      style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;flex-wrap:wrap;gap:16px;padding:14px 20px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
-      <div style="font-size:13px;color:var(--text2)">
-        Hiển thị <strong>{{ (currentPage - 1) * pageSize + 1 }}</strong> – <strong>{{ Math.min(currentPage * pageSize, filteredLaws.length) }}</strong> trong tổng số <strong>{{ filteredLaws.length }}</strong> văn bản & quy chuẩn
+         style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:14px;padding:12px 18px;background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)">
+      <div style="font-size:12.5px;color:var(--text2)">
+        Hiển thị <strong>{{ (currentPage - 1) * pageSize + 1 }}</strong> – <strong>{{ Math.min(currentPage * pageSize, filteredLaws.length) }}</strong> / <strong>{{ filteredLaws.length }}</strong> văn bản
       </div>
 
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <button class="pagination-btn" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
-          ‹ Trước
-        </button>
+        <button type="button" class="pagination-btn" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">‹ Trước</button>
         <button v-for="(p, idx) in pageNumbers" :key="idx"
-          class="pagination-btn"
-          :class="{ active: p === currentPage }"
-          :disabled="p === '...'"
-          :style="p === '...' ? { cursor: 'default', border: 'none', background: 'transparent' } : {}"
-          @click="typeof p === 'number' && changePage(p)">
+                type="button"
+                class="pagination-btn"
+                :class="{ active: p === currentPage }"
+                :disabled="p === '...'"
+                @click="typeof p === 'number' && changePage(p)">
           {{ p }}
         </button>
-        <button class="pagination-btn" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
-          Sau ›
-        </button>
+        <button type="button" class="pagination-btn" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">Sau ›</button>
       </div>
 
-      <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
         <span>Hiển thị:</span>
-        <select v-model.number="pageSize"
-          style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer">
+        <select v-model.number="pageSize" style="width:105px;height:30px;font-size:12.5px">
           <option :value="10">10 / trang</option>
-          <option :value="20">20 / trang</option>
+          <option :value="15">15 / trang</option>
+          <option :value="30">30 / trang</option>
           <option :value="50">50 / trang</option>
         </select>
       </div>
     </div>
 
-    <!-- Modal Chi tiết Văn bản Pháp lý -->
-    <div v-if="selectedLaw" class="modal-overlay" style="display: flex;" @click.self="selectedLaw = null">
-      <div class="modal-card fade-up" style="width:720px;max-width:92vw;max-height:88vh;overflow-y:auto">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:12px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span class="chip chip-status" :class="selectedLaw.status" style="font-size:11px">
-              {{ getTypeLabel(selectedLaw.type) }}
+    <!-- SLIDE-OVER READING DRAWER FOR LAW DETAILS -->
+    <div v-if="selectedLaw" class="drawer-overlay" @click.self="selectedLaw = null">
+      <div class="drawer-panel">
+        <!-- Drawer Header -->
+        <div class="drawer-header">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="chip chip-gray">{{ getTypeLabel(selectedLaw.type) }}</span>
+            <span class="chip-status" :class="selectedLaw.status">
+              <span class="status-dot" :class="selectedLaw.status"></span>
+              {{ getStatusLabel(selectedLaw.status) }}
             </span>
-            <span v-if="selectedLaw.year" style="font-size:12px;color:var(--text3);font-weight:600">
+            <span v-if="selectedLaw.year" style="font-size:12px;color:var(--text3);font-weight:500">
               Năm ban hành: {{ selectedLaw.year }}
             </span>
           </div>
-          <button @click="selectedLaw = null" title="Đóng"
-            style="background:transparent;border:none;font-size:24px;cursor:pointer;color:var(--text3);line-height:1;padding:0 4px">&times;</button>
+          <button type="button" class="drawer-close-btn" @click="selectedLaw = null" title="Đóng">
+            <i class="ti ti-x"></i>
+          </button>
         </div>
 
-        <div>
-          <h3 style="font-family:'Playfair Display',serif;font-size:22px;color:var(--accent);margin:0 0 6px;line-height:1.35">
+        <!-- Drawer Body -->
+        <div class="drawer-body">
+          <h3 style="font-size:19px;font-weight:700;color:var(--text);margin:0 0 8px;line-height:1.4">
             {{ selectedLaw.ten }}
           </h3>
-          <div style="font-size:13px;color:var(--text2);margin-bottom:14px;display:flex;flex-wrap:wrap;gap:12px">
-            <span><strong>Số hiệu:</strong> {{ selectedLaw.so }}</span>
-            <span><strong>Hiệu lực từ:</strong> {{ selectedLaw.hieuluc || 'Chưa rõ' }}</span>
-            <span><strong>Trạng thái:</strong> {{ getStatusLabel(selectedLaw.status) }}</span>
+
+          <div style="font-size:13px;color:var(--text2);margin-bottom:16px;display:flex;flex-wrap:wrap;gap:16px">
+            <span><strong style="color:var(--text)">Số hiệu:</strong> {{ selectedLaw.so }}</span>
+            <span><strong style="color:var(--text)">Hiệu lực:</strong> {{ selectedLaw.hieuluc || 'Đang áp dụng' }}</span>
           </div>
 
-          <!-- Banner liên kết trực tiếp website chuyên ngành bên thứ 3 -->
-          <div style="background:linear-gradient(135deg, rgba(46,125,50,0.08), rgba(27,94,32,0.03));border:1px solid rgba(46,125,50,0.25);padding:10px 14px;border-radius:var(--radius);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <!-- Prominent 3rd-party direct link banner -->
+          <div style="background:var(--accent2);border:1px solid var(--success-border);padding:12px 16px;border-radius:var(--radius);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div style="font-size:13px;color:var(--accent);display:flex;align-items:center;gap:8px;font-weight:500">
-              <span style="font-size:16px">🌐</span>
-              <span>Trang tra cứu chuyên ngành <strong>luatmoitruong.vn</strong>:</span>
+              <i class="ti ti-world" style="font-size:18px"></i>
+              <span>Tra cứu toàn văn gốc trên <strong>luatmoitruong.vn</strong></span>
             </div>
-            <a :href="getDirectLawLink(selectedLaw)" target="_blank" rel="noopener noreferrer"
-              style="display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:6px;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,0.1);transition:opacity 0.2s">
-              Xem toàn văn gốc trực tiếp ↗
+            <a :href="getDirectLawLink(selectedLaw)" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm">
+              <span>Mở văn bản gốc</span>
+              <i class="ti ti-external-link"></i>
             </a>
           </div>
 
-          <!-- Mô tả tóm tắt -->
+          <!-- Summary -->
           <div v-if="selectedLaw.mo_ta" style="margin-bottom:18px">
-            <h4 style="font-size:13.5px;font-weight:700;margin:0 0 6px;color:var(--text)">Mô tả tóm tắt:</h4>
-            <p style="font-size:13.5px;color:var(--text2);line-height:1.6;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);margin:0;border:1px solid var(--border)">
+            <div style="font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">
+              Mô tả tóm tắt
+            </div>
+            <p style="font-size:13.5px;color:var(--text2);line-height:1.6;background:var(--bg);padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);margin:0">
               {{ selectedLaw.mo_ta }}
             </p>
           </div>
 
-          <!-- Danh sách điều khoản / phụ lục với accordion -->
-          <div style="margin-bottom:20px">
-            <!-- Header điều khoản & nút mở rộng/thu gọn -->
+          <!-- Note if any -->
+          <div v-if="selectedLaw.note" style="margin-bottom:18px">
+            <div style="font-size:13px;color:var(--warn);padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:var(--radius);display:flex;align-items:flex-start;gap:8px">
+              <i class="ti ti-alert-triangle" style="font-size:16px;margin-top:2px"></i>
+              <div><strong>Lưu ý:</strong> {{ selectedLaw.note }}</div>
+            </div>
+          </div>
+
+          <!-- Provisions Accordion -->
+          <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-              <h4 style="font-size:13.5px;font-weight:700;margin:0;color:var(--text)">
-                Các điều khoản / Phụ lục quy định
-                <span v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length" style="font-size:12px;color:var(--text3);font-weight:normal">
+              <div style="font-size:12.5px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.04em">
+                Điều khoản &amp; Phụ lục quy định
+                <span v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length" style="color:var(--text3);font-weight:500;text-transform:none">
                   ({{ filteredProvisionsWithIndex.length }}/{{ selectedLaw.dieu_khoang.length }} mục)
                 </span>
-              </h4>
+              </div>
+
               <div v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length > 1" style="display:flex;align-items:center;gap:6px">
-                <button type="button" @click="expandAllProvisions"
-                  style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11.5px;color:var(--text2);cursor:pointer;font-family:inherit">
-                  + Mở rộng tất cả
+                <button type="button" class="btn-secondary btn-sm" style="height:28px;font-size:11.5px" @click="expandAllProvisions">
+                  <i class="ti ti-arrows-maximize"></i>
+                  <span>Mở rộng tất cả</span>
                 </button>
-                <button type="button" @click="collapseAllProvisions"
-                  style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11.5px;color:var(--text2);cursor:pointer;font-family:inherit">
-                  − Thu gọn tất cả
+                <button type="button" class="btn-secondary btn-sm" style="height:28px;font-size:11.5px" @click="collapseAllProvisions">
+                  <i class="ti ti-arrows-minimize"></i>
+                  <span>Thu gọn tất cả</span>
                 </button>
               </div>
             </div>
 
-            <!-- Ô tìm kiếm điều khoản nhanh khi danh sách dài -->
-            <div v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length > 3" style="margin-bottom:10px">
+            <div v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length > 3" style="margin-bottom:10px;position:relative">
+              <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
               <input type="text" v-model="provisionSearchQuery"
-                placeholder="Tìm nhanh trong các điều khoản (vd: Điều 1, QCVN, quan trắc...)..."
-                style="width:100%;padding:7px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12.5px;font-family:inherit" />
+                     placeholder="Lọc nhanh điều khoản (VD: Điều 1, Phụ lục, quan trắc...)"
+                     style="padding-left:32px;height:34px;font-size:12.5px" />
             </div>
 
-            <!-- Danh sách Accordion -->
             <div style="display:flex;flex-direction:column;gap:8px">
               <div v-for="{ d, index } in filteredProvisionsWithIndex" :key="index"
-                style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-                
-                <!-- Tiêu đề mục: Click để đóng / mở -->
+                   style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
                 <div @click="getProvisionContent(d) && toggleProvision(index)"
-                  :style="{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 14px',
-                    cursor: getProvisionContent(d) ? 'pointer' : 'default',
-                    background: isProvisionExpanded(index) && getProvisionContent(d) ? 'var(--surface2)' : 'transparent',
-                    userSelect: 'none'
-                  }">
+                     :style="{
+                       display: 'flex',
+                       justifyContent: 'space-between',
+                       alignItems: 'center',
+                       gap: '10px',
+                       padding: '10px 14px',
+                       cursor: getProvisionContent(d) ? 'pointer' : 'default',
+                       background: isProvisionExpanded(index) && getProvisionContent(d) ? 'var(--surface2)' : 'transparent',
+                       userSelect: 'none'
+                     }">
                   <div style="display:flex;align-items:flex-start;gap:8px;flex:1">
-                    <span style="color:var(--accent);margin-top:2px;font-size:13px">✦</span>
+                    <i class="ti ti-bookmark" style="color:var(--accent);margin-top:2px;font-size:15px"></i>
                     <strong style="font-size:13.5px;color:var(--text);line-height:1.45">{{ getProvisionTitle(d) }}</strong>
                   </div>
-                  <div v-if="getProvisionContent(d)" style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                    <span style="font-size:11.5px;color:var(--accent);padding:3px 8px;border-radius:4px;background:rgba(46,125,50,0.08);font-weight:600">
-                      {{ isProvisionExpanded(index) ? 'Thu gọn ▲' : 'Xem nội dung ▼' }}
+                  <div v-if="getProvisionContent(d)" style="flex-shrink:0">
+                    <span class="chip chip-gray" style="height:22px;font-size:11px">
+                      <span>{{ isProvisionExpanded(index) ? 'Thu gọn' : 'Xem nội dung' }}</span>
+                      <i class="ti" :class="isProvisionExpanded(index) ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
                     </span>
                   </div>
                 </div>
 
-                <!-- Chi tiết nội dung điều khoản: Thu gọn / Mở rộng -->
                 <div v-if="getProvisionContent(d) && isProvisionExpanded(index)"
-                  style="padding:14px 16px;border-top:1px dashed var(--border);background:var(--surface);font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;font-family:inherit">
+                     style="padding:14px 16px;border-top:1px solid var(--border);background:var(--surface);font-size:13.5px;color:var(--text);line-height:1.7;white-space:pre-wrap">
                   {{ getProvisionContent(d) }}
                 </div>
               </div>
 
-              <!-- Trạng thái trống khi tìm kiếm hoặc chưa có điều khoản -->
               <div v-if="selectedLaw.dieu_khoang && selectedLaw.dieu_khoang.length > 0 && filteredProvisionsWithIndex.length === 0"
-                style="color:var(--text3);font-size:13px;font-style:italic;text-align:center;padding:16px;background:var(--surface2);border-radius:var(--radius)">
-                Không tìm thấy điều khoản nào khớp với "{{ provisionSearchQuery }}".
+                   style="color:var(--text3);font-size:13px;text-align:center;padding:20px;background:var(--bg);border-radius:var(--radius)">
+                Không tìm thấy điều khoản nào khớp với từ khóa "{{ provisionSearchQuery }}".
               </div>
+
               <div v-if="!selectedLaw.dieu_khoang || selectedLaw.dieu_khoang.length === 0"
-                style="color:var(--text3);font-size:13px;font-style:italic;padding:12px;background:var(--surface2);border-radius:var(--radius)">
-                Chưa cập nhật các điều khoản chi tiết cho văn bản này. Bạn có thể xem liên kết trực tiếp trên luatmoitruong.vn bên trên.
+                   style="color:var(--text3);font-size:13px;padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+                Chưa cập nhật danh mục điều khoản chi tiết. Vui lòng nhấn nút mở toàn văn trên luatmoitruong.vn ở trên để xem chi tiết.
               </div>
             </div>
           </div>
+        </div>
 
-          <div v-if="selectedLaw.note" style="margin-bottom:20px;">
-            <div style="font-size:13px;color:var(--warn);padding:10px 14px;background:var(--warn-bg);border-radius:var(--radius);border-left:4px solid #D4860A">
-              ⚡ <strong>Ghi chú:</strong> {{ selectedLaw.note }}
-            </div>
-          </div>
-
-          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:16px;margin-top:16px;flex-wrap:wrap;gap:10px">
-            <button type="button" @click="selectedLaw = null"
-              style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
-              ✕ Đóng lại
-            </button>
-            <a :href="getDirectLawLink(selectedLaw)" target="_blank" rel="noopener noreferrer" class="btn-classify"
-              style="width:auto;margin:0;padding:8px 18px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-size:13px">
-              🌐 Xem toàn văn trên luatmoitruong.vn ↗
-            </a>
-          </div>
+        <!-- Drawer Footer -->
+        <div class="drawer-footer">
+          <button type="button" class="btn-secondary" @click="selectedLaw = null">
+            <i class="ti ti-x"></i>
+            <span>Đóng lại</span>
+          </button>
+          <a :href="getDirectLawLink(selectedLaw)" target="_blank" rel="noopener noreferrer" class="btn-primary">
+            <i class="ti ti-world"></i>
+            <span>Xem toàn văn trên luatmoitruong.vn</span>
+            <i class="ti ti-external-link"></i>
+          </a>
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@
       <span class="selected-text" :class="{ 'placeholder-text': !selectedItem }">
         {{ selectedItem ? selectedItem.name : placeholder }}
       </span>
-      <span class="arrow-icon" :class="{ 'rotated': isOpen }">▾</span>
+      <i class="ti ti-chevron-down arrow-icon" :class="{ 'rotated': isOpen }"></i>
     </div>
 
     <div v-if="isOpen && !disabled" class="dropdown-popover">
@@ -19,7 +19,7 @@
           type="text" 
           v-model="searchQuery" 
           class="search-input" 
-          :placeholder="searchPlaceholder || '🔍 Gõ tìm kiếm...'"
+          :placeholder="searchPlaceholder || 'Gõ từ khóa để lọc...'"
           @click.stop
         />
         <button 
@@ -28,7 +28,7 @@
           class="clear-search-btn" 
           @click.stop="searchQuery = ''"
         >
-          ✕
+          <i class="ti ti-x"></i>
         </button>
       </div>
 
@@ -44,7 +44,7 @@
           @click="selectOption(opt)"
         >
           <span>{{ opt.name }}</span>
-          <span v-if="isSelected(opt)" class="check-mark">✓</span>
+          <i v-if="isSelected(opt)" class="ti ti-check check-mark"></i>
         </div>
       </div>
     </div>

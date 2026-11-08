@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { runCrawler } = require('../utils/crawler');
+const { runCrawler, getCrawlerRunningState } = require('../utils/crawler');
 const { requireAdmin } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { CRAWLER_SETTING_KEY } = require('../utils/constants');
@@ -11,7 +11,11 @@ router.get('/settings', requireAdmin, async (req, res) => {
   try {
     const settingRes = await db.query('SELECT value FROM system_settings WHERE key = $1', [CRAWLER_SETTING_KEY]);
     const isEnabled = settingRes.rowCount > 0 && settingRes.rows[0].value === 'true';
-    return res.json({ success: true, autoCrawlEnabled: isEnabled });
+    return res.json({
+      success: true,
+      autoCrawlEnabled: isEnabled,
+      isRunning: getCrawlerRunningState()
+    });
   } catch (err) {
     logger.error('Lỗi khi lấy cấu hình crawler:', err);
     return res.status(500).json({ error: 'Không thể lấy cấu hình từ cơ sở dữ liệu.' });
@@ -46,21 +50,30 @@ router.post('/settings', requireAdmin, async (req, res) => {
 
 // 3. POST run (Chạy crawler thủ công ngay lập tức)
 router.post('/run', requireAdmin, async (req, res) => {
+  if (getCrawlerRunningState()) {
+    return res.status(409).json({
+      error: 'Hệ thống đang thực hiện một tiến trình đồng bộ dữ liệu pháp lý khác. Vui lòng đợi hoàn tất!'
+    });
+  }
+
   try {
     logger.info(`[Admin Manual Trigger] Admin ${req.user.fullName} kích hoạt cập nhật thủ công.`);
     
-    // Run the crawler asynchronously or synchronously.
-    // Since it takes a little time (scanning sitemap and pulling new pages), we do it synchronously
-    // but with a polite response when done.
     const result = await runCrawler(req.user.id);
+    const sec = (result.durationMs / 1000).toFixed(2);
     
     return res.json({
       success: true,
-      createdCount: result.createdCount,
-      updatedCount: result.updatedCount,
-      message: `Quá trình quét hoàn tất! Đã thêm mới ${result.createdCount} và cập nhật ${result.updatedCount} văn bản pháp lý.`
+      ...result,
+      stats: result,
+      message: `Hoàn tất kiểm tra ${result.totalSitemapUrls} URLs (${result.totalMainDocs} văn bản gốc) trong ${sec}s: Thêm mới ${result.createdCount}, Cập nhật ${result.updatedCount}, Chuyển hết hiệu lực ${result.expiredUpdatedCount || 0}, Đã đồng bộ (Fast-Skip) ${result.skippedExistingCount}.`
     });
   } catch (err) {
+    if (err.message === 'CRAWLER_BUSY') {
+      return res.status(409).json({
+        error: 'Hệ thống đang trong tiến trình đồng bộ dữ liệu, vui lòng đợi hoàn tất.'
+      });
+    }
     logger.error('Lỗi trong quá trình quét thủ công:', err);
     return res.status(500).json({ error: `Có lỗi xảy ra: ${err.message}` });
   }

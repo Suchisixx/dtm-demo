@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { PAGES, PRIVATE_PAGES, DEFAULT_PAGE, API } from './utils/constants.js'
 import { logger } from './utils/logger.js'
 import AuthModal from './components/AuthModal.vue'
@@ -12,17 +12,47 @@ import DashboardTab from './components/DashboardTab.vue'
 
 const currentUser = ref(null)
 const showLogin = ref(false)
+const sidebarCollapsed = ref(false)
+const mobileMenuOpen = ref(false)
+
+const PAGE_META = {
+  dashboard: { title: 'Dashboard điều hành', group: 'Tổng quan' },
+  laws: { title: 'Thư viện văn bản pháp lý', group: 'Tra cứu' },
+  classify: { title: 'Phân loại & Xác định hồ sơ', group: 'Nghiệp vụ' },
+  qcvn: { title: 'Đối chiếu quy chuẩn QCVN', group: 'Nghiệp vụ' },
+  map: { title: 'Bản đồ GIS dự án', group: 'Không gian' },
+  admin: { title: 'Quản trị hệ thống', group: 'Hệ thống' }
+}
+
 const getPageFromUrl = () => {
   const pathname = window.location.pathname.replace(/^\/+/, '').split('/')[0].trim()
   const hash = window.location.hash.replace('#', '').replace('/', '').trim()
   const validPages = PAGES
-  
+
   if (validPages.includes(pathname)) return pathname
   if (validPages.includes(hash)) return hash
   return DEFAULT_PAGE
 }
 
 const activePage = ref(getPageFromUrl())
+
+const currentPageTitle = computed(() => {
+  return PAGE_META[activePage.value]?.title || 'ETC LegalHub'
+})
+
+const userInitials = computed(() => {
+  if (!currentUser.value?.fullName) return 'U'
+  const parts = currentUser.value.fullName.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+})
+
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  setTimeout(() => {
+    window.dispatchEvent(new Event('resize'))
+  }, 220)
+}
 
 const checkAuth = async () => {
   try {
@@ -39,7 +69,6 @@ const checkAuth = async () => {
     logger.error('Lỗi checkAuth:', err)
   }
 
-  // Sau khi kiểm tra auth, kiểm tra quyền truy cập của trang hiện tại
   const initialPage = getPageFromUrl()
   if (initialPage === 'admin') {
     if (!currentUser.value || currentUser.value.role !== 'admin') {
@@ -98,6 +127,7 @@ const handleLogout = async () => {
 }
 
 const handlePageChange = (page) => {
+  mobileMenuOpen.value = false
   if (page === 'admin') {
     if (!currentUser.value || currentUser.value.role !== 'admin') {
       pendingTargetPage.value = 'admin'
@@ -133,7 +163,6 @@ const handleViewLaw = (lawId) => {
   window.history.pushState({ page: 'laws' }, '', '/laws')
 }
 
-// Watch currentUser changes. If logged out, redirect if on private page
 watch(currentUser, (newUser) => {
   if (!newUser) {
     if (activePage.value !== DEFAULT_PAGE) {
@@ -148,89 +177,141 @@ onMounted(() => {
     const page = getPageFromUrl()
     activePage.value = page
   })
-  
-  // Đồng bộ URL sạch (loại bỏ hash nếu có)
+
   const initialPage = getPageFromUrl()
   window.history.replaceState({ page: initialPage }, '', `/${initialPage}`)
-  
+
   checkAuth()
 })
 </script>
 
 <template>
-  <div style="min-height: 100vh; display: flex; flex-direction: column;">
-    <!-- HEADER -->
-    <header class="header">
-      <div class="header-inner">
-        <div style="display:flex;align-items:center;gap:12px">
-          <img src="/assets/logo/logo-bg.png" alt="Logo" class="logo-img" style="width:38px;height:38px;object-fit:contain;border-radius:50%" />
-          <div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <h1 class="logo-text" style="font-size:16px;font-weight:700;margin:0;line-height:1.35">ETC LegalHub</h1>
-              <span class="chip-status valid" style="font-size:10px;padding:2px 8px">Cập nhật: NĐ 48/2026</span>
-            </div>
-            <div style="font-size:11px;color:var(--text3);line-height:1.35;margin-top:2px">Môi trường & Pháp lý doanh nghiệp</div>
-          </div>
-        </div>
-        
-        <div class="user-auth-container" style="display:flex;align-items:center;margin-left:auto">
-          <div v-if="currentUser" style="display:flex;align-items:center;gap:12px">
-            <div style="text-align:right">
-              <div style="font-size:13px;font-weight:600;color:var(--text);line-height:1.35">{{ currentUser.fullName }}</div>
-              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;line-height:1.35">{{ currentUser.role }}</div>
-            </div>
-            <button class="btn-clear" style="padding:6px 12px;font-size:12px;margin:0;border-radius:6px" @click="handleLogout">🚪 Đăng xuất</button>
-          </div>
-          <button v-else class="btn-classify" style="width:auto;margin:0;padding:6px 16px;font-size:13px;border-radius:6px" @click="showLogin = true">Đăng nhập</button>
+  <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <!-- Mobile Backdrop -->
+    <div class="sidebar-backdrop" :class="{ show: mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
+
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileMenuOpen }">
+      <div class="sidebar-brand">
+        <img src="/assets/logo/logo-bg.png" alt="ETC LegalHub" class="sidebar-logo" />
+        <div v-if="!sidebarCollapsed" class="sidebar-brand-text">
+          <span class="sidebar-brand-title">ETC LegalHub</span>
+          <span class="sidebar-brand-sub">Pháp lý & Môi trường</span>
         </div>
       </div>
-    </header>
 
-    <!-- NAVIGATION -->
-    <nav class="nav-bar">
-      <div class="nav-inner">
-        <a href="/laws" class="nav-btn" :class="{ active: activePage === 'laws' }" @click.prevent="handlePageChange('laws')">
-          <i class="ti ti-file-text"></i> Tra cứu văn bản pháp lý
+      <nav class="sidebar-nav">
+        <div class="sidebar-group-label">Phân hệ nghiệp vụ</div>
+
+        <a href="/dashboard" class="sidebar-link" :class="{ active: activePage === 'dashboard' }"
+           title="Dashboard thống kê" @click.prevent="handlePageChange('dashboard')">
+          <i class="ti ti-layout-dashboard"></i>
+          <span class="sidebar-link-label">Dashboard</span>
+          <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
 
-        <a href="/dashboard" class="nav-btn" :class="{ active: activePage === 'dashboard' }" @click.prevent="handlePageChange('dashboard')">
-          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> Dashboard thống kê
+        <a href="/laws" class="sidebar-link" :class="{ active: activePage === 'laws' }"
+           title="Văn bản pháp lý" @click.prevent="handlePageChange('laws')">
+          <i class="ti ti-scale"></i>
+          <span class="sidebar-link-label">Văn bản pháp lý</span>
         </a>
-        
-        <a href="/classify" class="nav-btn" :class="{ active: activePage === 'classify' }" @click.prevent="handlePageChange('classify')">
-          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> Phân loại & Xác định hồ sơ
+
+        <a href="/classify" class="sidebar-link" :class="{ active: activePage === 'classify' }"
+           title="Phân loại dự án" @click.prevent="handlePageChange('classify')">
+          <i class="ti ti-file-analytics"></i>
+          <span class="sidebar-link-label">Phân loại dự án</span>
+          <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
-        
-        <a href="/qcvn" class="nav-btn" :class="{ active: activePage === 'qcvn' }" @click.prevent="handlePageChange('qcvn')">
-          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> So sánh QCVN
+
+        <a href="/qcvn" class="sidebar-link" :class="{ active: activePage === 'qcvn' }"
+           title="So sánh QCVN" @click.prevent="handlePageChange('qcvn')">
+          <i class="ti ti-flask-2"></i>
+          <span class="sidebar-link-label">So sánh QCVN</span>
+          <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
-        
-        <a href="/map" class="nav-btn" :class="{ active: activePage === 'map' }" @click.prevent="handlePageChange('map')">
-          <span v-if="!currentUser"><i class="ti ti-lock"></i></span> 🗺️ Bản đồ dự án
+
+        <a href="/map" class="sidebar-link" :class="{ active: activePage === 'map' }"
+           title="Bản đồ dự án" @click.prevent="handlePageChange('map')">
+          <i class="ti ti-map-2"></i>
+          <span class="sidebar-link-label">Bản đồ dự án</span>
+          <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
-        
-        <a v-if="currentUser && currentUser.role === 'admin'" href="/admin" class="nav-btn" :class="{ active: activePage === 'admin' }" @click.prevent="handlePageChange('admin')">
-          Quản trị hệ thống
-        </a>
+
+        <template v-if="currentUser && currentUser.role === 'admin'">
+          <div class="sidebar-group-label" style="margin-top: 12px;">Quản trị</div>
+          <a href="/admin" class="sidebar-link" :class="{ active: activePage === 'admin' }"
+             title="Quản trị hệ thống" @click.prevent="handlePageChange('admin')">
+            <i class="ti ti-settings"></i>
+            <span class="sidebar-link-label">Quản trị hệ thống</span>
+          </a>
+        </template>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="sidebar-collapse-btn" @click="toggleSidebar" :title="sidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'">
+          <i class="ti" :class="sidebarCollapsed ? 'ti-layout-sidebar-left-expand' : 'ti-layout-sidebar-left-collapse'" style="font-size: 18px;"></i>
+          <span v-if="!sidebarCollapsed">Thu gọn menu</span>
+        </button>
       </div>
-    </nav>
+    </aside>
 
-    <!-- MAIN BODY -->
-    <main style="flex: 1; padding: 24px 0;">
-      <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
-      <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
-      <ClassifyTab v-else-if="activePage === 'classify'" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
-      <QCVNTab v-else-if="activePage === 'qcvn'" :loadSampleId="pendingSampleId" @sample-loaded="pendingSampleId = null" />
-      <MapTab v-else-if="activePage === 'map'" @view-project="handleViewProject" />
-      <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />
-    </main>
+    <!-- MAIN VIEWPORT -->
+    <div class="app-main">
+      <!-- TOPBAR -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button type="button" class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Menu">
+            <i class="ti ti-menu-2"></i>
+          </button>
+          <div class="topbar-breadcrumb">
+            <span class="breadcrumb-root">ETC LegalHub</span>
+            <i class="ti ti-chevron-right breadcrumb-sep"></i>
+            <span class="breadcrumb-current">{{ currentPageTitle }}</span>
+          </div>
+        </div>
 
-    <!-- FOOTER -->
-    <footer style="padding: 24px 0; border-top: 1px solid var(--border); margin-top: auto; background: var(--surface);">
-      <div class="container" style="text-align: center; font-size: 13px; color: var(--text3)">
-        &copy; 2026 ETC Environmental Consulting Hub. Cập nhật theo chuỗi nghị định sửa đổi NĐ 08/2022/NĐ-CP mới nhất.
-      </div>
-    </footer>
+        <div class="topbar-right">
+          <div class="legal-version-pill">
+            <i class="ti ti-shield-check"></i>
+            <span>Chuẩn pháp lý: NĐ 48/2026 & VBHN 49</span>
+          </div>
+
+          <div class="user-profile-bar">
+            <template v-if="currentUser">
+              <div class="user-avatar">{{ userInitials }}</div>
+              <div class="user-info-text">
+                <span class="user-info-name">{{ currentUser.fullName }}</span>
+                <span class="user-info-role">{{ currentUser.role === 'admin' ? 'Quản trị viên' : 'Chuyên viên' }}</span>
+              </div>
+              <button type="button" class="btn-ghost btn-sm" style="margin-left: 4px;" @click="handleLogout" title="Đăng xuất">
+                <i class="ti ti-logout"></i>
+                <span>Đăng xuất</span>
+              </button>
+            </template>
+            <button v-else type="button" class="btn-primary btn-sm" @click="showLogin = true">
+              <i class="ti ti-login"></i>
+              <span>Đăng nhập</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- MAIN CONTENT -->
+      <main class="app-content">
+        <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
+        <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
+        <ClassifyTab v-else-if="activePage === 'classify'" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
+        <QCVNTab v-else-if="activePage === 'qcvn'" :loadSampleId="pendingSampleId" @sample-loaded="pendingSampleId = null" />
+        <MapTab v-else-if="activePage === 'map'" @view-project="handleViewProject" />
+        <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />
+      </main>
+
+      <!-- FOOTER -->
+      <footer class="app-footer">
+        <span>&copy; 2026 ETC Environmental Consulting Hub. Hệ thống quản trị hồ sơ & đối chiếu quy chuẩn môi trường.</span>
+        <span>Dữ liệu đồng bộ theo chuỗi Nghị định 08/2022/NĐ-CP & 48/2026/NĐ-CP</span>
+      </footer>
+    </div>
 
     <!-- AUTH MODAL -->
     <AuthModal v-if="showLogin" @login-success="handleLoginSuccess" @close="showLogin = false" />

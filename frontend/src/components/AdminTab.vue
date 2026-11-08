@@ -91,6 +91,19 @@ const crawlHistory = ref([])
 const isCrawling = ref(false)
 const crawlerMessage = ref('')
 const crawlerStatusType = ref('info')
+const lastCrawlStats = ref(null)
+
+const getHistoryActionLabel = (action) => {
+  if (action === 'AUTO_CRAWL_CREATE' || action === 'create') return 'Thêm mới'
+  if (action === 'AUTO_CRAWL_EXPIRE' || action === 'expire') return 'Hết hiệu lực'
+  return 'Cập nhật'
+}
+
+const getHistoryActionClass = (action) => {
+  if (action === 'AUTO_CRAWL_CREATE' || action === 'create') return 'valid'
+  if (action === 'AUTO_CRAWL_EXPIRE' || action === 'expire') return 'expired'
+  return 'amended'
+}
 
 const fetchCrawlerSettings = async () => {
   try {
@@ -98,6 +111,9 @@ const fetchCrawlerSettings = async () => {
     if (res.ok) {
       const data = await res.json()
       autoCrawlEnabled.value = data.autoCrawlEnabled
+      if (data.isRunning) {
+        isCrawling.value = true
+      }
     }
   } catch (err) {
     logger.error('Lỗi lấy thiết lập crawler:', err)
@@ -144,7 +160,7 @@ const triggerCrawlNow = async () => {
   if (!confirm('Bạn có chắc chắn muốn kích hoạt quét tự động từ luatmoitruong.vn ngay bây giờ?\nQuá trình này có thể mất từ vài giây đến một phút.')) return
   
   isCrawling.value = true
-  crawlerMessage.value = 'Hệ thống đang kiểm tra sitemap và tải thông tin các văn bản mới...'
+  crawlerMessage.value = 'Hệ thống đang kết nối sitemap-pages.xml, đối chiếu lastmod cache và kiểm tra hiệu lực văn bản...'
   crawlerStatusType.value = 'info'
   
   try {
@@ -153,6 +169,7 @@ const triggerCrawlNow = async () => {
     if (res.ok) {
       crawlerMessage.value = data.message
       crawlerStatusType.value = 'success'
+      lastCrawlStats.value = data.stats || data
       await fetchCrawlHistory()
       await fetchLaws()
     } else {
@@ -447,314 +464,395 @@ onMounted(() => {
 </script>
 
 <template>
-  <div id="admin" class="page container">
-    <div class="section-head">Trang Quản trị hệ thống</div>
-    <div class="section-desc">Quản lý nhân viên, dự án và cơ sở dữ liệu quy chuẩn động</div>
-
-    <div class="admin-grid">
-      <!-- Sidebar -->
-      <div class="admin-sidebar">
-        <button class="admin-tab-btn" :class="{ active: currentSubpage === 'users' }" @click="switchSubpage('users')">👥 Nhân viên</button>
-        <button class="admin-tab-btn" :class="{ active: currentSubpage === 'projects' }" @click="switchSubpage('projects')">📂 Dự án</button>
-        <button class="admin-tab-btn" :class="{ active: currentSubpage === 'laws' }" @click="switchSubpage('laws')">📜 Quy chuẩn pháp lý</button>
-        <button class="admin-tab-btn" :class="{ active: currentSubpage === 'crawler' }" @click="switchSubpage('crawler')">🔄 Cập nhật tự động</button>
+  <div id="admin" class="page container fade-up">
+    <!-- PAGE HEADER -->
+    <div class="page-header">
+      <div>
+        <h2 class="section-head">Bảng Điều khiển Quản trị Hệ thống</h2>
+        <p class="section-desc">
+          Quản lý phân quyền tài khoản nhân sự, giám sát danh mục dự án toàn hệ thống, cập nhật cơ sở dữ liệu văn bản pháp lý và đồng bộ tự động.
+        </p>
       </div>
+    </div>
 
-      <!-- Content area -->
-      <div class="admin-content">
-        <!-- Subpage: Users -->
-        <div v-if="currentSubpage === 'users'" id="admin-users" class="admin-subpage">
-          <div class="admin-section-header">
-            <div class="admin-section-title">Quản lý tài khoản nhân viên</div>
-            <button class="btn-classify" @click="openAddUserModal"
-              style="width:auto;margin:0;padding:6px 14px;font-size:13px">➕ Thêm nhân viên</button>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>Tên đăng nhập</th>
-                  <th>Họ và tên</th>
-                  <th>Vai trò</th>
-                  <th>Ngày tạo</th>
-                  <th style="width:120px;text-align:right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="users.length === 0">
-                  <td colspan="5" style="text-align:center;color:var(--text3)">Chưa có tài khoản nào được tạo.</td>
-                </tr>
-                <tr v-for="u in paginatedUsers" :key="u.id">
-                  <td><strong>{{ u.username }}</strong></td>
-                  <td>{{ u.full_name }}</td>
-                  <td><span class="chip-status" :class="u.role === 'admin' ? 'valid' : 'amended'">{{ u.role.toUpperCase() }}</span></td>
-                  <td>{{ new Date(u.created_at).toLocaleDateString('vi-VN') }}</td>
-                  <td style="text-align:right">
-                    <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
-                      <button class="btn-action-edit" @click="openEditUserModal(u)">✏️ Sửa</button>
-                      <button class="btn-action-delete" :disabled="currentUser && currentUser.id === u.id"
-                        :style="currentUser && currentUser.id === u.id ? { opacity: 0.4, cursor: 'not-allowed' } : {}"
-                        @click="handleDeleteUser(u.id, u.username)">🗑️ Xoá</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+    <!-- HORIZONTAL NAVIGATION TABS -->
+    <div class="admin-tabs-bar">
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'users' }" @click="switchSubpage('users')">
+        <i class="ti ti-users"></i>
+        <span>Quản lý Nhân viên ({{ users.length }})</span>
+      </button>
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'projects' }" @click="switchSubpage('projects')">
+        <i class="ti ti-folders"></i>
+        <span>Dự án toàn hệ thống ({{ projects.length }})</span>
+      </button>
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'laws' }" @click="switchSubpage('laws')">
+        <i class="ti ti-scale"></i>
+        <span>Văn bản &amp; Quy chuẩn ({{ laws.length }})</span>
+      </button>
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'crawler' }" @click="switchSubpage('crawler')">
+        <i class="ti ti-refresh"></i>
+        <span>Đồng bộ dữ liệu tự động</span>
+      </button>
+    </div>
 
-          <!-- Phân trang Users -->
-          <div v-if="users.length > 0"
-            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
-            <div style="font-size:13px;color:var(--text2)">
-              Hiển thị <strong>{{ (userCurrentPage - 1) * userPageSize + 1 }}</strong> – <strong>{{ Math.min(userCurrentPage * userPageSize, users.length) }}</strong> / {{ users.length }} nhân viên
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <button class="pagination-btn" :disabled="userCurrentPage === 1" @click="userCurrentPage--">‹</button>
-              <button v-for="pg in userTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === userCurrentPage }" @click="userCurrentPage = pg">{{ pg }}</button>
-              <button class="pagination-btn" :disabled="userCurrentPage === userTotalPages" @click="userCurrentPage++">›</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
-              <span>Hiển thị:</span>
-              <select v-model.number="userPageSize"
-                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
-                <option :value="10">10 / trang</option>
-                <option :value="20">20 / trang</option>
-                <option :value="50">50 / trang</option>
-              </select>
-            </div>
-          </div>
+    <!-- CONTENT AREA -->
+    <div class="admin-content">
+      <!-- Subpage: Users -->
+      <div v-if="currentSubpage === 'users'" id="admin-users" class="admin-subpage">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Danh sách tài khoản nhân sự</div>
+          <button type="button" class="btn-primary btn-sm" @click="openAddUserModal">
+            <i class="ti ti-user-plus"></i>
+            <span>Thêm nhân viên</span>
+          </button>
         </div>
 
-        <!-- Subpage: Projects -->
-        <div v-if="currentSubpage === 'projects'" id="admin-projects" class="admin-subpage">
-          <div class="admin-section-header">
-            <div class="admin-section-title">Quản lý dự án toàn hệ thống</div>
-          </div>
-          <div style="overflow-x:auto">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th>Tên dự án</th>
-                  <th>Người sở hữu</th>
-                  <th>Ngành nghề</th>
-                  <th>Ngày tạo</th>
-                  <th style="width:100px;text-align:right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="projects.length === 0">
-                  <td colspan="5" style="text-align:center;color:var(--text3)">Chưa có dự án nào trên hệ thống.</td>
-                </tr>
-                <tr v-for="p in paginatedProjects" :key="p.id">
-                  <td><strong>{{ p.name }}</strong></td>
-                  <td>{{ p.owner_name }} ({{ p.owner_username }})</td>
-                  <td>
-                    <span style="font-size:12px;color:var(--text2)">
-                      {{ IND_DB[p.form_data?.nganh]?.lbl || p.form_data?.nganh || 'Chưa xác định' }}
-                    </span>
-                  </td>
-                  <td>{{ new Date(p.created_at).toLocaleString('vi-VN') }}</td>
-                  <td style="text-align:right">
-                    <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
-                      <button class="btn-action-delete" @click="handleDeleteProject(p.id, p.name)">🗑️ Xoá</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Phân trang Projects -->
-          <div v-if="projects.length > 0"
-            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
-            <div style="font-size:13px;color:var(--text2)">
-              Hiển thị <strong>{{ (projectCurrentPage - 1) * projectPageSize + 1 }}</strong> – <strong>{{ Math.min(projectCurrentPage * projectPageSize, projects.length) }}</strong> / {{ projects.length }} dự án
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <button class="pagination-btn" :disabled="projectCurrentPage === 1" @click="projectCurrentPage--">‹</button>
-              <button v-for="pg in projectTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === projectCurrentPage }" @click="projectCurrentPage = pg">{{ pg }}</button>
-              <button class="pagination-btn" :disabled="projectCurrentPage === projectTotalPages" @click="projectCurrentPage++">›</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
-              <span>Hiển thị:</span>
-              <select v-model.number="projectPageSize"
-                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
-                <option :value="10">10 / trang</option>
-                <option :value="20">20 / trang</option>
-                <option :value="50">50 / trang</option>
-              </select>
-            </div>
-          </div>
+        <div style="overflow-x:auto">
+          <table class="saas-table">
+            <thead>
+              <tr>
+                <th>Tên đăng nhập</th>
+                <th>Họ và tên</th>
+                <th>Vai trò</th>
+                <th>Ngày khởi tạo</th>
+                <th style="width:150px;text-align:right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="users.length === 0">
+                <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Chưa có tài khoản nào được tạo.</td>
+              </tr>
+              <tr v-for="u in paginatedUsers" :key="u.id">
+                <td><strong style="color:var(--text)">{{ u.username }}</strong></td>
+                <td>{{ u.full_name }}</td>
+                <td>
+                  <span class="chip-status" :class="u.role === 'admin' ? 'valid' : 'amended'">
+                    {{ u.role === 'admin' ? 'Quản trị viên' : 'Chuyên viên' }}
+                  </span>
+                </td>
+                <td style="color:var(--text2)">{{ new Date(u.created_at).toLocaleDateString('vi-VN') }}</td>
+                <td style="text-align:right">
+                  <div style="display:flex;gap:6px;justify-content:flex-end">
+                    <button type="button" class="btn-action-edit" @click="openEditUserModal(u)">
+                      <i class="ti ti-edit"></i>
+                      <span>Sửa</span>
+                    </button>
+                    <button type="button" class="btn-action-delete"
+                            :disabled="currentUser && currentUser.id === u.id"
+                            @click="handleDeleteUser(u.id, u.username)">
+                      <i class="ti ti-trash"></i>
+                      <span>Xóa</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- Subpage: Laws -->
-        <div v-if="currentSubpage === 'laws'" id="admin-laws" class="admin-subpage">
-          <div class="admin-section-header">
-            <div class="admin-section-title">Quản lý văn bản pháp lý & Quy chuẩn</div>
-            <button class="btn-classify" @click="openAddLawModal"
-              style="width:auto;margin:0;padding:6px 14px;font-size:13px">➕ Thêm quy chuẩn</button>
+        <!-- Phân trang Users -->
+        <div v-if="users.length > 0"
+             style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:12.5px;color:var(--text2)">
+            Hiển thị <strong>{{ (userCurrentPage - 1) * userPageSize + 1 }}</strong> – <strong>{{ Math.min(userCurrentPage * userPageSize, users.length) }}</strong> / {{ users.length }} nhân viên
           </div>
-          
-          <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center">
-            <input type="text" v-model="lawSearchQuery" placeholder="🔍 Tìm kiếm theo số hiệu hoặc tên..."
-              style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--text)" />
-            <select v-model="lawFilterType"
-              style="width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);color:var(--text)">
-              <option value="all">Tất cả loại văn bản</option>
-              <option value="luat">Luật</option>
-              <option value="nd">Nghị định</option>
-              <option value="vbhn">Văn bản hợp nhất</option>
-              <option value="tt">Thông tư</option>
-              <option value="qcvn">Quy chuẩn (QCVN)</option>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button type="button" class="pagination-btn" :disabled="userCurrentPage === 1" @click="userCurrentPage--">‹</button>
+            <button v-for="pg in userTotalPages" :key="pg" type="button" class="pagination-btn" :class="{ active: pg === userCurrentPage }" @click="userCurrentPage = pg">{{ pg }}</button>
+            <button type="button" class="pagination-btn" :disabled="userCurrentPage === userTotalPages" @click="userCurrentPage++">›</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
+            <span>Hiển thị:</span>
+            <select v-model.number="userPageSize" style="width:100px;height:30px;font-size:12.5px">
+              <option :value="10">10 / trang</option>
+              <option :value="20">20 / trang</option>
+              <option :value="50">50 / trang</option>
             </select>
           </div>
-          
-          <div style="overflow-x:auto">
-            <table class="admin-table">
-              <thead>
-                <tr>
-                  <th style="width:120px">Mã VB</th>
-                  <th style="width:100px">Loại</th>
-                  <th>Số hiệu</th>
-                  <th style="width:100px">Hiệu lực</th>
-                  <th style="width:150px;text-align:right">Hành động</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="filteredLaws.length === 0">
-                  <td colspan="5" style="text-align:center;color:var(--text3)">Không tìm thấy văn bản phù hợp.</td>
-                </tr>
-                <tr v-for="l in paginatedLaws" :key="l.id">
-                  <td><code>{{ l.id }}</code></td>
-                  <td><span class="chip-status valid" style="background:#eaf2f8;color:#2980b9">{{ getLawTypeLabel(l.type) }}</span></td>
-                  <td>
-                    <strong>{{ l.so }}</strong>
-                    <div style="font-size:11px;color:var(--text3);margin-top:2px">Năm ban hành: {{ l.year }}</div>
-                  </td>
-                  <td><span class="chip-status" :class="l.status">{{ l.status === 'valid' ? 'Hiệu lực' : (l.status === 'amended' ? 'Sửa đổi' : 'Hết HL') }}</span></td>
-                  <td style="text-align:right">
-                    <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
-                      <button class="btn-action-edit" @click="openEditLawModal(l)">✏️ Sửa</button>
-                      <button class="btn-action-delete" @click="handleDeleteLaw(l.id, l.so)">🗑️ Xoá</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        </div>
+      </div>
+
+      <!-- Subpage: Projects -->
+      <div v-if="currentSubpage === 'projects'" id="admin-projects" class="admin-subpage">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Quản lý hồ sơ dự án toàn hệ thống</div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="saas-table">
+            <thead>
+              <tr>
+                <th>Tên dự án</th>
+                <th>Chuyên viên phụ trách</th>
+                <th>Ngành nghề</th>
+                <th>Thời gian tạo</th>
+                <th style="width:110px;text-align:right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="projects.length === 0">
+                <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Chưa có dự án nào trên hệ thống.</td>
+              </tr>
+              <tr v-for="p in paginatedProjects" :key="p.id">
+                <td><strong style="color:var(--text)">{{ p.name }}</strong></td>
+                <td style="color:var(--text2)">{{ p.owner_name }} ({{ p.owner_username }})</td>
+                <td>
+                  <span class="chip chip-gray">
+                    {{ IND_DB[p.form_data?.nganh]?.lbl || p.form_data?.nganh || 'Chưa xác định' }}
+                  </span>
+                </td>
+                <td style="color:var(--text2)">{{ new Date(p.created_at).toLocaleString('vi-VN') }}</td>
+                <td style="text-align:right">
+                  <button type="button" class="btn-action-delete" @click="handleDeleteProject(p.id, p.name)">
+                    <i class="ti ti-trash"></i>
+                    <span>Xóa</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Phân trang Projects -->
+        <div v-if="projects.length > 0"
+             style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:12.5px;color:var(--text2)">
+            Hiển thị <strong>{{ (projectCurrentPage - 1) * projectPageSize + 1 }}</strong> – <strong>{{ Math.min(projectCurrentPage * projectPageSize, projects.length) }}</strong> / {{ projects.length }} dự án
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button type="button" class="pagination-btn" :disabled="projectCurrentPage === 1" @click="projectCurrentPage--">‹</button>
+            <button v-for="pg in projectTotalPages" :key="pg" type="button" class="pagination-btn" :class="{ active: pg === projectCurrentPage }" @click="projectCurrentPage = pg">{{ pg }}</button>
+            <button type="button" class="pagination-btn" :disabled="projectCurrentPage === projectTotalPages" @click="projectCurrentPage++">›</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
+            <span>Hiển thị:</span>
+            <select v-model.number="projectPageSize" style="width:100px;height:30px;font-size:12.5px">
+              <option :value="10">10 / trang</option>
+              <option :value="20">20 / trang</option>
+              <option :value="50">50 / trang</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subpage: Laws -->
+      <div v-if="currentSubpage === 'laws'" id="admin-laws" class="admin-subpage">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Quản lý cơ sở dữ liệu Văn bản pháp lý &amp; Quy chuẩn</div>
+          <button type="button" class="btn-primary btn-sm" @click="openAddLawModal">
+            <i class="ti ti-plus"></i>
+            <span>Thêm văn bản / quy chuẩn</span>
+          </button>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+          <div style="position:relative;flex:1;min-width:240px">
+            <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
+            <input type="text" v-model="lawSearchQuery" placeholder="Tìm theo mã, số hiệu hoặc tên văn bản..." style="padding-left:32px" />
+          </div>
+          <select v-model="lawFilterType" style="width:200px">
+            <option value="all">Tất cả loại văn bản</option>
+            <option value="luat">Luật</option>
+            <option value="nd">Nghị định</option>
+            <option value="vbhn">Văn bản hợp nhất</option>
+            <option value="tt">Thông tư</option>
+            <option value="qcvn">Quy chuẩn (QCVN)</option>
+          </select>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="saas-table">
+            <thead>
+              <tr>
+                <th style="width:150px">Mã định danh</th>
+                <th style="width:110px">Loại</th>
+                <th>Số hiệu &amp; Tên văn bản</th>
+                <th style="width:125px">Trạng thái</th>
+                <th style="width:150px;text-align:right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="filteredLaws.length === 0">
+                <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Không tìm thấy văn bản phù hợp.</td>
+              </tr>
+              <tr v-for="l in paginatedLaws" :key="l.id">
+                <td><code style="font-size:12px;color:var(--text2);background:var(--bg);padding:2px 6px;border-radius:4px">{{ l.id }}</code></td>
+                <td><span class="chip chip-gray">{{ getLawTypeLabel(l.type) }}</span></td>
+                <td>
+                  <div style="font-weight:600;color:var(--accent)">{{ l.so }}</div>
+                  <div style="font-size:13px;color:var(--text);margin-top:2px">{{ l.ten }}</div>
+                  <div style="font-size:11.5px;color:var(--text3);margin-top:2px">Năm ban hành: {{ l.year }}</div>
+                </td>
+                <td>
+                  <span class="chip-status" :class="l.status">
+                    {{ l.status === 'valid' ? 'Hiệu lực' : (l.status === 'amended' ? 'Sửa đổi' : 'Hết HL') }}
+                  </span>
+                </td>
+                <td style="text-align:right">
+                  <div style="display:flex;gap:6px;justify-content:flex-end">
+                    <button type="button" class="btn-action-edit" @click="openEditLawModal(l)">
+                      <i class="ti ti-edit"></i>
+                      <span>Sửa</span>
+                    </button>
+                    <button type="button" class="btn-action-delete" @click="handleDeleteLaw(l.id, l.so)">
+                      <i class="ti ti-trash"></i>
+                      <span>Xóa</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Phân trang Laws -->
+        <div v-if="filteredLaws.length > 0"
+             style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font-size:12.5px;color:var(--text2)">
+            Hiển thị <strong>{{ (lawCurrentPage - 1) * lawPageSize + 1 }}</strong> – <strong>{{ Math.min(lawCurrentPage * lawPageSize, filteredLaws.length) }}</strong> / {{ filteredLaws.length }} văn bản
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button type="button" class="pagination-btn" :disabled="lawCurrentPage === 1" @click="lawCurrentPage--">‹</button>
+            <button v-for="pg in lawTotalPages" :key="pg" type="button" class="pagination-btn" :class="{ active: pg === lawCurrentPage }" @click="lawCurrentPage = pg">{{ pg }}</button>
+            <button type="button" class="pagination-btn" :disabled="lawCurrentPage === lawTotalPages" @click="lawCurrentPage++">›</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
+            <span>Hiển thị:</span>
+            <select v-model.number="lawPageSize" style="width:100px;height:30px;font-size:12.5px">
+              <option :value="10">10 / trang</option>
+              <option :value="20">20 / trang</option>
+              <option :value="50">50 / trang</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Subpage: Crawler -->
+      <div v-if="currentSubpage === 'crawler'" id="admin-crawler" class="admin-subpage">
+        <div class="admin-section-header">
+          <div class="admin-section-title">Cấu hình đồng bộ văn bản pháp lý tự động</div>
+        </div>
+
+        <div style="padding:20px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px">
+          <div style="font-size:14.5px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:8px">
+            <i class="ti ti-cloud-download" style="color:var(--accent);font-size:18px"></i>
+            <span>Trình đồng bộ Sitemap &amp; Bóc tách Điều khoản tự động (luatmoitruong.vn)</span>
+          </div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+            Hệ thống vận hành theo kiến trúc <strong>Đồng bộ 2 tầng (Human-in-the-loop Regulatory Governance)</strong>:
+            Tầng 1 tự động quét <code>sitemap-pages.xml</code> định kỳ (ngày 01 hàng tháng lúc 00:00), đối chiếu dấu thời gian <code>lastmod</code> với bộ nhớ đệm PostgreSQL, tự động bóc tách điều khoản theo thứ tự tự nhiên và phát hiện văn bản hết hiệu lực. Tầng 2 ghi nhận nhật ký biến động để Quản trị viên rà soát và cập nhật có kiểm soát các thông số định lượng QCVN hoặc ngưỡng phân loại dự án.
+          </p>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-top:10px;border-top:1px solid var(--border)">
+            <label style="display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer">
+              <input type="checkbox" v-model="autoCrawlEnabled" @change="toggleAutoCrawl" style="width:16px;height:16px;accent-color:var(--accent)" />
+              <span>Kích hoạt tự động quét định kỳ hàng tháng (Cron Scheduler: 00:00 ngày 01)</span>
+            </label>
+
+            <button type="button" class="btn-primary" :disabled="isCrawling" @click="triggerCrawlNow">
+              <i class="ti" :class="isCrawling ? 'ti-loader' : 'ti-player-play'"></i>
+              <span>{{ isCrawling ? 'Đang quét & đồng bộ dữ liệu...' : 'Chạy kiểm tra & cập nhật ngay' }}</span>
+            </button>
           </div>
 
-          <!-- Phân trang Quy chuẩn & Văn bản pháp lý -->
-          <div v-if="filteredLaws.length > 0"
-            style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">
-            <div style="font-size:13px;color:var(--text2)">
-              Hiển thị <strong>{{ (lawCurrentPage - 1) * lawPageSize + 1 }}</strong> – <strong>{{ Math.min(lawCurrentPage * lawPageSize, filteredLaws.length) }}</strong> / {{ filteredLaws.length }} quy chuẩn & văn bản
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <button class="pagination-btn" :disabled="lawCurrentPage === 1" @click="lawCurrentPage--">‹</button>
-              <button v-for="pg in lawTotalPages" :key="pg" class="pagination-btn" :class="{ active: pg === lawCurrentPage }" @click="lawCurrentPage = pg">{{ pg }}</button>
-              <button class="pagination-btn" :disabled="lawCurrentPage === lawTotalPages" @click="lawCurrentPage++">›</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
-              <span>Hiển thị:</span>
-              <select v-model.number="lawPageSize"
-                style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
-                <option :value="10">10 / trang</option>
-                <option :value="20">20 / trang</option>
-                <option :value="50">50 / trang</option>
-              </select>
-            </div>
+          <div v-if="crawlerMessage" style="margin-top:14px;padding:10px 14px;border-radius:var(--radius);font-size:13px;border:1px solid"
+               :style="{
+                 backgroundColor: crawlerStatusType === 'success' ? 'var(--success-bg)' : crawlerStatusType === 'error' ? 'var(--red-bg)' : 'var(--info-bg)',
+                 color: crawlerStatusType === 'success' ? 'var(--success)' : crawlerStatusType === 'error' ? 'var(--red)' : 'var(--info)',
+                 borderColor: crawlerStatusType === 'success' ? 'var(--success-border)' : crawlerStatusType === 'error' ? 'var(--danger-border)' : 'var(--info-border)'
+               }">
+            {{ crawlerMessage }}
           </div>
         </div>
 
-        <!-- Subpage: Crawler -->
-        <div v-if="currentSubpage === 'crawler'" id="admin-crawler" class="admin-subpage">
-          <div class="admin-section-header">
-            <div class="admin-section-title">Cấu hình cập nhật luật tự động</div>
+        <!-- Bảng thống kê phiên quét trực quan (Crawl Session Telemetry) -->
+        <div v-if="lastCrawlStats" class="kpi-grid fade-up" style="margin-bottom:24px">
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">Tổng URL Sitemap đã quét</span>
+              <div class="kpi-icon"><i class="ti ti-sitemap"></i></div>
+            </div>
+            <div class="kpi-value">{{ lastCrawlStats.totalSitemapUrls || 0 }}</div>
+            <div class="kpi-sub">{{ lastCrawlStats.totalMainDocs || 0 }} văn bản gốc · {{ lastCrawlStats.totalSubPages || 0 }} trang điều khoản</div>
           </div>
-          
-          <!-- Control Panel Card -->
-          <div class="card" style="padding:20px;margin-bottom:24px;border:1px solid var(--border)">
-            <h4 style="font-size:15px;margin-bottom:12px;color:var(--text)">Trình cập nhật tự động (luatmoitruong.vn)</h4>
-            <p style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5">
-              Hệ thống sử dụng Scheduler tự động quét sitemap và bài viết mới từ trang luatmoitruong.vn định kỳ mỗi tháng một lần (ngày 01 hàng tháng lúc 00:00). Hệ thống tra cứu nhanh, tự động bỏ qua các văn bản đã có không đổi hoặc hết hiệu lực, chỉ thêm mới các văn bản pháp lý còn hiệu lực.
-            </p>
-            
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-              <label class="switch-label" style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer">
-                <input type="checkbox" v-model="autoCrawlEnabled" @change="toggleAutoCrawl" style="width:18px;height:18px;accent-color:var(--accent)" />
-                Bật tự động quét hàng tháng
-              </label>
-            </div>
 
-            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-              <button class="btn-classify" :disabled="isCrawling" @click="triggerCrawlNow" style="width:auto;margin:0;padding:8px 16px;font-size:13px">
-                <span v-if="isCrawling">⏳ Đang quét dữ liệu...</span>
-                <span v-else>⚡ Chạy kiểm tra & Cập nhật ngay</span>
-              </button>
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">Đã đồng bộ (Fast Cache Skip)</span>
+              <div class="kpi-icon" style="color:var(--success);background:var(--success-bg)"><i class="ti ti-database-check"></i></div>
             </div>
-            
-            <!-- Crawler status message -->
-            <div v-if="crawlerMessage" :style="{
-              marginTop: '16px',
-              padding: '12px',
-              borderRadius: '6px',
-              fontSize: '13px',
-              border: '1px solid',
-              backgroundColor: crawlerStatusType === 'success' ? 'var(--accent2)' : crawlerStatusType === 'error' ? 'var(--red-bg)' : 'var(--info-bg)',
-              color: crawlerStatusType === 'success' ? 'var(--accent)' : crawlerStatusType === 'error' ? 'var(--red)' : 'var(--info)',
-              borderColor: crawlerStatusType === 'success' ? 'var(--border)' : crawlerStatusType === 'error' ? 'var(--red)' : 'var(--info)'
-            }">
-              {{ crawlerMessage }}
+            <div class="kpi-value" style="color:var(--success)">{{ lastCrawlStats.skippedExistingCount || 0 }}</div>
+            <div class="kpi-sub">Khớp dấu thời gian lastmod trong PostgreSQL</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">Biến động pháp lý ghi nhận</span>
+              <div class="kpi-icon" style="color:var(--info);background:var(--info-bg)"><i class="ti ti-file-diff"></i></div>
+            </div>
+            <div class="kpi-value" style="color:var(--info)">
+              {{ (lastCrawlStats.createdCount || 0) + (lastCrawlStats.updatedCount || 0) + (lastCrawlStats.expiredUpdatedCount || 0) }}
+            </div>
+            <div class="kpi-sub">
+              +{{ lastCrawlStats.createdCount || 0 }} mới · {{ lastCrawlStats.updatedCount || 0 }} sửa đổi · {{ lastCrawlStats.expiredUpdatedCount || 0 }} hết HL
             </div>
           </div>
 
-          <!-- Update Log history -->
-          <div class="admin-section-header" style="margin-top:24px">
-            <div class="admin-section-title" style="font-size:16px">Nhật ký cập nhật luật tự động</div>
+          <div class="kpi-card">
+            <div class="kpi-header">
+              <span class="kpi-label">Thời gian thực thi</span>
+              <div class="kpi-icon"><i class="ti ti-clock-bolt"></i></div>
+            </div>
+            <div class="kpi-value">{{ ((lastCrawlStats.durationMs || 0) / 1000).toFixed(2) }}s</div>
+            <div class="kpi-sub">Bỏ qua {{ lastCrawlStats.skippedExpiredCount || 0 }} văn bản ngoài hệ thống đã hết HL</div>
           </div>
-          
-          <div style="overflow-x:auto">
-            <table class="admin-table" style="min-width:650px">
-              <thead>
-                <tr>
-                  <th style="width:160px">Thời gian</th>
-                  <th style="width:120px">Mã luật</th>
-                  <th style="width:120px">Hành động</th>
-                  <th style="width:150px">Người thực hiện</th>
-                  <th>Mô tả chi tiết</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="crawlHistory.length === 0">
-                  <td colspan="5" style="text-align:center;color:var(--text3)">Chưa ghi nhận lịch sử cập nhật nào từ crawler.</td>
-                </tr>
-                <tr v-for="h in crawlHistory" :key="h.id">
-                  <td>{{ new Date(h.updated_at).toLocaleString('vi-VN') }}</td>
-                  <td><code>{{ h.law_id }}</code></td>
-                  <td>
-                    <span class="chip-status" :class="h.action === 'AUTO_CRAWL_CREATE' ? 'valid' : 'amended'">
-                      {{ h.action === 'AUTO_CRAWL_CREATE' ? 'THÊM MỚI' : 'CẬP NHẬT' }}
-                    </span>
-                  </td>
-                  <td>{{ h.updated_by_name || 'Hệ thống tự động' }}</td>
-                  <td style="color:var(--text2)">{{ h.description }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        </div>
+
+        <div class="admin-section-header" style="margin-top:8px">
+          <div class="admin-section-title" style="font-size:15px">Nhật ký cập nhật cơ sở dữ liệu pháp lý</div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="saas-table" style="min-width:650px">
+            <thead>
+              <tr>
+                <th style="width:165px">Thời gian</th>
+                <th style="width:140px">Mã văn bản</th>
+                <th style="width:125px">Loại thao tác</th>
+                <th style="width:150px">Thực hiện bởi</th>
+                <th>Chi tiết thay đổi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="crawlHistory.length === 0">
+                <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Chưa ghi nhận lịch sử cập nhật nào.</td>
+              </tr>
+              <tr v-for="h in crawlHistory" :key="h.id">
+                <td style="color:var(--text2);font-size:12.5px">{{ new Date(h.updated_at).toLocaleString('vi-VN') }}</td>
+                <td><code style="font-size:12px">{{ h.law_id }}</code></td>
+                <td>
+                  <span class="chip-status" :class="getHistoryActionClass(h.action)">
+                    {{ getHistoryActionLabel(h.action) }}
+                  </span>
+                </td>
+                <td style="font-weight:500">{{ h.updated_by_name || 'Hệ thống tự động' }}</td>
+                <td style="color:var(--text2)">{{ h.description }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
     <!-- Modal Thêm/Sửa Nhân viên -->
-    <div v-if="showUserModal" class="modal-overlay" style="display:flex" @click.self="showUserModal = false">
-      <div class="modal-card fade-up" style="width:450px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--accent);margin:0">
-            {{ isUserEdit ? `Chỉnh sửa: ${userForm.username}` : 'Thêm nhân viên mới' }}
+    <div v-if="showUserModal" class="modal-overlay" @click.self="showUserModal = false">
+      <div class="modal-card fade-up" style="width:440px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <h3 style="font-size:16px;font-weight:600;color:var(--text);margin:0">
+            {{ isUserEdit ? `Chỉnh sửa nhân viên: ${userForm.username}` : 'Thêm tài khoản nhân viên mới' }}
           </h3>
-          <button @click="showUserModal = false"
-            style="background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--text3)">&times;</button>
+          <button type="button" class="drawer-close-btn" @click="showUserModal = false">
+            <i class="ti ti-x"></i>
+          </button>
         </div>
         <form @submit.prevent="handleUserSubmit" id="user-form">
           <div class="form-group">
@@ -763,36 +861,43 @@ onMounted(() => {
           </div>
           <div class="form-group">
             <label class="form-label">Họ và tên *</label>
-            <input type="text" v-model="userForm.fullName" placeholder="Nhập họ và tên..." required />
+            <input type="text" v-model="userForm.fullName" placeholder="Nhập họ và tên đầy đủ..." required />
           </div>
           <div class="form-group">
             <label class="form-label">Mật khẩu <span v-if="!isUserEdit">*</span></label>
-            <input type="password" v-model="userForm.password" :placeholder="isUserEdit ? 'Để trống nếu muốn giữ nguyên mật khẩu cũ' : 'Nhập mật khẩu...'" :required="!isUserEdit"
-              style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)" />
+            <input type="password" v-model="userForm.password" :placeholder="isUserEdit ? 'Để trống nếu giữ nguyên mật khẩu cũ' : 'Nhập mật khẩu...'" :required="!isUserEdit" />
           </div>
           <div class="form-group">
-            <label class="form-label">Vai trò *</label>
-            <select v-model="userForm.role"
-              style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)">
-              <option value="staff">Nhân viên (staff)</option>
+            <label class="form-label">Vai trò hệ thống *</label>
+            <select v-model="userForm.role">
+              <option value="staff">Chuyên viên (staff)</option>
               <option value="admin">Quản trị viên (admin)</option>
             </select>
           </div>
-          <div v-if="userModalError" style="color:var(--red);font-size:13px;margin-bottom:12px;">{{ userModalError }}</div>
-          <button type="submit" class="btn-classify" style="margin-top:8px">Lưu thay đổi</button>
+          <div v-if="userModalError" style="color:var(--red);background:var(--red-bg);padding:8px 12px;border-radius:var(--radius);font-size:12.5px;margin-bottom:12px">
+            {{ userModalError }}
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+            <button type="button" class="btn-secondary" @click="showUserModal = false">Hủy</button>
+            <button type="submit" class="btn-primary">
+              <i class="ti ti-device-floppy"></i>
+              <span>Lưu thông tin</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
 
     <!-- Modal Thêm/Sửa Quy chuẩn -->
-    <div v-if="showLawModal" class="modal-overlay" style="display:flex" @click.self="showLawModal = false">
-      <div class="modal-card fade-up" style="width:550px;max-height:90vh;overflow-y:auto">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-          <h3 style="font-family:'Playfair Display',serif;font-size:20px;color:var(--accent);margin:0">
-            {{ isLawEdit ? `Sửa văn bản: ${lawForm.so}` : 'Thêm quy chuẩn môi trường mới' }}
+    <div v-if="showLawModal" class="modal-overlay" @click.self="showLawModal = false">
+      <div class="modal-card fade-up" style="width:580px;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <h3 style="font-size:16px;font-weight:600;color:var(--text);margin:0">
+            {{ isLawEdit ? `Cập nhật văn bản: ${lawForm.so}` : 'Thêm văn bản / quy chuẩn mới' }}
           </h3>
-          <button @click="showLawModal = false"
-            style="background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--text3)">&times;</button>
+          <button type="button" class="drawer-close-btn" @click="showLawModal = false">
+            <i class="ti ti-x"></i>
+          </button>
         </div>
         <form @submit.prevent="handleLawSubmit" id="law-form">
           <div class="form-grid-2">
@@ -802,8 +907,7 @@ onMounted(() => {
             </div>
             <div class="form-group">
               <label class="form-label">Loại văn bản *</label>
-              <select v-model="lawForm.type"
-                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)">
+              <select v-model="lawForm.type">
                 <option value="luat">Luật</option>
                 <option value="nd">Nghị định</option>
                 <option value="vbhn">Văn bản hợp nhất</option>
@@ -829,8 +933,7 @@ onMounted(() => {
             </div>
             <div class="form-group">
               <label class="form-label">Trạng thái hiệu lực</label>
-              <select v-model="lawForm.status"
-                style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)">
+              <select v-model="lawForm.status">
                 <option value="valid">Còn hiệu lực</option>
                 <option value="amended">Đã sửa đổi</option>
                 <option value="expired">Hết hiệu lực</option>
@@ -839,7 +942,7 @@ onMounted(() => {
           </div>
           <div class="form-group">
             <label class="form-label">Tên văn bản *</label>
-            <input type="text" v-model="lawForm.ten" placeholder="Nhập tên văn bản pháp lý..." required />
+            <input type="text" v-model="lawForm.ten" placeholder="Nhập tên đầy đủ của văn bản..." required />
           </div>
           <div class="form-group">
             <label class="form-label">Ngày có hiệu lực (Hiển thị)</label>
@@ -847,25 +950,30 @@ onMounted(() => {
           </div>
           <div class="form-group">
             <label class="form-label">Mô tả tóm tắt</label>
-            <textarea v-model="lawForm.mo_ta" rows="3" placeholder="Nhập mô tả tóm tắt nội dung..."
-              style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);resize:vertical"></textarea>
+            <textarea v-model="lawForm.mo_ta" rows="3" placeholder="Nhập mô tả tóm tắt nội dung..."></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Các điều khoản quan trọng (Mỗi dòng một điều khoản)</label>
-            <textarea v-model="lawForm.dieu_khoang_text" rows="3" placeholder="Điều 1...&#13;Điều 2..."
-              style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg);resize:vertical"></textarea>
+            <textarea v-model="lawForm.dieu_khoang_text" rows="3" placeholder="Điều 1...&#13;Điều 2..."></textarea>
           </div>
           <div class="form-group">
-            <label class="form-label">Ghi chú thêm</label>
-            <input type="text" v-model="lawForm.note" placeholder="VD: ⭐ Quan trọng" />
+            <label class="form-label">Ghi chú áp dụng</label>
+            <input type="text" v-model="lawForm.note" placeholder="Nhập lưu ý áp dụng (nếu có)..." />
           </div>
           <div class="form-group">
-            <label class="form-label">Đường dẫn tài liệu</label>
-            <input type="url" v-model="lawForm.link" placeholder="VD: https://www.luatmoitruong.vn/van-ban/..."
-              style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;color:var(--text);background:var(--surface)" />
+            <label class="form-label">Đường dẫn tài liệu gốc</label>
+            <input type="text" v-model="lawForm.link" placeholder="VD: https://luatmoitruong.vn/..." />
           </div>
-          <div v-if="lawModalError" style="color:var(--red);font-size:13px;margin-bottom:12px;">{{ lawModalError }}</div>
-          <button type="submit" class="btn-classify" style="margin-top:8px">Lưu quy chuẩn</button>
+          <div v-if="lawModalError" style="color:var(--red);background:var(--red-bg);padding:8px 12px;border-radius:var(--radius);font-size:12.5px;margin-bottom:12px">
+            {{ lawModalError }}
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+            <button type="button" class="btn-secondary" @click="showLawModal = false">Hủy</button>
+            <button type="submit" class="btn-primary">
+              <i class="ti ti-device-floppy"></i>
+              <span>Lưu văn bản</span>
+            </button>
+          </div>
         </form>
       </div>
     </div>
