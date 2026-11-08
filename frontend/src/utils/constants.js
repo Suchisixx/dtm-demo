@@ -17,6 +17,8 @@ export const API = {
   QCVN_SAMPLES: '/api/qcvns/samples',
   CLASSIFY: '/api/classification/evaluate',
   CLASSIFY_METADATA: '/api/classification/metadata',
+  CLASSIFY_SPATIAL_CHECK: '/api/classification/spatial-check',
+  CLASSIFY_GIS_LAYERS: '/api/classification/gis-layers',
   ADMIN_USERS: '/api/admin/users',
   ADMIN_PROJECTS: '/api/admin/projects',
   CRAWLER_SETTINGS: '/api/crawler/settings',
@@ -30,9 +32,107 @@ export const API = {
 // Helper function cho endpoints có param
 export const projectQcvnSamples = (id) => `/api/projects/${id}/qcvn-samples`
 
-// Esri tile layer config
-export const ESRI_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
-export const ESRI_ATTRIBUTION = 'Tiles &copy; Esri'
+// Tile Layer configs (100% Free, No API Key Required — Modern, Landuse & Satellite Hybrid)
+export const CARTO_VOYAGER_URL = 'https://mt{s}.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}'
+export const CARTO_ATTRIBUTION = '&copy; Google Maps Vietnam'
+export const OSM_LANDUSE_URL = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png'
+export const OSM_ATTRIBUTION = '&copy; OpenStreetMap contributors, Tiles courtesy of HOT OSM'
+export const ESRI_IMAGERY_URL = 'https://mt{s}.google.com/vt/lyrs=y&hl=vi&x={x}&y={y}&z={z}'
+export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
+
+// Danh mục Khu công nghiệp & Vùng nhạy cảm môi trường nhúng sẵn ở Frontend (hoạt động ngay cả khi chưa restart Backend)
+export const EMBEDDED_GIS_LAYERS = {
+  industrialParks: [
+    { id: 'kcn_tra_noc', name: 'Khu công nghiệp Trà Nóc 1 & 2', lat: 10.095, lng: 105.712, radiusKm: 2.5, province: 'Cần Thơ' },
+    { id: 'kcn_hung_phu', name: 'Khu công nghiệp Hưng Phú 1 & 2', lat: 10.012, lng: 105.805, radiusKm: 2.2, province: 'Cần Thơ' },
+    { id: 'kcn_thot_not', name: 'Khu công nghiệp Thốt Nốt', lat: 10.258, lng: 105.552, radiusKm: 2.0, province: 'Cần Thơ' },
+    { id: 'kcn_vinh_thanh', name: 'Khu công nghiệp Vĩnh Thạnh (VSIP Cần Thơ)', lat: 10.215, lng: 105.412, radiusKm: 3.0, province: 'Cần Thơ' },
+    { id: 'kcn_vsip_1', name: 'Khu công nghiệp VSIP I Bình Dương', lat: 10.931, lng: 106.716, radiusKm: 2.8, province: 'Bình Dương' },
+    { id: 'kcn_vsip_2', name: 'Khu công nghiệp VSIP II Bình Dương', lat: 11.085, lng: 106.682, radiusKm: 3.5, province: 'Bình Dương' },
+    { id: 'kcn_my_phuoc', name: 'Khu công nghiệp Mỹ Phước 1-2-3', lat: 11.132, lng: 106.608, radiusKm: 4.5, province: 'Bình Dương' },
+    { id: 'kcn_song_than', name: 'Khu công nghiệp Sóng Thần 1-2-3', lat: 10.892, lng: 106.748, radiusKm: 2.8, province: 'Bình Dương' },
+    { id: 'kcn_amata', name: 'Khu công nghiệp Amata Biên Hòa', lat: 10.952, lng: 106.885, radiusKm: 3.0, province: 'Đồng Nai' },
+    { id: 'kcn_bien_hoa_2', name: 'Khu công nghiệp Biên Hòa 2', lat: 10.922, lng: 106.854, radiusKm: 2.5, province: 'Đồng Nai' },
+    { id: 'kcn_nhon_trach', name: 'Cụm Khu công nghiệp Nhơn Trạch 1-6', lat: 10.735, lng: 106.925, radiusKm: 5.0, province: 'Đồng Nai' },
+    { id: 'kcn_long_thanh', name: 'Khu công nghiệp Long Thành', lat: 10.802, lng: 106.952, radiusKm: 2.8, province: 'Đồng Nai' },
+    { id: 'kcn_phu_my', name: 'Khu công nghiệp Phú Mỹ 1-2-3', lat: 10.578, lng: 107.042, radiusKm: 4.5, province: 'Bà Rịa - Vũng Tàu' },
+    { id: 'kcn_cai_mep', name: 'Khu công nghiệp Cái Mép', lat: 10.525, lng: 107.022, radiusKm: 3.2, province: 'Bà Rịa - Vũng Tàu' },
+    { id: 'kcn_tan_binh', name: 'Khu công nghiệp Tân Bình', lat: 10.818, lng: 106.625, radiusKm: 1.8, province: 'TP. Hồ Chí Minh' },
+    { id: 'kcn_hiep_phuoc', name: 'Khu công nghiệp Hiệp Phước', lat: 10.635, lng: 106.752, radiusKm: 3.5, province: 'TP. Hồ Chí Minh' },
+    { id: 'kcn_tan_tao', name: 'Khu công nghiệp Tân Tạo', lat: 10.748, lng: 106.588, radiusKm: 2.2, province: 'TP. Hồ Chí Minh' },
+    { id: 'kcn_tay_bac_cu_chi', name: 'Khu công nghiệp Tây Bắc Củ Chi', lat: 10.968, lng: 106.482, radiusKm: 2.5, province: 'TP. Hồ Chí Minh' },
+    { id: 'kcn_kcnc_hcm', name: 'Khu Công nghệ cao TP.HCM (SHTP)', lat: 10.852, lng: 106.798, radiusKm: 2.8, province: 'TP. Hồ Chí Minh' },
+    { id: 'kcn_long_hau', name: 'Khu công nghiệp Long Hậu', lat: 10.618, lng: 106.735, radiusKm: 2.2, province: 'Long An' },
+    { id: 'kcn_duc_hoa', name: 'Khu công nghiệp Đức Hòa 1 - Hạnh Phúc', lat: 10.828, lng: 106.458, radiusKm: 3.0, province: 'Long An' },
+    { id: 'kcn_phuoc_dong', name: 'Khu công nghiệp Phước Đông', lat: 11.125, lng: 106.285, radiusKm: 4.2, province: 'Tây Ninh' },
+    { id: 'kcn_long_giang', name: 'Khu công nghiệp Long Giang', lat: 10.452, lng: 106.295, radiusKm: 2.5, province: 'Tiền Giang' },
+    { id: 'kcn_hoa_phu', name: 'Khu công nghiệp Hòa Phú', lat: 10.165, lng: 105.948, radiusKm: 2.2, province: 'Vĩnh Long' },
+    { id: 'kcn_an_nghiep', name: 'Khu công nghiệp An Nghiệp', lat: 9.635, lng: 105.952, radiusKm: 2.2, province: 'Sóc Trăng' },
+    { id: 'kcn_khanh_an', name: 'Khu công nghiệp Khánh An', lat: 9.258, lng: 105.125, radiusKm: 2.5, province: 'Cà Mau' },
+    { id: 'kcn_bac_thang_long', name: 'Khu công nghiệp Bắc Thăng Long', lat: 21.123, lng: 105.775, radiusKm: 2.5, province: 'Hà Nội' },
+    { id: 'kcn_quang_minh', name: 'Khu công nghiệp Quang Minh', lat: 21.186, lng: 105.752, radiusKm: 2.5, province: 'Hà Nội' },
+    { id: 'kcn_yen_phong', name: 'Khu công nghiệp Yên Phong I & II', lat: 21.202, lng: 105.984, radiusKm: 4.0, province: 'Bắc Ninh' },
+    { id: 'kcn_que_vo', name: 'Khu công nghiệp Quế Võ I, II, III', lat: 21.158, lng: 106.152, radiusKm: 3.8, province: 'Bắc Ninh' },
+    { id: 'kcn_dinh_vu', name: 'Khu kinh tế - KCN Đình Vũ - Cát Hải', lat: 20.825, lng: 106.768, radiusKm: 4.5, province: 'Hải Phòng' },
+    { id: 'kcn_vsip_hai_phong', name: 'Khu công nghiệp VSIP Hải Phòng', lat: 20.912, lng: 106.665, radiusKm: 3.2, province: 'Hải Phòng' },
+    { id: 'kcn_vung_ang', name: 'Khu kinh tế Vũng Áng (Formosa)', lat: 18.062, lng: 106.418, radiusKm: 5.5, province: 'Hà Tĩnh' },
+    { id: 'kcn_hoa_khanh', name: 'Khu công nghiệp Hòa Khánh', lat: 16.082, lng: 108.145, radiusKm: 2.8, province: 'Đà Nẵng' },
+    { id: 'kcn_dung_quat', name: 'Khu kinh tế Dung Quất', lat: 15.382, lng: 108.765, radiusKm: 5.5, province: 'Quảng Ngãi' }
+  ],
+  sensitiveZones: [
+    { id: 'dt_can_gio', name: 'Khu dự trữ sinh quyển Rừng ngập mặn Cần Giờ', lat: 10.515, lng: 106.885, radiusKm: 18, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_tram_chim', name: 'Vườn Quốc gia Tràm Chim (Khu Ramsar)', lat: 10.715, lng: 105.505, radiusKm: 12, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_u_minh_thuong', name: 'Vườn Quốc gia U Minh Thượng', lat: 9.592, lng: 105.088, radiusKm: 12, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_mui_ca_mau', name: 'Vườn Quốc gia Mũi Cà Mau', lat: 8.625, lng: 104.765, radiusKm: 15, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_cat_tien', name: 'Vườn Quốc gia Cát Tiên', lat: 11.423, lng: 107.428, radiusKm: 18, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'ho_tri_an', name: 'Hồ chứa nước Trị An (Nguồn nước cấp sinh hoạt)', lat: 11.152, lng: 107.065, radiusKm: 15, ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'ho_dau_tieng', name: 'Hồ chứa nước Dầu Tiếng (Nguồn nước cấp sinh hoạt)', lat: 11.385, lng: 106.265, radiusKm: 16, ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'ds_ha_long', name: 'Di sản Thiên nhiên Thế giới Vịnh Hạ Long - Cát Bà', lat: 20.858, lng: 107.092, radiusKm: 20, ref: 'Điểm đ, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_cuc_phuong', name: 'Vườn Quốc gia Cúc Phương', lat: 20.316, lng: 105.608, radiusKm: 15, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_ba_vi', name: 'Vườn Quốc gia Ba Vì', lat: 21.081, lng: 105.367, radiusKm: 10, ref: 'Điểm c, Khoản 1, Điều 25 Luật BVMT 2020' },
+    { id: 'vqg_phong_nha', name: 'Vườn Quốc gia Phong Nha - Kẻ Bàng (Di sản UNESCO)', lat: 17.535, lng: 106.152, radiusKm: 22, ref: 'Điểm đ, Khoản 1, Điều 25 Luật BVMT 2020' }
+  ]
+}
+
+// Màu sắc phân vùng quy hoạch sử dụng đất (Landuse Zoning)
+export const LANDUSE_STYLES = {
+  industrial: {
+    label: 'Khu công nghiệp / Nhà máy',
+    color: '#7C3AED',
+    fillColor: '#8B5CF6',
+    fillOpacity: 0.28
+  },
+  residential: {
+    label: 'Khu dân cư / Đô thị',
+    color: '#2563EB',
+    fillColor: '#60A5FA',
+    fillOpacity: 0.20
+  },
+  commercial: {
+    label: 'Khu thương mại / Dịch vụ',
+    color: '#D97706',
+    fillColor: '#F59E0B',
+    fillOpacity: 0.24
+  },
+  retail: {
+    label: 'Khu thương mại / Dịch vụ',
+    color: '#D97706',
+    fillColor: '#F59E0B',
+    fillOpacity: 0.24
+  },
+  forest: {
+    label: 'Rừng / Cây xanh sinh thái',
+    color: '#286B4F',
+    fillColor: '#34D399',
+    fillOpacity: 0.22
+  },
+  farmland: {
+    label: 'Đất nông nghiệp / Canh tác',
+    color: '#65A30D',
+    fillColor: '#A3E635',
+    fillOpacity: 0.18
+  }
+}
 
 // Pages / Routes
 export const PAGES = ['laws', 'dashboard', 'classify', 'qcvn', 'map', 'admin']

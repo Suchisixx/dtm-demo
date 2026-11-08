@@ -1,5 +1,6 @@
 // Backend Classification Engine & Database
 // Căn cứ: Luật BVMT 2020 • NĐ 08/2022 • NĐ 05/2025 • NĐ 48/2026 • NĐ 110/2026 • TT 02/2022 • TT 09/2026
+const { analyzeSpatialContext, calculateImpactRadius } = require('./spatial-gis-service');
 
 const IND_DB = {
   che_bien_go: {
@@ -633,9 +634,16 @@ function evaluateClassification(formData = {}) {
     else if (ref.includes('BVMT')) refLawId = 'luat_bvmt_2020';
   }
 
+  const impactRadiusMeters = calculateImpactRadius(nhom, actualNt, actualKt);
+  const spatialAnalysis = (formData.latitude !== undefined && formData.longitude !== undefined)
+    ? analyzeSpatialContext(formData.latitude, formData.longitude)
+    : null;
+
   return {
     hs, tq, phuluc, ref, ref_law_id: refLawId, nhom,
     coQuan, thoiHan,
+    impactRadiusMeters,
+    spatialAnalysis,
     hi: HS_INFO[hs] || { icon: '📋', label: 'Hồ sơ môi trường', class: 'chip-gpmt', bg: '#EEF8F3' },
     cl: CHECKLIST[hs] || { bat_buoc: [], bo_sung: [] },
     lr: LAW_REFS[hs] || [],

@@ -4,7 +4,6 @@ import { QCVN_DATA } from '../data/qcvn-db.js'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { removeAccents } from '../utils/string-helpers.js'
-import { projectQcvnSamples } from '../utils/constants.js'
 
 const props = defineProps({
   loadSampleId: { type: Number, default: null }

@@ -318,22 +318,12 @@ const getDirectLawLink = (l) => {
         </div>
 
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--bg)">
-            <button type="button" @click="viewMode = 'table'"
-                    :style="{
-                      height: '36px', padding: '0 12px', border: 'none', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit',
-                      background: viewMode === 'table' ? 'var(--accent)' : 'transparent',
-                      color: viewMode === 'table' ? '#fff' : 'var(--text2)'
-                    }">
+          <div class="view-toggle">
+            <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">
               <i class="ti ti-list"></i>
               <span>Bảng</span>
             </button>
-            <button type="button" @click="viewMode = 'cards'"
-                    :style="{
-                      height: '36px', padding: '0 12px', border: 'none', cursor: 'pointer', fontSize: '12.5px', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'inherit',
-                      background: viewMode === 'cards' ? 'var(--accent)' : 'transparent',
-                      color: viewMode === 'cards' ? '#fff' : 'var(--text2)'
-                    }">
+            <button type="button" class="view-toggle-btn" :class="{ active: viewMode === 'cards' }" @click="viewMode = 'cards'">
               <i class="ti ti-layout-grid"></i>
               <span>Thẻ</span>
             </button>

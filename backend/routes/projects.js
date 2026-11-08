@@ -8,6 +8,7 @@ const { ACTIONS, ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 
 const { evaluateClassification } = require('../services/classification-service');
+const { calculateImpactRadius } = require('../services/spatial-gis-service');
 
 // ── GIS API (trước requireAuth vì route /geo cũng cần auth nhưng query khác) ──
 
@@ -22,6 +23,8 @@ router.get('/geo', requireAuth, async (req, res) => {
         p.latitude,
         p.longitude,
         p.dia_chi_hien_thi,
+        p.phuong_xa,
+        p.quan_huyen,
         p.classification_result,
         p.form_data,
         u.full_name AS user_name,
@@ -46,6 +49,8 @@ router.get('/geo', requireAuth, async (req, res) => {
       const cr = (row.classification_result && row.classification_result.nhom)
         ? row.classification_result
         : fallbackCr;
+      const nhomDuAn = cr.nhom || fallbackCr.nhom || 'Nhóm II';
+      const impactRadiusMeters = cr.impactRadiusMeters || calculateImpactRadius(nhomDuAn, fd.nt, fd.kt);
 
       return {
         id: row.id,
@@ -53,10 +58,15 @@ router.get('/geo', requireAuth, async (req, res) => {
         latitude: parseFloat(row.latitude),
         longitude: parseFloat(row.longitude),
         dia_chi: row.dia_chi_hien_thi || fd.tinh || '',
+        phuong_xa: row.phuong_xa || '',
         loai_ho_so: cr.hs || fallbackCr.hs || '—',
-        nhom_du_an: cr.nhom || fallbackCr.nhom || 'Nhóm II',
+        nhom_du_an: nhomDuAn,
         co_quan: cr.coQuan || fallbackCr.coQuan || '—',
         tinh: fd.tinh || '',
+        nganh: fd.nganh || '',
+        nt: parseFloat(fd.nt) || 0,
+        kt: parseFloat(fd.kt) || 0,
+        impact_radius_meters: impactRadiusMeters,
         quy_mo: fd.capacity ? `${fd.capacity}` : (fd.cap ? `${fd.cap}` : ''),
         user_name: row.user_name || 'Ẩn danh',
         quan_trac_gan_nhat_ngay: row.quan_trac_gan_nhat_ngay || null,

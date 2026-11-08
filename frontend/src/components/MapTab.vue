@@ -6,7 +6,7 @@
         <div>
           <h2 class="section-head">Bản đồ Không gian Dự án (GIS Workspace)</h2>
           <p class="section-desc">
-            Trực quan hóa vị trí địa lý các dự án đầu tư, phân loại nhóm rủi ro môi trường và trạng thái quan trắc trên nền bản đồ số.
+            Trực quan hóa vị trí địa lý các dự án đầu tư, vùng đệm tác động môi trường, phân khu Khu công nghiệp / vùng nhạy cảm và trạng thái quan trắc QCVN trên nền bản đồ số.
           </p>
         </div>
       </div>
@@ -14,14 +14,14 @@
       <div class="card map-workspace-card">
         <!-- FILTER BAR -->
         <div class="map-toolbar">
-          <div style="position:relative;min-width:220px;flex:1;max-width:320px">
+          <div style="position:relative;min-width:200px;flex:1;max-width:260px">
             <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
-            <input type="text" v-model="searchQuery" placeholder="Tìm nhanh tên dự án..." style="padding-left:32px;height:36px" />
+            <input type="text" v-model="searchQuery" placeholder="Tìm tên dự án, địa chỉ..." style="padding-left:32px;height:36px" />
           </div>
 
-          <div style="display:flex;align-items:center;gap:8px">
-            <label style="font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap">Nhóm dự án:</label>
-            <select v-model="filterNhom" style="width:150px;height:36px">
+          <div class="toolbar-select-group">
+            <label>Nhóm:</label>
+            <select v-model="filterNhom" style="width:128px;height:36px">
               <option value="">Tất cả nhóm</option>
               <option value="Nhóm I">Nhóm I</option>
               <option value="Nhóm II">Nhóm II</option>
@@ -30,15 +30,35 @@
             </select>
           </div>
 
-          <div style="display:flex;align-items:center;gap:8px">
-            <label style="font-size:12.5px;font-weight:600;color:var(--text2);white-space:nowrap">Tỉnh / Thành:</label>
-            <select v-model="filterTinh" style="width:180px;height:36px">
-              <option value="">Tất cả địa phương</option>
+          <div class="toolbar-select-group">
+            <label>Hồ sơ:</label>
+            <select v-model="filterHoSo" style="width:136px;height:36px">
+              <option value="">Tất cả hồ sơ</option>
+              <option value="ĐTM">ĐTM</option>
+              <option value="GPMT">GPMT</option>
+              <option value="ĐKMT">ĐKMT</option>
+            </select>
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Quan trắc:</label>
+            <select v-model="filterQcvn" style="width:142px;height:36px">
+              <option value="">Mọi trạng thái</option>
+              <option value="vuot_nguong">Vượt ngưỡng</option>
+              <option value="canh_bao">Cảnh báo</option>
+              <option value="dat_chuan">Đạt chuẩn</option>
+            </select>
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Địa phương:</label>
+            <select v-model="filterTinh" style="width:160px;height:36px">
+              <option value="">Tất cả Tỉnh/TP</option>
               <option v-for="tinh in uniqueProvinces" :key="tinh" :value="tinh">{{ tinh }}</option>
             </select>
           </div>
 
-          <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
             <span class="chip chip-gray">
               <i class="ti ti-map-pin" style="color:var(--accent)"></i>
               Hiển thị <strong>{{ filteredProjects.length }}</strong> / {{ projects.length }} dự án
@@ -74,6 +94,13 @@
                     {{ p.nhom_du_an }}
                   </span>
                   <span class="p-hs-badge">{{ p.loai_ho_so }}</span>
+                  <span
+                    v-if="p.quan_trac_gan_nhat_trang_thai"
+                    class="p-qcvn-badge"
+                    :class="p.quan_trac_gan_nhat_trang_thai"
+                  >
+                    {{ p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? 'Vượt QCVN' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? 'Cảnh báo' : 'Đạt QCVN' }}
+                  </span>
                 </div>
                 <div class="p-title">{{ p.ten_du_an }}</div>
                 <div class="p-meta">
@@ -82,7 +109,8 @@
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
                   <span class="p-user">
-                    <i class="ti ti-user"></i> {{ p.user_name }}
+                    <i class="ti ti-radar-2" style="color:var(--accent)"></i>
+                    R={{ ((p.impact_radius_meters || 1000) / 1000).toFixed(1) }}km • {{ p.user_name }}
                   </span>
                   <button type="button" class="btn-ghost btn-sm" style="height:24px;padding:0 8px;font-size:11px"
                           @click.stop="emit('view-project', p.id)">
@@ -96,14 +124,75 @@
 
           <!-- Right Area: Interactive GIS Map -->
           <div class="map-container">
+            <!-- Floating Top-Left: Base Map Switcher -->
+            <div class="gis-floating-controls left">
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'landuse' }"
+                @click="switchBaseMap('landuse')"
+                title="Bản đồ phân vùng đất (KCN, Khu dân cư, Rừng, Nông nghiệp)"
+              >
+                <i class="ti ti-polygon"></i>
+                <span>Phân vùng đất</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'voyager' }"
+                @click="switchBaseMap('voyager')"
+                title="Bản đồ Vector hiện đại, tối giản"
+              >
+                <i class="ti ti-map"></i>
+                <span>Tinh gọn</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'satellite' }"
+                @click="switchBaseMap('satellite')"
+                title="Ảnh vệ tinh kết hợp nhãn địa danh"
+              >
+                <i class="ti ti-satellite"></i>
+                <span>Vệ tinh</span>
+              </button>
+            </div>
+
+            <!-- Floating Top-Right: Layer Toggles -->
+            <div class="gis-floating-controls right">
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: showImpactBuffers }"
+                @click="toggleImpactBuffers"
+                title="Hiển thị vòng tròn phạm vi bán kính ảnh hưởng môi trường của từng dự án"
+              >
+                <i class="ti ti-radar-2"></i>
+                <span>Vùng đệm tác động</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: showSensitiveLayers }"
+                @click="toggleSensitiveLayers"
+                title="Hiển thị các Khu công nghiệp và Vùng bảo tồn / Nhạy cảm môi trường trên bản đồ"
+              >
+                <i class="ti ti-layers-linked"></i>
+                <span>Lớp KCN &amp; Vùng bảo tồn</span>
+              </button>
+            </div>
+
             <div id="gis-map" class="map-view"></div>
 
             <div class="map-legend">
-              <div class="legend-title">Chú giải nhóm dự án</div>
-              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ)</div>
+              <div class="legend-title">Chú giải GIS Môi trường</div>
+              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ / Nguy cơ cao)</div>
               <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM / GPMT)</div>
               <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT / ĐKMT)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Miễn)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Ít nguy cơ)</div>
+              <div class="legend-divider"></div>
+              <div class="legend-item"><span class="color-ring" style="border-color: #7C3AED; background: rgba(139,92,246,0.2);"></span> Khu công nghiệp tập trung</div>
+              <div class="legend-item"><span class="color-ring" style="border-color: #D65B5B; background: rgba(214,91,91,0.18);"></span> Khu bảo tồn / Di sản / Nguồn nước</div>
             </div>
           </div>
         </div>
@@ -114,7 +203,19 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { DEFAULT_LAT, DEFAULT_LNG, DEFAULT_ZOOM, NHOM_COLORS, ESRI_TILE_URL, ESRI_ATTRIBUTION, API } from '../utils/constants.js'
+import {
+  DEFAULT_LAT,
+  DEFAULT_LNG,
+  DEFAULT_ZOOM,
+  NHOM_COLORS,
+  CARTO_VOYAGER_URL,
+  CARTO_ATTRIBUTION,
+  OSM_LANDUSE_URL,
+  OSM_ATTRIBUTION,
+  ESRI_IMAGERY_URL,
+  EMBEDDED_GIS_LAYERS,
+  API
+} from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 
@@ -123,12 +224,23 @@ const emit = defineEmits(['view-project'])
 const projects = ref([])
 const error = ref('')
 const filterNhom = ref('')
+const filterHoSo = ref('')
+const filterQcvn = ref('')
 const filterTinh = ref('')
 const searchQuery = ref('')
 const selectedProjectId = ref(null)
 
+const activeBaseMap = ref('voyager')
+const showImpactBuffers = ref(true)
+const showSensitiveLayers = ref(true)
+let gisStaticLayers = EMBEDDED_GIS_LAYERS
+
 let map = null
+let baseTileLayer = null
+let labelTileLayer = null
 let clusterGroup = null
+let bufferLayerGroup = null
+let sensitiveLayerGroup = null
 const markerMap = new Map()
 
 const uniqueProvinces = computed(() => {
@@ -140,22 +252,130 @@ const filteredProjects = computed(() => {
   const q = normalizeString(searchQuery.value.trim())
   return projects.value.filter(p => {
     const matchNhom = !filterNhom.value || p.nhom_du_an === filterNhom.value
+    const matchHoSo = !filterHoSo.value || (p.loai_ho_so || '').includes(filterHoSo.value)
+    const matchQcvn = !filterQcvn.value || p.quan_trac_gan_nhat_trang_thai === filterQcvn.value
     const matchTinh = !filterTinh.value || p.tinh === filterTinh.value
     const matchSearch = !q || normalizeString(p.ten_du_an || '').includes(q) || normalizeString(p.dia_chi || '').includes(q)
-    return matchNhom && matchTinh && matchSearch && p.latitude && p.longitude
+    return matchNhom && matchHoSo && matchQcvn && matchTinh && matchSearch && p.latitude && p.longitude
   })
 })
 
 const getNhomColor = (nhom) => NHOM_COLORS[nhom] || NHOM_COLORS.default
 
+const switchBaseMap = (mode) => {
+  activeBaseMap.value = mode
+  if (!map || !window.L) return
+
+  if (baseTileLayer) {
+    map.removeLayer(baseTileLayer)
+    baseTileLayer = null
+  }
+  if (labelTileLayer) {
+    map.removeLayer(labelTileLayer)
+    labelTileLayer = null
+  }
+
+  if (mode === 'voyager') {
+    baseTileLayer = window.L.tileLayer(CARTO_VOYAGER_URL, {
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: ['0', '1', '2', '3'],
+      maxZoom: 20
+    }).addTo(map)
+  } else if (mode === 'satellite') {
+    baseTileLayer = window.L.tileLayer(ESRI_IMAGERY_URL, {
+      attribution: '&copy; Google Satellite Hybrid',
+      subdomains: ['0', '1', '2', '3'],
+      maxZoom: 20
+    }).addTo(map)
+  } else {
+    baseTileLayer = window.L.tileLayer(OSM_LANDUSE_URL, {
+      attribution: OSM_ATTRIBUTION,
+      subdomains: ['a', 'b', 'c'],
+      maxZoom: 19
+    }).addTo(map)
+  }
+}
+
+const renderStaticGisOverlays = () => {
+  if (!map || !sensitiveLayerGroup || !window.L) return
+  sensitiveLayerGroup.clearLayers()
+  if (!showSensitiveLayers.value || !gisStaticLayers) return
+
+  for (const kcn of (gisStaticLayers.industrialParks || [])) {
+    const circle = window.L.circle([kcn.lat, kcn.lng], {
+      radius: kcn.radiusKm * 1000,
+      color: '#7C3AED',
+      weight: 1.5,
+      dashArray: '4, 4',
+      fillColor: '#8B5CF6',
+      fillOpacity: 0.16
+    })
+    circle.bindTooltip(
+      `<div style="font-family:'Be Vietnam Pro',sans-serif;font-size:12px">
+        <strong style="color:#7C3AED">${kcn.name}</strong><br/>
+        <span>Địa bàn: ${kcn.province} (Bán kính ~${kcn.radiusKm} km)</span>
+      </div>`,
+      { sticky: true }
+    )
+    sensitiveLayerGroup.addLayer(circle)
+  }
+
+  for (const sz of (gisStaticLayers.sensitiveZones || [])) {
+    const circle = window.L.circle([sz.lat, sz.lng], {
+      radius: sz.radiusKm * 1000,
+      color: '#D65B5B',
+      weight: 1.5,
+      dashArray: '6, 4',
+      fillColor: '#D65B5B',
+      fillOpacity: 0.12
+    })
+    circle.bindTooltip(
+      `<div style="font-family:'Be Vietnam Pro',sans-serif;font-size:12px">
+        <strong style="color:#D65B5B">Vùng bảo vệ: ${sz.name}</strong><br/>
+        <span>Bán kính nhạy cảm: ${sz.radiusKm} km — ${sz.ref}</span>
+      </div>`,
+      { sticky: true }
+    )
+    sensitiveLayerGroup.addLayer(circle)
+  }
+}
+
+const toggleImpactBuffers = () => {
+  showImpactBuffers.value = !showImpactBuffers.value
+  updateMapMarkers(false)
+}
+
+const toggleSensitiveLayers = () => {
+  showSensitiveLayers.value = !showSensitiveLayers.value
+  renderStaticGisOverlays()
+}
+
 const updateMapMarkers = (shouldFit = true) => {
   if (!map || !clusterGroup || !window.L) return
 
   clusterGroup.clearLayers()
+  if (bufferLayerGroup) bufferLayerGroup.clearLayers()
   markerMap.clear()
 
   filteredProjects.value.forEach(p => {
     const color = getNhomColor(p.nhom_du_an)
+    const radiusMeters = Number(p.impact_radius_meters) || 1000
+
+    if (showImpactBuffers.value && bufferLayerGroup) {
+      const impactCircle = window.L.circle([p.latitude, p.longitude], {
+        radius: radiusMeters,
+        color,
+        weight: 1.5,
+        dashArray: '5, 4',
+        fillColor: color,
+        fillOpacity: 0.12
+      })
+      impactCircle.bindTooltip(
+        `<strong>${p.ten_du_an}</strong><br/>Phạm vi ảnh hưởng dự kiến: ${(radiusMeters / 1000).toFixed(1)} km`,
+        { sticky: true }
+      )
+      bufferLayerGroup.addLayer(impactCircle)
+    }
 
     const iconHtml = `
       <div class="gis-pin" style="--pin-color: ${color}">
@@ -177,14 +397,16 @@ const updateMapMarkers = (shouldFit = true) => {
     const marker = window.L.marker([p.latitude, p.longitude], { icon: customIcon })
 
     const popupContent = `
-      <div style="min-width:240px;max-width:280px;font-family:'Be Vietnam Pro',sans-serif;padding:4px 2px">
+      <div style="min-width:250px;max-width:290px;font-family:'Be Vietnam Pro',sans-serif;padding:4px 2px">
         <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#192A21;line-height:1.4">${p.ten_du_an || 'Chưa có tên'}</div>
         <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4">${p.dia_chi || p.tinh || 'Chưa có địa chỉ'}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <span style="background:${color};color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.nhom_du_an}</span>
           <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so}</span>
+          <span style="background:#F0F4F1;color:#286B4F;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">R=${(radiusMeters / 1000).toFixed(1)}km</span>
         </div>
         <div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Thẩm quyền:</strong> ${p.co_quan || '—'}</div>
+        ${(p.nt || p.kt) ? `<div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Phát thải:</strong> NT ${p.nt || 0} m³/ngđ • KT ${p.kt || 0} m³/h</div>` : ''}
         <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4"><strong style="color:#192A21">Phụ trách:</strong> ${p.user_name || '—'}</div>
         ${p.quan_trac_gan_nhat_trang_thai ? `
         <div style="font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px;line-height:1.4">
@@ -194,8 +416,8 @@ const updateMapMarkers = (shouldFit = true) => {
           </span>
         </div>` : ''}
         <div style="margin-top:10px">
-          <button onclick="window.__gisViewProject(${p.id})" style="background:#286B4F;color:#fff;border:none;padding:7px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;width:100%;text-align:center;font-family:inherit">
-            Mở chi tiết hồ sơ dự án →
+          <button type="button" class="gis-popup-btn" onclick="window.__gisViewProject(${p.id})">
+            Mở chi tiết hồ sơ dự án <i class="ti ti-arrow-right" style="vertical-align:-1px"></i>
           </button>
         </div>
       </div>
@@ -229,16 +451,31 @@ const focusProject = (p) => {
   }
 }
 
-watch([filterNhom, filterTinh, searchQuery], () => {
+watch([filterNhom, filterHoSo, filterQcvn, filterTinh, searchQuery], () => {
   updateMapMarkers(true)
 })
 
 const fetchData = async () => {
   try {
-    const res = await fetch(API.PROJECTS_GEO)
-    if (!res.ok) throw new Error('Không thể tải dữ liệu bản đồ')
-    const data = await res.json()
-    projects.value = data
+    renderStaticGisOverlays()
+    const [geoRes, layersRes] = await Promise.all([
+      fetch(API.PROJECTS_GEO),
+      fetch(API.CLASSIFY_GIS_LAYERS)
+    ])
+    if (!geoRes.ok) throw new Error('Không thể tải dữ liệu bản đồ dự án')
+    projects.value = await geoRes.json()
+
+    if (layersRes.ok) {
+      const ct = layersRes.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
+        const lData = await layersRes.json()
+        if (lData && lData.industrialParks) {
+          gisStaticLayers = lData
+          renderStaticGisOverlays()
+        }
+      }
+    }
+
     updateMapMarkers(true)
   } catch (err) {
     error.value = err.message
@@ -262,12 +499,13 @@ onMounted(() => {
       return
     }
 
-    map = window.L.map('gis-map').setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM)
+    map = window.L.map('gis-map', { zoomControl: false }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM)
+    window.L.control.zoom({ position: 'bottomleft' }).addTo(map)
 
-    window.L.tileLayer(ESRI_TILE_URL, {
-      attribution: ESRI_ATTRIBUTION,
-      maxZoom: 19
-    }).addTo(map)
+    switchBaseMap(activeBaseMap.value)
+
+    sensitiveLayerGroup = window.L.layerGroup().addTo(map)
+    bufferLayerGroup = window.L.layerGroup().addTo(map)
 
     setTimeout(() => {
       if (map) map.invalidateSize()
@@ -306,11 +544,24 @@ onUnmounted(() => {
 .map-toolbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: 10px;
+  padding: 12px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
+}
+
+.toolbar-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-select-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  white-space: nowrap;
 }
 
 .map-layout {
@@ -378,6 +629,7 @@ onUnmounted(() => {
   display: flex;
   gap: 6px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .p-nhom-badge {
@@ -396,6 +648,25 @@ onUnmounted(() => {
   padding: 2px 7px;
   border-radius: 4px;
   border: 1px solid var(--border);
+}
+
+.p-qcvn-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.p-qcvn-badge.vuot_nguong {
+  background: var(--red-bg);
+  color: var(--red);
+}
+.p-qcvn-badge.canh_bao {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.p-qcvn-badge.dat_chuan {
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .p-title {
@@ -435,6 +706,53 @@ onUnmounted(() => {
   background: var(--surface2);
 }
 
+.gis-floating-controls {
+  position: absolute;
+  top: 12px;
+  z-index: 900;
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.gis-floating-controls.left {
+  left: 12px;
+}
+
+.gis-floating-controls.right {
+  right: 12px;
+}
+
+.gis-ctrl-pill {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gis-ctrl-pill:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.gis-ctrl-pill.active {
+  background: var(--accent);
+  color: #ffffff;
+}
+
 .map-legend {
   position: absolute;
   bottom: 20px;
@@ -443,7 +761,7 @@ onUnmounted(() => {
   padding: 12px 14px;
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
-  z-index: 1000;
+  z-index: 900;
   pointer-events: none;
   border: 1px solid var(--border);
 }
@@ -461,7 +779,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: 11.5px;
   margin-bottom: 5px;
   color: var(--text);
 }
@@ -470,11 +788,27 @@ onUnmounted(() => {
   margin-bottom: 0;
 }
 
+.legend-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
 .color-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
+}
+
+.color-ring {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px dashed;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 @media (max-width: 900px) {

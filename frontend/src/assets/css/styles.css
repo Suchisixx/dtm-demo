@@ -330,6 +330,12 @@ body {
   justify-content: center;
   cursor: pointer;
   font-size: 18px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.mobile-menu-btn:hover {
+  background: var(--surface2);
+  border-color: var(--border-strong);
 }
 
 .topbar-breadcrumb {
@@ -853,25 +859,45 @@ body {
 
 /* ── BUTTONS ── */
 .btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost,
+.btn-danger,
 .btn-classify,
 .btn-export,
 .btn-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   height: var(--control-h);
-  padding: 0 16px;
+  padding: 0 18px;
   border-radius: var(--radius);
   font-family: inherit;
   font-size: 13.5px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
   text-decoration: none;
   white-space: nowrap;
+  user-select: none;
+  box-sizing: border-box;
 }
 
+.btn i,
+.btn-primary i,
+.btn-secondary i,
+.btn-ghost i,
+.btn-danger i,
+.btn-classify i,
+.btn-export i,
+.btn-clear i {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* Primary */
 .btn-primary,
 .btn-classify {
   background: var(--accent);
@@ -887,8 +913,18 @@ body {
 .btn-classify:hover:not(:disabled) {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
+  color: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(32, 87, 63, 0.18);
 }
 
+.btn-primary:active:not(:disabled),
+.btn-classify:active:not(:disabled) {
+  background: #1A4834;
+  border-color: #1A4834;
+  box-shadow: none;
+}
+
+/* Secondary */
 .btn-secondary,
 .btn-export {
   background: var(--surface);
@@ -899,10 +935,17 @@ body {
 
 .btn-secondary:hover:not(:disabled),
 .btn-export:hover:not(:disabled) {
-  background: var(--surface2);
-  border-color: var(--border-strong);
+  background: var(--accent2);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
+.btn-secondary:active:not(:disabled),
+.btn-export:active:not(:disabled) {
+  background: #DCEBE1;
+}
+
+/* Ghost */
 .btn-ghost,
 .btn-clear {
   background: transparent;
@@ -914,9 +957,16 @@ body {
 .btn-ghost:hover:not(:disabled),
 .btn-clear:hover:not(:disabled) {
   background: var(--surface2);
+  border-color: var(--border-strong);
   color: var(--text);
 }
 
+.btn-ghost:active:not(:disabled),
+.btn-clear:active:not(:disabled) {
+  background: var(--border);
+}
+
+/* Danger */
 .btn-danger {
   background: var(--red-bg);
   color: var(--red);
@@ -925,22 +975,130 @@ body {
 
 .btn-danger:hover:not(:disabled) {
   background: var(--red);
+  border-color: var(--red);
   color: #FFFFFF;
 }
 
+.btn-danger:active:not(:disabled) {
+  background: #C04A4A;
+  border-color: #C04A4A;
+}
+
+/* Focus (keyboard) */
+.btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-ghost:focus-visible,
+.btn-danger:focus-visible,
+.btn-classify:focus-visible,
+.btn-export:focus-visible,
+.btn-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent2);
+}
+
+/* Small size */
 .btn-sm {
   height: 32px;
-  padding: 0 12px;
+  padding: 0 13px;
+  gap: 6px;
   font-size: 12.5px;
   border-radius: var(--radius-sm);
 }
 
+.btn-sm i {
+  font-size: 14px;
+}
+
+/* Disabled */
 .btn:disabled,
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn-ghost:disabled,
+.btn-danger:disabled,
 .btn-classify:disabled,
 .btn-export:disabled,
 .btn-clear:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Clickable chips */
+button.chip {
+  cursor: pointer;
+  padding: 0 11px;
+  font-family: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+button.chip-gray:hover {
+  background: var(--accent2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Segmented view toggle (Laws: Bảng / Thẻ) */
+.view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.view-toggle-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text2);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.view-toggle-btn:hover:not(.active) {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.view-toggle-btn.active {
+  background: var(--accent);
+  color: #FFFFFF;
+}
+
+.view-toggle-btn.active:hover {
+  background: var(--primary-hover);
+}
+
+/* Leaflet popup action button (Map tab) */
+.gis-popup-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.gis-popup-btn:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .btn-action-edit {
@@ -1217,8 +1375,8 @@ input:disabled {
 /* ── CLASSIFY STUDIO ── */
 .classify-studio-grid {
   display: grid;
-  grid-template-columns: 440px 1fr;
-  gap: 20px;
+  grid-template-columns: 480px 1fr;
+  gap: 24px;
   align-items: start;
 }
 
@@ -1816,6 +1974,11 @@ input:disabled {
 
 .admin-tab-btn:hover {
   color: var(--text);
+  background: var(--surface2);
+}
+
+.admin-tab-btn {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
 .admin-tab-btn.active {
@@ -1893,9 +2056,16 @@ input:disabled {
 }
 
 /* ── RESPONSIVE DESIGN ── */
-@media (max-width: 1180px) {
+@media (max-width: 1220px) {
   .classify-studio-grid {
-    grid-template-columns: 390px 1fr;
+    grid-template-columns: 440px 1fr;
+    gap: 18px;
+  }
+}
+@media (max-width: 1080px) {
+  .classify-studio-grid {
+    grid-template-columns: 410px 1fr;
+    gap: 16px;
   }
   .info-grid {
     grid-template-columns: repeat(2, 1fr);

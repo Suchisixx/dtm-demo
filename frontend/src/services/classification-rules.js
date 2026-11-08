@@ -1,5 +1,5 @@
 // frontend/src/services/classification-rules.js
-// Utility phục vụ ClassifyTab — chỉ giữ lại hàm được sử dụng
+// Utility phục vụ ClassifyTab — lấy nhãn công suất theo ngành nghề
 
 import { IND_DB } from '../data/classification-db.js'
 
@@ -8,6 +8,6 @@ import { IND_DB } from '../data/classification-db.js'
  */
 export function getCapacityLabel(industryKey) {
   const ind = IND_DB[industryKey]
-  if (!ind || !ind.label_congSuat) return 'Công suất / quy mô'
-  return ind.label_congSuat
+  if (!ind) return 'Quy mô / Công suất thiết kế *'
+  return ind.lbl || ind.label_congSuat || 'Quy mô / Công suất thiết kế *'
 }

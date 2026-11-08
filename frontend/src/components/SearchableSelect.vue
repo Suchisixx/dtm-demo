@@ -43,7 +43,13 @@
           :class="{ 'is-selected': isSelected(opt) }"
           @click="selectOption(opt)"
         >
-          <span>{{ opt.name }}</span>
+          <div class="option-content">
+            <div class="option-title-group">
+              <span class="option-name">{{ opt.name }}</span>
+              <span v-if="opt.subText" class="option-subtext">{{ opt.subText }}</span>
+            </div>
+            <span v-if="opt.districtName" class="option-dist-badge">{{ opt.districtName }}</span>
+          </div>
           <i v-if="isSelected(opt)" class="ti ti-check check-mark"></i>
         </div>
       </div>
@@ -89,15 +95,19 @@ const selectedItem = computed(() => {
   if (props.modelValue === null || props.modelValue === undefined || props.modelValue === '') {
     return null
   }
-  return props.options.find(opt => opt.code === props.modelValue || opt.name === props.modelValue) || null
+  return props.options.find(opt => 
+    String(opt.code) === String(props.modelValue) || 
+    opt.name === props.modelValue || 
+    (opt.wardName && opt.wardName === props.modelValue)
+  ) || null
 })
 
 const isSelected = (opt) => {
   if (props.modelValue === null || props.modelValue === undefined) return false
-  return opt.code === props.modelValue || opt.name === props.modelValue
+  return String(opt.code) === String(props.modelValue) || 
+         opt.name === props.modelValue || 
+         (opt.wardName && opt.wardName === props.modelValue)
 }
-
-
 
 const filteredOptions = computed(() => {
   if (!searchQuery.value.trim()) {
@@ -105,8 +115,16 @@ const filteredOptions = computed(() => {
   }
   const query = normalizeString(searchQuery.value)
   return props.options.filter(opt => {
-    const nameClean = normalizeString(opt.name)
-    return nameClean.includes(query)
+    const nameClean = normalizeString(opt.name || '')
+    const wardClean = normalizeString(opt.wardName || '')
+    const distClean = normalizeString(opt.districtName || '')
+    const subClean = normalizeString(opt.subText || '')
+    const aliasClean = normalizeString(opt.alias || '')
+    return nameClean.includes(query) || 
+           wardClean.includes(query) || 
+           distClean.includes(query) || 
+           subClean.includes(query) || 
+           aliasClean.includes(query)
   })
 })
 
@@ -153,6 +171,7 @@ watch(() => props.disabled, (newVal) => {
 <style scoped>
 .searchable-select-wrap {
   position: relative;
+  width: 100%;
   flex: 1;
   min-width: 140px;
   font-family: inherit;
@@ -307,12 +326,58 @@ watch(() => props.disabled, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
-  font-size: 13.5px;
+  padding: 8px 12px;
+  font-size: 13px;
   color: var(--text, #333);
   cursor: pointer;
   transition: background 0.1s ease;
   line-height: 1.4;
+  gap: 8px;
+}
+
+.option-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+
+.option-title-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.option-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.option-subtext {
+  font-size: 11px;
+  color: var(--text3, #89958D);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.option-dist-badge {
+  font-size: 10.5px;
+  color: var(--text3, #89958D);
+  background: var(--surface2, #F0F4F1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border, #E5EBE6);
+  white-space: nowrap;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 .option-item:hover {
