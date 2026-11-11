@@ -1,6 +1,7 @@
 const cheerio = require('cheerio');
 const db = require('../config/db');
 const logger = require('./logger');
+const { syncCrawlerEvents } = require('../services/crawler-sync-service');
 
 // Biến khóa chống chạy chồng chéo tiến trình Crawler (Mutex Lock)
 let isCrawlerRunning = false;
@@ -305,6 +306,7 @@ async function runCrawler(updatedByUserId = null) {
     let expiredUpdatedCount = 0;
     let skippedExistingCount = 0;
     let skippedExpiredCount = 0;
+    const crawlEvents = [];
 
     // C. Fast Process loop
     for (const doc of mainDocs) {
@@ -354,6 +356,12 @@ async function runCrawler(updatedByUserId = null) {
             existingRecord.status = 'expired';
             existingRecord.last_crawled_mod = doc.lastmod;
             expiredUpdatedCount++;
+            crawlEvents.push({
+              lawId: dbId,
+              lawTitle: docData.docTitle || existingRecord.ten || dbId,
+              so: existingRecord.so || '',
+              eventAction: 'AUTO_CRAWL_EXPIRE',
+            });
             logger.info(`✔ Đã cập nhật trạng thái Hết hiệu lực cho văn bản: ${docData.docTitle}`);
           } else {
             skippedExpiredCount++;
@@ -393,6 +401,13 @@ async function runCrawler(updatedByUserId = null) {
           );
 
           createdCount++;
+          crawlEvents.push({
+            lawId: docData.id,
+            lawTitle: docData.ten,
+            so: docData.so,
+            eventAction: 'AUTO_CRAWL_CREATE',
+            docData,
+          });
           lawMap.set(docData.id, {
             id: docData.id,
             status: docData.status,
@@ -436,6 +451,13 @@ async function runCrawler(updatedByUserId = null) {
           );
 
           updatedCount++;
+          crawlEvents.push({
+            lawId: docData.id,
+            lawTitle: docData.ten,
+            so: docData.so,
+            eventAction: 'AUTO_CRAWL_UPDATE',
+            docData,
+          });
           existingRecord.last_crawled_mod = doc.lastmod;
           logger.info(`✔ Đã cập nhật văn bản: ${docData.ten}`);
         }
@@ -443,6 +465,18 @@ async function runCrawler(updatedByUserId = null) {
         await new Promise(resolve => setTimeout(resolve, 300));
       } catch (err) {
         logger.error(`Lỗi khi xử lý tài liệu ${doc.loc}:`, err.message);
+      }
+    }
+
+    let syncStats = { impactsCreated: 0, candidatesCreated: 0 };
+    if (crawlEvents.length > 0) {
+      try {
+        syncStats = await syncCrawlerEvents(crawlEvents, { db });
+        logger.info(
+          `✔ Đồng bộ Crawler -> Rule Engine: ${syncStats.impactsCreated} cảnh báo tác động, ${syncStats.candidatesCreated} đề xuất PENDING_REVIEW.`
+        );
+      } catch (syncErr) {
+        logger.warn('Không thể đồng bộ sự kiện crawler sang Rule Engine:', syncErr.message);
       }
     }
 
@@ -456,6 +490,8 @@ async function runCrawler(updatedByUserId = null) {
       expiredUpdatedCount,
       skippedExistingCount,
       skippedExpiredCount,
+      impactsCreated: syncStats.impactsCreated,
+      candidatesCreated: syncStats.candidatesCreated,
       durationMs,
       scannedAt: new Date().toISOString()
     };

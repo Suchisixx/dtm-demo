@@ -1,8 +1,8 @@
 // backend/services/classification-service.js
 // Dịch vụ Phân loại Hồ sơ Môi trường & Xác định Thẩm quyền (Kiến trúc 3 bước độc lập sau Kiểm toán Pháp lý)
 const defaultDb = require('../config/db');
-const { loadClassificationCatalog } = require('./rule-repository');
-const { calculateImpactRadius, analyzeSpatialContext } = require('./spatial-gis-service');
+const { loadClassificationCatalog, getProjectSensitiveVerification } = require('./rule-repository');
+const { calculateImpactRadius, analyzeSpatialContext, analyzeSpatialContextWithDb } = require('./spatial-gis-service');
 
 const RULE_SCHEMA_VERSION = '2026.2-audit';
 const TWO_TIER_GOV_EFFECTIVE_DATE = '2025-07-01';
@@ -134,12 +134,12 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Cần tách luyện kim từ quặng, từ phế liệu, cán thép, gia công; điểm đối chiếu sơ bộ ghi nhận ngưỡng lớn từ 300.000 tấn sản phẩm/năm (0,3 triệu tấn/năm) kèm điều kiện công đoạn.',
     processRules: {
       ore_smelting: [
-        { min: 0.3, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0.3, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       rolling_only: [
-        { min: 0.5, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0.5, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -157,12 +157,12 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Cần tách nhiệt điện than (điểm đối chiếu sơ bộ ngưỡng lớn từ 600 MW) với nhiệt điện khí, sinh khối và loại hình khác.',
     processRules: {
       coal_fired: [
-        { min: 600, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 600, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       gas_fired: [
-        { min: 600, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'MEDIUM', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 600, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'MEDIUM', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -193,13 +193,13 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Một số loại hóa chất vô cơ cơ bản, phân bón hóa học, hóa chất BVTV có ngưỡng lớn từ 5.000 tấn/năm và mức trung bình 1.000 đến dưới 5.000 tấn/năm. Cần tách theo nhóm hóa chất và công đoạn.',
     processRules: {
       basic_inorganic_or_pesticide: [
-        { min: 5000, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 1000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 5000, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 1000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       blending_packaging_only: [
-        { min: 10000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 10000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -217,14 +217,14 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Với loại hình giấy có công đoạn sản xuất bột giấy hoặc sử dụng nguyên liệu tái chế, ngưỡng lớn đã đối chiếu sơ bộ là từ 50.000 tấn/năm; mức trung bình 5.000 đến dưới 50.000 tấn/năm. Cần tách công đoạn bột giấy và giấy thương phẩm.',
     processRules: {
       pulp_or_recycled: [
-        { min: 50000, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 7', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 5000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 7', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 50000, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 7', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 5000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 7', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       paper_from_commercial_pulp: [
-        { min: 100000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 10000, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'MEDIUM', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 100000, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 10000, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'MEDIUM', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 7', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', effectiveFrom: TWO_TIER_GOV_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -243,13 +243,13 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Phụ lục có tiêu chí riêng theo triệu m²/năm đối với vải dệt nhuộm và tấn/năm đối với sản xuất sợi; cần tách công đoạn nhuộm/giặt mài với chỉ dệt/may không nhuộm.',
     processRules: {
       dyeing_washing: [
-        { min: 50, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 8', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 5, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 8', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 8', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 50, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 8', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 5, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 8', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 8', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       weaving_garment_no_dyeing: [
-        { min: 50, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'LARGE', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 8', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 50, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'LARGE', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 8', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', effectiveFrom: TWO_TIER_GOV_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -323,13 +323,13 @@ const IND_DB = {
     auditNote: 'Mục 4.1 README: Một số hoạt động có ngưỡng lớn 50 triệu sản phẩm/năm; mức trung bình từ 100.000 (0,1 triệu) đến dưới 50 triệu sản phẩm/năm, kèm điều kiện công đoạn (mạ, làm sạch bề mặt bằng hóa chất, sản xuất linh kiện vs chỉ lắp ráp).',
     processRules: {
       surface_chemical_or_component: [
-        { min: 50, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 13', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0.1, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 13', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 13', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 50, operator: '>=', projectGroup: 'Nhóm I', capacityScale: 'LARGE', hs: 'DTM', tq: 'cap_bo', phu_luc: 'Phụ lục II & III, Mục 13', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0.1, operator: '>=', projectGroup: 'Nhóm II', capacityScale: 'MEDIUM', hs: 'DTM', tq: 'cap_so', phu_luc: 'Phụ lục II & IV, Mục 13', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'SMALL', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 13', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
       assembly_only: [
-        { min: 50, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'LARGE', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 13', ref: 'VBHN 49/2026', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 50, operator: '>=', projectGroup: 'Nhóm III', capacityScale: 'LARGE', hs: 'GPMT', tq: 'cap_so', phu_luc: 'Phụ lục IV, Mục 13', ref: 'VBHN 49/2026', effectiveFrom: VBHN_49_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+        { min: 0, operator: '>=', projectGroup: 'Nhóm IV', capacityScale: 'SMALL', hs: 'DKMT', tq: 'cap_xa', historicalTq: 'cap_huyen', phu_luc: '—', ref: 'Điều 49, Luật BVMT 2020', effectiveFrom: TWO_TIER_GOV_EFFECTIVE_DATE, effectiveTo: null, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       ],
     },
     t: [
@@ -878,34 +878,74 @@ function getAvailableProcessStages(industryKey, industryObj) {
   return keys.map(key => ({ key, label: metaMap.get(key) || key }));
 }
 
+function isValidDateString(str) {
+  if (!str || typeof str !== 'string') return false;
+  const trimmed = str.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
+  const d = new Date(`${trimmed}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === trimmed;
+}
+
+function isEffectiveOnDate(item = {}, evaluationDate = null) {
+  if (!evaluationDate) return true;
+  const target = String(evaluationDate).slice(0, 10);
+  const from = item.effectiveFrom ? String(item.effectiveFrom).slice(0, 10) : null;
+  const to = item.effectiveTo ? String(item.effectiveTo).slice(0, 10) : null;
+  if (from && target < from) return false;
+  if (to && target > to) return false;
+  return true;
+}
+
 /**
- * Tìm tier công suất theo ngành, công suất và công đoạn sản xuất (T01, T02, T03, T04)
- * Trả về null nếu ngành không tồn tại hoặc không có tier khớp (không fallback im lặng).
+ * Tìm tier công suất kèm chi tiết hiệu lực theo evaluationDate (fail-closed theo ngày hiệu lực).
  */
-function findIndustryTier(projectType, capacity, processStage = null, catalog = IND_DB) {
+function findIndustryTierDetailed(projectType, capacity, processStage = null, catalog = IND_DB, evaluationDate = null) {
   const { resolvedCode } = resolveIndustryCode(projectType);
   const industry = catalog?.[resolvedCode];
-  if (!industry) return null;
+  if (!industry) return { tier: null, reason: 'UNKNOWN_INDUSTRY', totalTiers: 0, activeTiers: 0 };
 
   const hasProcessRules = Boolean(industry.processRules && Object.keys(industry.processRules).length > 0);
   if (hasProcessRules) {
     if (!processStage || !Array.isArray(industry.processRules[processStage])) {
-      return null;
+      return { tier: null, reason: 'INVALID_PROCESS_STAGE', totalTiers: 0, activeTiers: 0 };
     }
   }
 
-  const tiers = hasProcessRules
+  const allTiers = hasProcessRules
     ? industry.processRules[processStage]
     : (Array.isArray(industry.t) ? industry.t : []);
 
-  if (!tiers || tiers.length === 0) return null;
+  if (!allTiers || allTiers.length === 0) {
+    return { tier: null, reason: 'NO_ACTIVE_RULES', totalTiers: 0, activeTiers: 0 };
+  }
 
-  for (const tier of tiers) {
+  const activeTiers = allTiers.filter(t => isEffectiveOnDate(t, evaluationDate));
+  if (activeTiers.length === 0) {
+    return { tier: null, reason: 'NO_ACTIVE_RULE_FOR_DATE', totalTiers: allTiers.length, activeTiers: 0 };
+  }
+
+  const sortedTiers = [...activeTiers].sort((a, b) => {
+    if ((a.tierOrder ?? 0) !== (b.tierOrder ?? 0)) return (a.tierOrder ?? 0) - (b.tierOrder ?? 0);
+    if (b.min !== a.min) return b.min - a.min;
+    const effA = a.effectiveFrom || '';
+    const effB = b.effectiveFrom || '';
+    return effB.localeCompare(effA);
+  });
+
+  for (const tier of sortedTiers) {
     if (matchesThreshold(capacity, tier.min, tier.operator || '>=')) {
-      return tier;
+      return { tier, reason: null, totalTiers: allTiers.length, activeTiers: sortedTiers.length };
     }
   }
-  return null;
+  return { tier: null, reason: 'NO_MATCHING_TIER', totalTiers: allTiers.length, activeTiers: sortedTiers.length };
+}
+
+/**
+ * Tìm tier công suất theo ngành, công suất, công đoạn và ngày hiệu lực.
+ * Trả về null nếu ngành không tồn tại hoặc không có tier hiệu lực khớp (không fallback im lặng).
+ */
+function findIndustryTier(projectType, capacity, processStage = null, catalog = IND_DB, evaluationDate = null) {
+  return findIndustryTierDetailed(projectType, capacity, processStage, catalog, evaluationDate).tier;
 }
 
 /**
@@ -915,12 +955,26 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
   const { resolvedCode, aliasedFrom } = resolveIndustryCode(formData.nganh);
   const industry = resolvedCode ? catalog?.[resolvedCode] : null;
 
+  const hasCustomEvalDate = formData.evaluationDate !== undefined && formData.evaluationDate !== null && formData.evaluationDate !== '';
+  const evalDate = hasCustomEvalDate ? String(formData.evaluationDate).trim() : new Date().toISOString().slice(0, 10);
+  if (!isValidDateString(evalDate)) {
+    return {
+      valid: false,
+      errorCode: 'INVALID_EVALUATION_DATE',
+      resolvedCode,
+      aliasedFrom,
+      evaluationDate: evalDate,
+      message: `Ngày đánh giá / nộp hồ sơ "${formData.evaluationDate}" không đúng định dạng YYYY-MM-DD.`,
+    };
+  }
+
   if (!resolvedCode || !industry) {
     return {
       valid: false,
       errorCode: 'UNKNOWN_INDUSTRY',
       resolvedCode,
       aliasedFrom,
+      evaluationDate: evalDate,
       message: `Mã ngành nghề "${formData.nganh || '(trống)'}" không tồn tại trong danh mục quy tắc hợp lệ. Hệ thống không gán Nhóm IV/ĐKMT mặc định.`,
     };
   }
@@ -934,6 +988,7 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
         errorCode: 'MISSING_PROCESS_STAGE',
         resolvedCode,
         aliasedFrom,
+        evaluationDate: evalDate,
         availableProcessStages,
         message: `Ngành "${INDUSTRY_META[resolvedCode]?.name || resolvedCode}" bắt buộc phải chọn công đoạn / loại nhiên liệu (processStage) trước khi phân loại.`,
       };
@@ -944,6 +999,7 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
         errorCode: 'INVALID_PROCESS_STAGE',
         resolvedCode,
         aliasedFrom,
+        evaluationDate: evalDate,
         availableProcessStages,
         message: `Công đoạn "${formData.processStage}" không hợp lệ hoặc chưa có quy tắc hoạt động cho ngành "${resolvedCode}".`,
       };
@@ -956,6 +1012,7 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
         errorCode: 'NO_ACTIVE_RULES',
         resolvedCode,
         aliasedFrom,
+        evaluationDate: evalDate,
         message: `Ngành "${resolvedCode}" hiện chưa có ngưỡng quy tắc đã ban hành/hiệu lực trong cơ sở dữ liệu (chỉ có bản nháp hoặc chưa cấu hình).`,
       };
     }
@@ -971,18 +1028,23 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
       errorCode: 'INVALID_CAPACITY',
       resolvedCode,
       aliasedFrom,
+      evaluationDate: evalDate,
       message: 'Quy mô / công suất thiết kế không hợp lệ (bắt buộc là số >= 0). Hệ thống không tự động chọn bậc công suất thay thế.',
     };
   }
 
-  const tier = findIndustryTier(resolvedCode, numericCap, formData.processStage || null, catalog);
-  if (!tier) {
+  const tierResult = findIndustryTierDetailed(resolvedCode, numericCap, formData.processStage || null, catalog, evalDate);
+  if (!tierResult.tier) {
+    const isDateMiss = tierResult.reason === 'NO_ACTIVE_RULE_FOR_DATE';
     return {
       valid: false,
-      errorCode: 'NO_MATCHING_TIER',
+      errorCode: tierResult.reason || 'NO_MATCHING_TIER',
       resolvedCode,
       aliasedFrom,
-      message: `Không tìm thấy bậc ngưỡng phù hợp cho công suất ${numericCap} trong CSDL.`,
+      evaluationDate: evalDate,
+      message: isDateMiss
+        ? `Không có quy tắc/ngưỡng phân loại nào đang có hiệu lực tại ngày đánh giá ${evalDate} cho ngành "${resolvedCode}". Hệ thống không tự động dùng quy tắc của thời kỳ khác.`
+        : `Không tìm thấy bậc ngưỡng phù hợp cho công suất ${numericCap} tại ngày ${evalDate} trong CSDL.`,
     };
   }
 
@@ -991,7 +1053,8 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
     resolvedCode,
     aliasedFrom,
     numericCap,
-    tier,
+    evaluationDate: evalDate,
+    tier: tierResult.tier,
     industry,
   };
 }
@@ -1002,11 +1065,13 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
  */
 function determineProjectGroup(formData = {}, options = {}) {
   const catalog = options.catalog || IND_DB;
+  const serverSensitiveVerification = options.serverSensitiveVerification || null;
   const {
     nganh,
     capacity,
     cap,
     processStage = null,
+    evaluationDate = null,
     rung = false, lua = false, bg = false,
     bao_ton = false, di_san = false,
     ven_bien = false, nguon_nc = false, dat_ngap = false,
@@ -1019,7 +1084,7 @@ function determineProjectGroup(formData = {}, options = {}) {
   const actualCap = parseFloat(rawCap);
   const flags = { rung, lua, bg, bao_ton, di_san, ven_bien, nguon_nc, dat_ngap };
 
-  const tier = findIndustryTier(resolvedCode, actualCap, processStage, catalog);
+  const tier = findIndustryTier(resolvedCode, actualCap, processStage, catalog, evaluationDate || null);
   if (!tier) {
     return {
       invalid: true,
@@ -1029,6 +1094,7 @@ function determineProjectGroup(formData = {}, options = {}) {
       phuluc: null,
       ref: null,
       verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+      sensitiveVerificationStatus: 'UNVERIFIED',
       nangNhom: [],
       cauNhom: [],
     };
@@ -1041,25 +1107,44 @@ function determineProjectGroup(formData = {}, options = {}) {
   const nangNhom = [];
   const cauNhom = [];
 
-  // A08 & T06: Xử lý yếu tố nhạy cảm môi trường
-  // Chỉ nâng nhóm khi đã xác minh đủ điều kiện pháp lý cụ thể (sensitiveCriteriaVerified === true hoặc sensitiveDetails hợp lệ).
-  // Tuyệt đối không dùng khoảng cách biên giới 50km (bg) hoặc chỉ boolean đơn thuần để ép mọi dự án lên Nhóm I.
+  // A08 & Hạng mục 6: KHÔNG tin sensitiveCriteriaVerified / sensitiveDetails thô từ client.
+  // Chỉ nâng nhóm hợp thức khi có bản ghi xác minh phía server đã duyệt VERIFIED kèm verified_by != null.
   const activeSensitiveAreas = SENSITIVE_AREAS.filter(a => !!flags[a.key]);
+  const nonBorderAreas = activeSensitiveAreas.filter(a => a.key !== 'bg');
 
-  if (activeSensitiveAreas.length > 0) {
-    const nonBorderAreas = activeSensitiveAreas.filter(a => a.key !== 'bg');
-    const hasVerifiedLegalCondition = Boolean(
-      sensitiveCriteriaVerified ||
-      (sensitiveDetails && (
-        sensitiveDetails.insideCoreProtectedZone === true ||
-        Number(sensitiveDetails.paddyConversionAreaHa) >= 10 ||
-        Number(sensitiveDetails.forestConversionAreaHa) >= 50 ||
-        sensitiveDetails.verifiedByAuthority === true
-      ))
-    );
+  const hasClientSensitiveClaim = Boolean(
+    sensitiveCriteriaVerified
+    || (sensitiveDetails && (
+      sensitiveDetails.insideCoreProtectedZone === true
+      || Number(sensitiveDetails.paddyConversionAreaHa) > 0
+      || Number(sensitiveDetails.forestConversionAreaHa) > 0
+      || sensitiveDetails.verifiedByAuthority === true
+    ))
+  );
 
-    if (nonBorderAreas.length > 0 && hasVerifiedLegalCondition) {
-      // Đủ điều kiện pháp lý đã xác minh: nâng nhóm theo quy định (Dự án quy mô lớn/trung bình có yếu tố nhạy cảm -> Nhóm I; quy mô nhỏ -> Nhóm II)
+  const serverVerifStatus = serverSensitiveVerification
+    ? String(serverSensitiveVerification.verification_status || '').toUpperCase()
+    : null;
+  const serverDetails = (serverSensitiveVerification && typeof serverSensitiveVerification.declared_details === 'object')
+    ? serverSensitiveVerification.declared_details
+    : {};
+  const hasServerVerifiedLegalCondition = Boolean(
+    serverSensitiveVerification
+    && serverVerifStatus === 'VERIFIED'
+    && serverSensitiveVerification.verified_by != null
+    && (
+      Boolean(serverSensitiveVerification.evidence_ref)
+      || serverDetails.insideCoreProtectedZone === true
+      || Number(serverDetails.paddyConversionAreaHa) >= 10
+      || Number(serverDetails.forestConversionAreaHa) >= 50
+    )
+  );
+
+  let sensitiveVerificationStatus = 'NOT_REQUIRED';
+
+  if (activeSensitiveAreas.length > 0 || hasClientSensitiveClaim || (serverSensitiveVerification && serverVerifStatus !== 'NOT_REQUIRED')) {
+    if (hasServerVerifiedLegalCondition && (nonBorderAreas.length > 0 || serverDetails.insideCoreProtectedZone === true || Number(serverDetails.paddyConversionAreaHa) >= 10 || Number(serverDetails.forestConversionAreaHa) >= 50)) {
+      sensitiveVerificationStatus = 'VERIFIED';
       const previousGroup = projectGroup;
       if (tier.capacityScale === 'LARGE' || tier.capacityScale === 'MEDIUM' || projectGroup === 'Nhóm I' || projectGroup === 'Nhóm II') {
         projectGroup = 'Nhóm I';
@@ -1069,25 +1154,48 @@ function determineProjectGroup(formData = {}, options = {}) {
         phuluc = 'Khoản 4, Điều 28 Luật BVMT 2020 & Phụ lục IV VBHN 49/2026';
       }
       ref = 'Điều 25 & Điều 28, Luật BVMT 2020';
-      nonBorderAreas.forEach(area => {
+      const areasForNote = nonBorderAreas.length > 0
+        ? nonBorderAreas
+        : [{ label: 'Yếu tố nhạy cảm môi trường (điều kiện định lượng)', ref: serverSensitiveVerification.evidence_ref || 'Hồ sơ thẩm định server' }];
+      areasForNote.forEach(area => {
         nangNhom.push({
           icon: '⚠️',
-          text: `${area.label} (đã xác nhận điều kiện pháp lý) → nâng từ ${previousGroup} lên ${projectGroup}`,
+          text: `${area.label} (đã xác minh phía server bởi cán bộ thẩm định #${serverSensitiveVerification.verified_by}) → nâng từ ${previousGroup} lên ${projectGroup}`,
           ref: area.ref,
         });
+      });
+    } else if (serverVerifStatus === 'REJECTED') {
+      sensitiveVerificationStatus = 'REJECTED';
+      verificationStatus = 'NEEDS_LEGAL_VERIFICATION';
+      cauNhom.push({
+        icon: '⛔',
+        type: 'warn',
+        text: `Hồ sơ xác minh vùng nhạy cảm đã bị TỪ CHỐI thẩm định (${serverSensitiveVerification.verification_note || 'Không đạt điều kiện nâng nhóm'}). Giữ nguyên nhóm cơ sở theo công suất ngành.`,
+        ref: 'Điều 25 & Điều 28, Luật BVMT 2020',
       });
     } else {
-      // Chưa đủ dữ liệu điều kiện pháp lý (chỉ mới tích chọn boolean hoặc tự động gắn cờ GIS):
-      // Không tự động nâng lên Nhóm I; giữ nhóm cơ sở và gắn cờ NEEDS_LEGAL_VERIFICATION
+      sensitiveVerificationStatus = (serverVerifStatus === 'PENDING_VERIFICATION' || hasClientSensitiveClaim || nonBorderAreas.length > 0)
+        ? 'PENDING_SERVER_VERIFICATION'
+        : 'UNVERIFIED';
       verificationStatus = 'NEEDS_LEGAL_VERIFICATION';
-      activeSensitiveAreas.forEach(area => {
-        cauNhom.push({
-          icon: area.key === 'bg' ? 'ℹ️' : '⚠️',
-          type: area.key === 'bg' ? 'info' : 'warn',
-          text: `${area.label}: ${area.requiresLegalCriteria} Không tự động nâng lên Nhóm I khi chưa xác minh đủ điều kiện pháp lý (NEEDS_LEGAL_VERIFICATION).`,
-          ref: area.ref,
+      if (activeSensitiveAreas.length > 0) {
+        activeSensitiveAreas.forEach(area => {
+          cauNhom.push({
+            icon: area.key === 'bg' ? 'ℹ️' : '⚠️',
+            type: area.key === 'bg' ? 'info' : 'warn',
+            text: `${area.label}: ${area.requiresLegalCriteria} Chưa có xác minh VERIFIED phía server — không tự động nâng lên Nhóm I (${sensitiveVerificationStatus}).`,
+            ref: area.ref,
+          });
         });
-      });
+      }
+      if (hasClientSensitiveClaim) {
+        cauNhom.push({
+          icon: '🔒',
+          type: 'warn',
+          text: 'Cờ sensitiveCriteriaVerified / diện tích chuyển đổi từ client chỉ mang tính khai báo (PENDING_SERVER_VERIFICATION), chưa có hiệu lực nâng nhóm chính thức cho đến khi Admin duyệt trên server.',
+          ref: 'Điều 25 NĐ 08/2022/NĐ-CP',
+        });
+      }
     }
   }
 
@@ -1109,6 +1217,7 @@ function determineProjectGroup(formData = {}, options = {}) {
     phuluc,
     ref,
     verificationStatus,
+    sensitiveVerificationStatus,
     nangNhom,
     cauNhom,
   };
@@ -1385,10 +1494,12 @@ function determineCompetentAuthority(formData = {}, groupResult, obligationsResu
   }
 
   const isUpstreamVerified = groupResult?.verificationStatus === 'VERIFIED';
+  const missingHistoricalAuthority = isHistoricalBeforeTwoTier && !groupResult?.tier?.historicalTq;
 
   return {
     tq: tierTq,
     coQuan: coQuanLabel,
+    missingHistoricalAuthority,
     competentAuthority: {
       competentPerson,
       competentAgency,
@@ -1397,7 +1508,7 @@ function determineCompetentAuthority(formData = {}, groupResult, obligationsResu
       legalBasis,
       effectiveFrom: isHistoricalBeforeTwoTier ? '2022-01-01' : TWO_TIER_GOV_EFFECTIVE_DATE,
       effectiveTo: isHistoricalBeforeTwoTier ? '2025-06-30' : null,
-      verificationStatus: (isUpstreamVerified && !dtcong && !delegatedToKcnBoard && hs !== 'GPMT')
+      verificationStatus: (isUpstreamVerified && !missingHistoricalAuthority && !dtcong && !delegatedToKcnBoard && hs !== 'GPMT')
         ? 'VERIFIED'
         : 'NEEDS_LEGAL_VERIFICATION',
     },
@@ -1467,7 +1578,12 @@ function evaluateClassification(formData = {}, options = {}) {
       ruleSource,
       fallbackReason,
       ruleVersion: RULE_SCHEMA_VERSION,
-      evaluationDate,
+      appliedRuleVersion: RULE_SCHEMA_VERSION,
+      appliedEffectiveFrom: null,
+      appliedEffectiveTo: null,
+      isHistoricalEvaluation: Boolean(validation.evaluationDate && validation.evaluationDate < TWO_TIER_GOV_EFFECTIVE_DATE),
+      sensitiveVerificationStatus: 'NOT_REQUIRED',
+      evaluationDate: validation.evaluationDate || evaluationDate,
       hi: null,
       cl: { bat_buoc: [], bo_sung: [] },
       lr: [],
@@ -1479,19 +1595,23 @@ function evaluateClassification(formData = {}, options = {}) {
     };
   }
 
+  const evalDate = validation.evaluationDate || evaluationDate;
   const resolvedNganh = validation.resolvedCode;
   const normalizedFormData = {
     ...formData,
     nganh: resolvedNganh,
     capacity: validation.numericCap,
-    evaluationDate,
+    evaluationDate: evalDate,
   };
 
   const actualNt = parseFloat(nt || 0);
   const actualKt = parseFloat(kt || 0);
 
   // 1. Bước 1: Xác định Nhóm dự án (projectGroup)
-  const groupResult = determineProjectGroup(normalizedFormData, { catalog });
+  const groupResult = determineProjectGroup(normalizedFormData, {
+    catalog,
+    serverSensitiveVerification: options.serverSensitiveVerification || null,
+  });
 
   // 2. Bước 2: Xác định Nghĩa vụ / Thủ tục môi trường (environmentalObligations)
   const obligationsResult = determineEnvironmentalObligations(normalizedFormData, groupResult);
@@ -1604,9 +1724,14 @@ function evaluateClassification(formData = {}, options = {}) {
   }
 
   const impactRadiusMeters = calculateImpactRadius(nhom, actualNt, actualKt);
-  const spatialAnalysis = (formData.latitude !== undefined && formData.longitude !== undefined)
-    ? analyzeSpatialContext(formData.latitude, formData.longitude)
-    : null;
+  let spatialAnalysis = options.spatialAnalysisOverride !== undefined ? options.spatialAnalysisOverride : null;
+  if (spatialAnalysis === null && formData.latitude !== undefined && formData.longitude !== undefined && formData.latitude !== '' && formData.longitude !== '') {
+    spatialAnalysis = analyzeSpatialContext(formData.latitude, formData.longitude, options.gisLayers ? {
+      sensitiveZones: options.gisLayers.sensitiveZones,
+      industrialParks: options.gisLayers.industrialParks,
+      gisSource: options.gisLayers.gisSource || 'DATABASE',
+    } : {});
+  }
 
   // Tổng hợp gate pháp lý & nguồn dữ liệu (A-01, A-04, CL-07)
   const isFromDb = ruleSource === 'DATABASE';
@@ -1620,8 +1745,15 @@ function evaluateClassification(formData = {}, options = {}) {
   if (groupResult.verificationStatus !== 'VERIFIED') {
     unverifiedReasons.push('Ngưỡng phân loại theo công suất / công đoạn / yếu tố nhạy cảm chưa hoàn tất xác minh pháp lý (NEEDS_LEGAL_VERIFICATION).');
   }
+  if (groupResult.sensitiveVerificationStatus && ['PENDING_SERVER_VERIFICATION', 'UNVERIFIED'].includes(groupResult.sensitiveVerificationStatus)) {
+    unverifiedReasons.push('Khai báo vùng nhạy cảm / tiêu chí nâng nhóm chưa có quyết định xác minh VERIFIED phía server.');
+  }
   if (authorityResult.competentAuthority.verificationStatus !== 'VERIFIED') {
-    unverifiedReasons.push('Thẩm quyền tiếp nhận/thẩm định cần chuyên viên pháp lý kiểm tra thêm các điều kiện phân cấp hoặc ngoại lệ.');
+    unverifiedReasons.push(
+      authorityResult.missingHistoricalAuthority
+        ? `Chưa có cấu hình thẩm quyền lịch sử (historicalTq) đã xác minh cho thời kỳ trước ${TWO_TIER_GOV_EFFECTIVE_DATE}.`
+        : 'Thẩm quyền tiếp nhận/thẩm định cần chuyên viên pháp lý kiểm tra thêm các điều kiện phân cấp hoặc ngoại lệ.'
+    );
   }
 
   const overallVerificationStatus = (
@@ -1638,6 +1770,11 @@ function evaluateClassification(formData = {}, options = {}) {
   const isOfficialConclusion = conclusionStatus === 'VERIFIED';
   const canExportOfficialReport = isOfficialConclusion;
   const isPreliminary = !isOfficialConclusion;
+
+  const appliedRuleVersion = groupResult.tier?.ruleVersion || industryObj.ruleVersion || RULE_SCHEMA_VERSION;
+  const appliedEffectiveFrom = groupResult.tier?.effectiveFrom || null;
+  const appliedEffectiveTo = groupResult.tier?.effectiveTo || null;
+  const isHistoricalEvaluation = Boolean(evalDate && evalDate < TWO_TIER_GOV_EFFECTIVE_DATE);
 
   const preliminary = {
     projectGroup: nhom,
@@ -1661,6 +1798,7 @@ function evaluateClassification(formData = {}, options = {}) {
     // Trạng thái & Cổng kiểm soát kết luận pháp lý
     conclusionStatus,
     verificationStatus: overallVerificationStatus,
+    sensitiveVerificationStatus: groupResult.sensitiveVerificationStatus || 'NOT_REQUIRED',
     isOfficialConclusion,
     canExportOfficialReport,
     isPreliminary,
@@ -1669,8 +1807,13 @@ function evaluateClassification(formData = {}, options = {}) {
     unverifiedReasons,
     ruleSource,
     fallbackReason,
-    ruleVersion: industryObj.ruleVersion || groupResult.tier?.ruleVersion || RULE_SCHEMA_VERSION,
-    evaluationDate,
+    ruleVersion: appliedRuleVersion,
+    appliedRuleVersion,
+    appliedEffectiveFrom,
+    appliedEffectiveTo,
+    isHistoricalEvaluation,
+    evaluationDate: evalDate,
+    gisSource: spatialAnalysis?.gisSource || null,
 
     // Các trường cấu trúc sau kiểm toán pháp lý
     projectGroup: isFromDb ? nhom : null,
@@ -1703,20 +1846,102 @@ function evaluateClassification(formData = {}, options = {}) {
 /**
  * Thực thi phân loại sử dụng catalog runtime từ PostgreSQL (route API chính thức).
  */
-async function evaluateClassificationWithDb(formData = {}, { db = defaultDb } = {}) {
+async function evaluateClassificationWithDb(formData = {}, { db = defaultDb, projectId = null } = {}) {
   const loaded = await loadClassificationCatalog({ db });
+  const targetProjectId = projectId || formData.projectId || null;
+
+  let serverSensitiveVerification = null;
+  let spatialAnalysisOverride;
+
   if (loaded.ok && loaded.catalog) {
+    if (targetProjectId) {
+      serverSensitiveVerification = await getProjectSensitiveVerification(targetProjectId, { db });
+    }
+    if (formData.latitude !== undefined && formData.longitude !== undefined && formData.latitude !== '' && formData.longitude !== '') {
+      spatialAnalysisOverride = await analyzeSpatialContextWithDb(formData.latitude, formData.longitude, { db });
+    }
+
     return evaluateClassification(formData, {
       catalog: loaded.catalog,
       ruleSource: 'DATABASE',
       fallbackReason: null,
+      serverSensitiveVerification,
+      spatialAnalysisOverride,
     });
   }
+
   return evaluateClassification(formData, {
     catalog: IND_DB,
     ruleSource: 'FALLBACK_UNVERIFIED',
     fallbackReason: loaded.error || 'DB_UNAVAILABLE',
+    serverSensitiveVerification: null,
   });
+}
+
+/**
+ * Đánh giá thống nhất cho một bản ghi dự án đã lưu trong DB (dùng chung cho /geo và /dashboard/stats).
+ * Không fallback sang 'Nhóm II' / 'Nhóm III' / 'GPMT' / 'cap_so' khi dữ liệu thiếu hoặc lỗi.
+ */
+function evaluateStoredProject(projectRow = {}, options = {}) {
+  const catalog = options.catalog || IND_DB;
+  const ruleSource = options.ruleSource || 'FALLBACK_UNVERIFIED';
+  const gisLayers = options.gisLayers || null;
+  const serverSensitiveVerification = options.serverSensitiveVerification || null;
+
+  const baseForm = (projectRow.form_data && typeof projectRow.form_data === 'object')
+    ? { ...projectRow.form_data }
+    : {};
+
+  if (projectRow.latitude !== undefined && projectRow.latitude !== null) {
+    baseForm.latitude = Number(projectRow.latitude);
+  }
+  if (projectRow.longitude !== undefined && projectRow.longitude !== null) {
+    baseForm.longitude = Number(projectRow.longitude);
+  }
+
+  let spatialAnalysisOverride;
+  if (
+    baseForm.latitude !== undefined
+    && baseForm.longitude !== undefined
+    && baseForm.latitude !== ''
+    && baseForm.longitude !== ''
+    && !Number.isNaN(Number(baseForm.latitude))
+    && !Number.isNaN(Number(baseForm.longitude))
+  ) {
+    spatialAnalysisOverride = analyzeSpatialContext(
+      baseForm.latitude,
+      baseForm.longitude,
+      gisLayers
+        ? {
+            sensitiveZones: gisLayers.sensitiveZones,
+            industrialParks: gisLayers.industrialParks,
+            gisSource: gisLayers.gisSource || 'DATABASE',
+          }
+        : {}
+    );
+  }
+
+  const cr = evaluateClassification(baseForm, {
+    catalog,
+    ruleSource,
+    fallbackReason: options.fallbackReason || null,
+    serverSensitiveVerification,
+    spatialAnalysisOverride,
+  });
+
+  return {
+    formData: baseForm,
+    classification: cr,
+    nhom: cr.nhom || null,
+    hs: cr.hs || null,
+    tq: cr.tq || null,
+    coQuan: cr.coQuan || null,
+    conclusionStatus: cr.conclusionStatus || 'NEEDS_REVIEW',
+    sensitiveVerificationStatus: cr.sensitiveVerificationStatus || 'NOT_REQUIRED',
+    isOfficialConclusion: Boolean(cr.isOfficialConclusion),
+    impactRadiusMeters: cr.impactRadiusMeters || null,
+    spatialAnalysis: cr.spatialAnalysis || spatialAnalysisOverride || null,
+  };
 }
 
 /**
@@ -1765,11 +1990,15 @@ module.exports = {
   LAW_CHANGE_WARNINGS,
   resolveIndustryCode,
   getAvailableProcessStages,
+  isValidDateString,
+  isEffectiveOnDate,
+  findIndustryTierDetailed,
   findIndustryTier,
   determineProjectGroup,
   determineEnvironmentalObligations,
   determineCompetentAuthority,
   evaluateClassification,
   evaluateClassificationWithDb,
+  evaluateStoredProject,
   getClassificationMetadata,
 };

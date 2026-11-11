@@ -7,8 +7,12 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const {
   ensureClassificationSchema,
   ensureQcvnSchema,
+  ensureSensitiveVerificationSchema,
+  ensureGisSchema,
+  ensureCrawlerSyncSchema,
   seedClassificationCatalog,
   seedQcvnCatalog,
+  seedGisLayers,
 } = require('./services/rule-repository');
 
 const dbConfig = {
@@ -472,7 +476,10 @@ async function initDatabase() {
 
     await ensureQcvnSchema(targetClient);
     await ensureClassificationSchema(targetClient);
-    console.log('✔ Đã kiểm tra và bổ sung các cột metadata pháp lý (migration an toàn, không xóa dữ liệu).');
+    await ensureSensitiveVerificationSchema(targetClient);
+    await ensureGisSchema(targetClient);
+    await ensureCrawlerSyncSchema(targetClient);
+    console.log('✔ Đã kiểm tra và bổ sung các cột metadata pháp lý, xác minh nhạy cảm, GIS & crawler sync (migration an toàn, không xóa dữ liệu).');
 
     if (schemaOnly) {
       console.log('--- HOÀN TẤT MIGRATION SCHEMA (--schema-only) ---');
@@ -506,6 +513,20 @@ async function initDatabase() {
       console.log(`✔ Seed phân loại hoàn tất: thêm ${classStats.industriesInserted} ngành, cập nhật ${classStats.industriesEnriched}, chèn ${classStats.thresholdsInserted} ngưỡng (gồm processRules), giữ nguyên ${classStats.skippedVerified} nhóm ngưỡng đã duyệt.`);
     } catch (e) {
       console.error('⚠️ Không thể đồng bộ ngành nghề từ classification-service.js:', e.message);
+    }
+
+    // 6b. Seed lớp bản đồ GIS (Vùng nhạy cảm & KCN, bảo toàn bản ghi VERIFIED)
+    try {
+      console.log('Đang seed lớp GIS nhạy cảm & KCN từ spatial-gis-service.js...');
+      const { VIETNAM_SENSITIVE_ZONES, VIETNAM_INDUSTRIAL_PARKS } = require('./services/spatial-gis-service');
+      const gisStats = await seedGisLayers(targetClient, {
+        sensitiveZones: VIETNAM_SENSITIVE_ZONES || [],
+        industrialParks: VIETNAM_INDUSTRIAL_PARKS || [],
+        force: forceSeed,
+      });
+      console.log(`✔ Seed GIS hoàn tất: thêm mới ${gisStats.inserted}, cập nhật ${gisStats.updated}, giữ nguyên ${gisStats.skippedVerified} lớp đã duyệt.`);
+    } catch (e) {
+      console.error('⚠️ Không thể seed lớp GIS:', e.message);
     }
 
     // 7. Đồng bộ Quy tắc mẫu của Rule Engine vào database (A01, A04, Q10)

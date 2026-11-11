@@ -30,15 +30,19 @@ const stats = ref({
     passSamples: 0,
     warnSamples: 0,
     failSamples: 0,
+    incompleteSamples: 0,
+    needsReviewSamples: 0,
+    needsReviewProjects: 0,
+    unverifiedProjects: 0,
     complianceRate: 100,
     totalLaws: 0,
     validLaws: 0,
     amendedLaws: 0
   },
   distributions: {
-    byGroup: { 'Nhóm I': 0, 'Nhóm II': 0, 'Nhóm III': 0, 'Nhóm IV': 0 },
+    byGroup: { 'Nhóm I': 0, 'Nhóm II': 0, 'Nhóm III': 0, 'Nhóm IV': 0, 'Cần rà soát': 0 },
     byDossier: { DTM: 0, GPMT: 0, DKMT: 0 },
-    byAuthority: { cap_bo: 0, cap_so: 0, cap_huyen: 0 },
+    byAuthority: { cap_bo: 0, cap_so: 0, cap_xa: 0, cap_huyen: 0, chua_xac_dinh: 0 },
     byQcvnType: [],
     topIndustries: [],
     topProvinces: []
@@ -137,7 +141,9 @@ const DOSSIER_META = [
 const AUTHORITY_META = [
   { key: 'cap_bo', label: 'Bộ NN&MT (Cấp Bộ)', icon: 'ti-building-bank' },
   { key: 'cap_so', label: 'UBND Cấp Tỉnh / Sở NN&MT', icon: 'ti-building-community' },
-  { key: 'cap_huyen', label: 'UBND Cấp Xã / Phường', icon: 'ti-building' }
+  { key: 'cap_xa', label: 'UBND Cấp Xã / Phường', icon: 'ti-building' },
+  { key: 'cap_huyen', label: 'UBND Cấp Huyện (Lịch sử trước 01/07/2025)', icon: 'ti-history' },
+  { key: 'chua_xac_dinh', label: 'Chưa xác định thẩm quyền', icon: 'ti-help-circle' }
 ]
 
 const SENSITIVE_META = [
@@ -211,7 +217,27 @@ const getGroupColor = (nhom) => {
   if (nhom === 'Nhóm I') return '#D65B5B'
   if (nhom === 'Nhóm II') return '#D99A38'
   if (nhom === 'Nhóm III') return '#5681A5'
+  if (nhom === 'Cần rà soát') return '#6B7280'
   return '#286B4F'
+}
+
+const getDashboardSampleBadge = (status) => {
+  switch (status) {
+    case 'vuot_nguong':
+      return { cls: 'expired', label: 'Vượt ngưỡng' }
+    case 'canh_bao':
+      return { cls: 'amended', label: 'Cảnh báo' }
+    case 'dat':
+    case 'dat_chuan':
+      return { cls: 'valid', label: 'Đạt chuẩn' }
+    case 'chua_du_thong_so':
+      return { cls: 'neutral', label: 'Thiếu chỉ tiêu' }
+    case 'period_mismatch':
+      return { cls: 'neutral', label: 'Lệch chu kỳ' }
+    case 'can_ra_soat':
+    default:
+      return { cls: 'neutral', label: 'Cần rà soát' }
+  }
 }
 
 const printDashboard = () => {
@@ -300,6 +326,9 @@ const printDashboard = () => {
           <div class="kpi-value" style="color:var(--warn)">{{ formatNumber(stats.kpis.highRiskProjects) }}</div>
           <div class="kpi-sub">
             Chiếm <strong>{{ stats.kpis.totalProjects > 0 ? Math.round((stats.kpis.highRiskProjects / stats.kpis.totalProjects) * 100) : 0 }}%</strong> dự án nguy cơ MT cao &amp; TB
+            <span v-if="stats.kpis.needsReviewProjects > 0" style="display:block;color:var(--red);margin-top:2px">
+              <strong>{{ stats.kpis.needsReviewProjects }}</strong> dự án cần rà soát pháp lý
+            </span>
           </div>
         </div>
 
@@ -314,10 +343,12 @@ const printDashboard = () => {
           <div class="kpi-value" :style="{ color: stats.kpis.failSamples > 0 ? 'var(--red)' : 'var(--success)' }">
             {{ stats.kpis.complianceRate }}%
           </div>
-          <div class="kpi-sub" style="display:flex;gap:10px;flex-wrap:wrap">
+          <div class="kpi-sub" style="display:flex;gap:8px;flex-wrap:wrap">
             <span style="color:var(--success);font-weight:600">{{ stats.kpis.passSamples }} đạt</span>
             <span style="color:var(--warn);font-weight:600">{{ stats.kpis.warnSamples }} cảnh báo</span>
             <span style="color:var(--red);font-weight:600">{{ stats.kpis.failSamples }} vượt</span>
+            <span v-if="stats.kpis.incompleteSamples > 0" style="color:#475569;font-weight:600">{{ stats.kpis.incompleteSamples }} thiếu chỉ tiêu</span>
+            <span v-if="stats.kpis.needsReviewSamples > 0" style="color:#4B5563;font-weight:600">{{ stats.kpis.needsReviewSamples }} rà soát</span>
           </div>
         </div>
 
@@ -406,7 +437,7 @@ const printDashboard = () => {
             <div>
               <div class="dash-sub-title">Thẩm quyền cấp phép</div>
               <div style="display:flex;flex-direction:column;gap:8px">
-                <div v-for="a in AUTHORITY_META" :key="a.key" class="dash-mini-stat-row">
+                <div v-for="a in AUTHORITY_META.filter(a => a.key !== 'chua_xac_dinh' || (stats.distributions.byAuthority?.[a.key] || 0) > 0)" :key="a.key" class="dash-mini-stat-row">
                   <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);font-weight:500">
                     <i class="ti" :class="a.icon" style="color:var(--accent);font-size:16px"></i>
                     <span>{{ a.label }}</span>
@@ -427,13 +458,15 @@ const printDashboard = () => {
                 <span>Kết quả Quan trắc theo Quy chuẩn (QCVN)</span>
               </div>
               <div style="font-size:12px;color:var(--text3);margin-top:2px">
-                Phân tích tỷ lệ Đạt / Cảnh báo / Vượt ngưỡng theo từng thành phần môi trường
+                Phân tích tỷ lệ Đạt / Cảnh báo / Vượt ngưỡng / Thiếu chỉ tiêu / Cần rà soát
               </div>
             </div>
-            <div style="display:flex;gap:10px;font-size:11.5px;color:var(--text2)">
+            <div style="display:flex;gap:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap">
               <span style="display:inline-flex;align-items:center;gap:4px"><i style="width:8px;height:8px;border-radius:2px;background:var(--success)"></i> Đạt</span>
               <span style="display:inline-flex;align-items:center;gap:4px"><i style="width:8px;height:8px;border-radius:2px;background:var(--warn)"></i> Cảnh báo</span>
               <span style="display:inline-flex;align-items:center;gap:4px"><i style="width:8px;height:8px;border-radius:2px;background:var(--red)"></i> Vượt</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><i style="width:8px;height:8px;border-radius:2px;background:#64748B"></i> Thiếu</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><i style="width:8px;height:8px;border-radius:2px;background:#9CA3AF"></i> Rà soát</span>
             </div>
           </div>
 
@@ -444,7 +477,7 @@ const printDashboard = () => {
                 <span style="color:var(--text3);font-size:12px">
                   <strong style="color:var(--text)">{{ item.total }}</strong> mẫu
                   <template v-if="item.total > 0">
-                    ({{ item.dat }} đạt · {{ item.canh_bao }} CB · {{ item.vuot_nguong }} vượt)
+                    ({{ item.dat || 0 }} đạt · {{ item.canh_bao || 0 }} CB · {{ item.vuot_nguong || 0 }} vượt<template v-if="(item.chua_du_thong_so || 0) > 0"> · {{ item.chua_du_thong_so }} thiếu</template><template v-if="(item.can_ra_soat || 0) > 0"> · {{ item.can_ra_soat }} rà soát</template>)
                   </template>
                 </span>
               </div>
@@ -453,6 +486,8 @@ const printDashboard = () => {
                   <div v-if="item.dat > 0" class="dash-bar-seg pass" :style="{ width: (item.dat / item.total) * 100 + '%' }"></div>
                   <div v-if="item.canh_bao > 0" class="dash-bar-seg warn" :style="{ width: (item.canh_bao / item.total) * 100 + '%' }"></div>
                   <div v-if="item.vuot_nguong > 0" class="dash-bar-seg fail" :style="{ width: (item.vuot_nguong / item.total) * 100 + '%' }"></div>
+                  <div v-if="item.chua_du_thong_so > 0" class="dash-bar-seg incomplete" :style="{ width: (item.chua_du_thong_so / item.total) * 100 + '%' }"></div>
+                  <div v-if="item.can_ra_soat > 0" class="dash-bar-seg review" :style="{ width: (item.can_ra_soat / item.total) * 100 + '%' }"></div>
                 </template>
               </div>
             </div>
@@ -483,8 +518,8 @@ const printDashboard = () => {
                   {{ s.type_label }} · {{ formatDate(s.created_at) }}
                 </div>
               </div>
-              <span class="chip-status" :class="s.status === 'vuot_nguong' ? 'expired' : 'amended'">
-                {{ s.status === 'vuot_nguong' ? 'Vượt ngưỡng' : 'Cảnh báo' }}
+              <span class="chip-status" :class="getDashboardSampleBadge(s.status).cls">
+                {{ getDashboardSampleBadge(s.status).label }}
               </span>
             </div>
           </div>
@@ -681,9 +716,9 @@ const printDashboard = () => {
                 <td>
                   <template v-if="proj.sample_count > 0">
                     <span class="chip-status" style="cursor:pointer"
-                          :class="proj.latest_sample_status === 'vuot_nguong' ? 'expired' : proj.latest_sample_status === 'canh_bao' ? 'amended' : 'valid'"
+                          :class="getDashboardSampleBadge(proj.latest_sample_status).cls"
                           @click="proj.latest_sample_id && emit('view-qcvn-sample', proj.latest_sample_id)">
-                      {{ proj.latest_sample_status === 'vuot_nguong' ? 'Vượt ngưỡng' : proj.latest_sample_status === 'canh_bao' ? 'Cảnh báo' : 'Đạt chuẩn' }}
+                      {{ getDashboardSampleBadge(proj.latest_sample_status).label }}
                       ({{ proj.sample_count }})
                     </span>
                     <div style="font-size:11.5px;color:var(--text3);margin-top:3px">
@@ -818,6 +853,9 @@ const printDashboard = () => {
 .dash-bar-seg.pass { background: var(--success); }
 .dash-bar-seg.warn { background: var(--warn); }
 .dash-bar-seg.fail { background: var(--red); }
+.dash-bar-seg.incomplete { background: #64748B; }
+.dash-bar-seg.review { background: #9CA3AF; }
+.chip-status.neutral { background: #F3F4F6; color: #374151; border-color: #D1D5DB; }
 
 .dash-alert-item {
   display: flex;

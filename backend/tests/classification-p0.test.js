@@ -32,7 +32,7 @@ function createMockClassificationDb({ failQuery = false } = {}) {
       const trimmed = sql.trim().replace(/\s+/g, ' ');
       state.queries.push(trimmed);
 
-      if (/^ALTER TABLE/i.test(trimmed)) {
+      if (/^(CREATE|ALTER) TABLE/i.test(trimmed)) {
         return { rows: [], rowCount: 0 };
       }
       if (trimmed.startsWith('SELECT id FROM laws')) {
@@ -342,4 +342,143 @@ test('DB mat ket noi / offline fallback -> FALLBACK_UNVERIFIED va ep NEEDS_REVIE
   const meta = await getClassificationMetadata({ db: brokenDb });
   assert.equal(meta.ruleSource, 'FALLBACK_UNVERIFIED');
   assert.equal(Object.keys(meta.industries).length, 39);
+});
+
+test('Phase 2 Item 5: Effective-Date Versioning & Historical Authority (evaluationDate)', async () => {
+  const {
+    ensureClassificationSchema,
+    seedClassificationCatalog,
+  } = require('../services/rule-repository');
+
+  const db = createMockClassificationDb();
+  await ensureClassificationSchema(db);
+  await seedClassificationCatalog(db, { indDb: IND_DB, industryMeta: INDUSTRY_META });
+
+  // Mark thuc_pham tiers & industry as VERIFIED, with historical-through-current rule starting 2025-01-06 on DKMT tier
+  const ind = db.state.industries.find(i => i.code === 'thuc_pham');
+  ind.verification_status = 'VERIFIED';
+  ind.publication_status = 'PUBLISHED';
+  db.state.classification_thresholds
+    .filter(t => t.industry_code === 'thuc_pham')
+    .forEach(t => {
+      t.verification_status = 'VERIFIED';
+      t.publication_status = 'PUBLISHED';
+      if (t.legal_doc_required === 'DKMT') {
+        t.effective_from = '2025-01-06';
+      }
+    });
+
+  // 1. Historical evaluation before 2025-07-01 for small tier (DKMT -> cap_huyen historical vs cap_xa current)
+  const histRes = await evaluateClassificationWithDb({
+    nganh: 'thuc_pham',
+    capacity: 50,
+    evaluationDate: '2025-05-01',
+  }, { db });
+  assert.equal(histRes.evaluationDate, '2025-05-01');
+  assert.equal(histRes.isHistoricalEvaluation, true);
+  assert.equal(histRes.appliedEffectiveFrom, '2025-01-06');
+  assert.equal(histRes.tq, 'cap_huyen');
+  assert.equal(histRes.hs, 'DKMT');
+
+  const curRes = await evaluateClassificationWithDb({
+    nganh: 'thuc_pham',
+    capacity: 50,
+    evaluationDate: '2026-08-01',
+  }, { db });
+  assert.equal(curRes.isHistoricalEvaluation, false);
+  assert.equal(curRes.tq, 'cap_xa');
+  assert.equal(curRes.hs, 'DKMT');
+
+  // 2. Invalid evaluationDate must fail closed
+  const badDateRes = await evaluateClassificationWithDb({
+    nganh: 'thuc_pham',
+    capacity: 50,
+    evaluationDate: '2026-13-45',
+  }, { db });
+  assert.equal(badDateRes.conclusionStatus, 'NEEDS_REVIEW');
+  assert.equal(badDateRes.errorCode, 'INVALID_EVALUATION_DATE');
+  assert.equal(badDateRes.hs, null);
+  assert.equal(badDateRes.nhom, null);
+  assert.equal(badDateRes.tq, null);
+  assert.equal(badDateRes.isOfficialConclusion, false);
+
+  // 3. Date outside effective window must fail closed NO_ACTIVE_RULE_FOR_DATE
+  db.state.classification_thresholds
+    .filter(t => t.industry_code === 'thuc_pham')
+    .forEach(t => {
+      t.effective_from = '2026-01-01';
+    });
+  const outWindowRes = await evaluateClassificationWithDb({
+    nganh: 'thuc_pham',
+    capacity: 50,
+    evaluationDate: '2024-06-01',
+  }, { db });
+  assert.equal(outWindowRes.conclusionStatus, 'NEEDS_REVIEW');
+  assert.equal(outWindowRes.errorCode, 'NO_ACTIVE_RULE_FOR_DATE');
+  assert.equal(outWindowRes.hs, null);
+  assert.equal(outWindowRes.nhom, null);
+  assert.equal(outWindowRes.isOfficialConclusion, false);
+});
+
+test('Phase 2 Item 6: Reject client spoofed sensitiveCriteriaVerified & escalate only on server VERIFIED', async () => {
+  const {
+    ensureClassificationSchema,
+    seedClassificationCatalog,
+  } = require('../services/rule-repository');
+
+  const db = createMockClassificationDb();
+  await ensureClassificationSchema(db);
+  await seedClassificationCatalog(db, { indDb: IND_DB, industryMeta: INDUSTRY_META });
+
+  const ind = db.state.industries.find(i => i.code === 'che_bien_go');
+  ind.verification_status = 'VERIFIED';
+  ind.publication_status = 'PUBLISHED';
+  db.state.classification_thresholds
+    .filter(t => t.industry_code === 'che_bien_go')
+    .forEach(t => {
+      t.verification_status = 'VERIFIED';
+      t.publication_status = 'PUBLISHED';
+    });
+
+  // Base che_bien_go capacity=60000 is Nhom II / DTM / cap_so (between 50,000 and 200,000).
+  // Client sends spoofed sensitiveCriteriaVerified: true and insideCoreProtectedZone: true without server verification:
+  const spoofedRes = await evaluateClassificationWithDb({
+    nganh: 'che_bien_go',
+    capacity: 60000,
+    evaluationDate: '2026-06-01',
+    rung: true,
+    sensitiveCriteriaVerified: true,
+    sensitiveDetails: { insideCoreProtectedZone: true, paddyConversionAreaHa: 15 },
+  }, { db });
+  assert.notEqual(spoofedRes.sensitiveVerificationStatus, 'VERIFIED');
+  assert.equal(spoofedRes.isOfficialConclusion, false);
+  assert.equal(spoofedRes.canExportOfficialReport, false);
+  assert.notEqual(spoofedRes.nhom, 'Nhóm I');
+
+  // With server-authoritative VERIFIED record passed via evaluateClassification options:
+  const { loadClassificationCatalog } = require('../services/rule-repository');
+  const loaded = await loadClassificationCatalog({ db });
+  const verifiedRes = evaluateClassification(
+    {
+      nganh: 'che_bien_go',
+      capacity: 60000,
+      evaluationDate: '2026-06-01',
+      rung: true,
+    },
+    {
+      catalog: loaded.catalog,
+      ruleSource: loaded.ruleSource,
+      serverSensitiveVerification: {
+        verification_status: 'VERIFIED',
+        verified_by: 1,
+        evidence_ref: 'VB-BQL-RUNG-2026',
+        declared_flags: { rung: true },
+        declared_details: { insideCoreProtectedZone: true },
+      },
+    }
+  );
+  assert.equal(verifiedRes.sensitiveVerificationStatus, 'VERIFIED');
+  assert.equal(verifiedRes.nhom, 'Nhóm I');
+  assert.equal(verifiedRes.hs, 'DTM');
+  assert.equal(verifiedRes.isOfficialConclusion, true);
 });

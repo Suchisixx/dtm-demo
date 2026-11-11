@@ -1,14 +1,41 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const { paginate, buildPagination, logQuery } = require('../utils/helpers');
 const { ACTIONS, ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 
-const { evaluateClassificationWithDb } = require('../services/classification-service');
-const { calculateImpactRadius } = require('../services/spatial-gis-service');
+const {
+  IND_DB,
+  evaluateClassificationWithDb,
+  evaluateStoredProject,
+} = require('../services/classification-service');
+const { calculateImpactRadius, analyzeSpatialContextWithDb } = require('../services/spatial-gis-service');
+const {
+  loadClassificationCatalog,
+  loadGisLayers,
+  getProjectSensitiveVerification,
+  upsertProjectSensitiveDeclaration,
+  reviewProjectSensitiveVerification,
+} = require('../services/rule-repository');
+
+async function loadSensitiveVerificationMap() {
+  try {
+    const res = await db.query(
+      `SELECT project_id, declared_flags, declared_details, evidence_ref, verification_status, verified_by, verified_at, verification_note
+       FROM project_sensitive_verifications`
+    );
+    const map = new Map();
+    for (const r of (res?.rows || [])) {
+      map.set(Number(r.project_id), r);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
 
 // ── GIS API (trước requireAuth vì route /geo cũng cần auth nhưng query khác) ──
 
@@ -43,14 +70,27 @@ router.get('/geo', requireAuth, async (req, res) => {
       ORDER BY p.created_at DESC
     `);
 
+    const [catalogRes, gisLayersRes, verifMap] = await Promise.all([
+      loadClassificationCatalog({ db }),
+      loadGisLayers({ db }),
+      loadSensitiveVerificationMap(),
+    ]);
+
+    const activeCatalog = catalogRes.ok && catalogRes.catalog ? catalogRes.catalog : IND_DB;
+    const activeRuleSource = catalogRes.ok ? 'DATABASE' : 'FALLBACK_UNVERIFIED';
+    const activeGisLayers = gisLayersRes.ok ? gisLayersRes : null;
+
     const projects = geoRes.rows.map(row => {
-      const fd = row.form_data || {};
-      const fallbackCr = evaluateClassification(fd);
-      const cr = (row.classification_result && row.classification_result.nhom)
-        ? row.classification_result
-        : fallbackCr;
-      const nhomDuAn = cr.nhom || fallbackCr.nhom || 'Nhóm II';
-      const impactRadiusMeters = cr.impactRadiusMeters || calculateImpactRadius(nhomDuAn, fd.nt, fd.kt);
+      const evaluated = evaluateStoredProject(row, {
+        catalog: activeCatalog,
+        ruleSource: activeRuleSource,
+        fallbackReason: catalogRes.error || null,
+        gisLayers: activeGisLayers,
+        serverSensitiveVerification: verifMap.get(Number(row.id)) || null,
+      });
+      const fd = evaluated.formData || {};
+      const nhomDuAn = evaluated.nhom || 'Cần rà soát';
+      const impactRadiusMeters = evaluated.impactRadiusMeters || calculateImpactRadius(evaluated.nhom || 'Nhóm III', fd.nt, fd.kt);
 
       return {
         id: row.id,
@@ -59,9 +99,15 @@ router.get('/geo', requireAuth, async (req, res) => {
         longitude: parseFloat(row.longitude),
         dia_chi: row.dia_chi_hien_thi || fd.tinh || '',
         phuong_xa: row.phuong_xa || '',
-        loai_ho_so: cr.hs || fallbackCr.hs || '—',
+        loai_ho_so: evaluated.hs || '—',
         nhom_du_an: nhomDuAn,
-        co_quan: cr.coQuan || fallbackCr.coQuan || '—',
+        tham_quyen: evaluated.tq || null,
+        co_quan: evaluated.coQuan || '—',
+        conclusion_status: evaluated.conclusionStatus,
+        is_official_conclusion: evaluated.isOfficialConclusion,
+        verification_status: evaluated.classification?.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+        rule_source: evaluated.classification?.ruleSource || activeRuleSource,
+        gis_source: evaluated.spatialAnalysis?.gisSource || (activeGisLayers ? 'DATABASE' : 'FALLBACK_UNVERIFIED'),
         tinh: fd.tinh || '',
         nganh: fd.nganh || '',
         nt: parseFloat(fd.nt) || 0,
@@ -247,14 +293,81 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Không tìm thấy dự án!' });
     }
 
-    return res.json({ project: projectRes.rows[0] });
+    const sensitiveVerification = await getProjectSensitiveVerification(projectId, { db });
+    return res.json({ project: projectRes.rows[0], sensitiveVerification });
   } catch (error) {
     logger.error('Lỗi lấy chi tiết dự án:', error);
     return res.status(500).json({ error: 'Không thể tải chi tiết dự án!' });
   }
 });
 
-// POST /api/projects - Lưu dự án (Tạo mới hoặc Cập nhật) — mở rộng với GIS fields
+// PUT /api/projects/:id/sensitive-verification - Admin xác minh yếu tố nhạy cảm phía Server (Item 6)
+router.put('/:id/sensitive-verification', requireAdmin, async (req, res) => {
+  const projectId = parseInt(req.params.id, 10);
+  if (Number.isNaN(projectId) || projectId <= 0) {
+    return res.status(400).json({ error: 'ID dự án không hợp lệ!' });
+  }
+
+  const {
+    verification_status,
+    verificationStatus,
+    evidence_ref = null,
+    evidenceRef = null,
+    verification_note = null,
+    verificationNote = null,
+  } = req.body || {};
+
+  const targetStatus = String(verification_status || verificationStatus || '').toUpperCase();
+  if (!['VERIFIED', 'REJECTED', 'PENDING_VERIFICATION'].includes(targetStatus)) {
+    return res.status(400).json({ error: 'Trạng thái xác minh không hợp lệ (VERIFIED, REJECTED, PENDING_VERIFICATION)!' });
+  }
+
+  try {
+    const verificationRow = await reviewProjectSensitiveVerification(db, {
+      projectId,
+      verificationStatus: targetStatus,
+      verifiedBy: req.user.id,
+      evidenceRef: evidence_ref ?? evidenceRef ?? null,
+      verificationNote: verification_note ?? verificationNote ?? null,
+    });
+
+    const projRes = await db.query('SELECT * FROM projects WHERE id = $1', [projectId]);
+    const projRow = projRes.rows[0];
+    const fd = typeof projRow.form_data === 'string'
+      ? JSON.parse(projRow.form_data || '{}')
+      : (projRow.form_data || {});
+    if (projRow.latitude !== null && projRow.latitude !== undefined) fd.latitude = projRow.latitude;
+    if (projRow.longitude !== null && projRow.longitude !== undefined) fd.longitude = projRow.longitude;
+
+    const evaluatedResult = await evaluateClassificationWithDb(fd, { db, projectId });
+    const updatedProjRes = await db.query(
+      'UPDATE projects SET classification_result = $1 WHERE id = $2 RETURNING *',
+      [JSON.stringify(evaluatedResult), projectId]
+    );
+
+    await logAudit(req.user.id, ACTIONS.VERIFY_SENSITIVE_CRITERIA, req, {
+      projectId,
+      verificationStatus: targetStatus,
+      evidenceRef: verificationRow.evidence_ref || null,
+      resultingGroup: evaluatedResult.nhom,
+    });
+
+    return res.json({
+      message: `Đã cập nhật trạng thái xác minh vùng nhạy cảm: ${targetStatus}`,
+      sensitiveVerification: verificationRow,
+      project: updatedProjRes.rows[0],
+      classification: evaluatedResult,
+    });
+  } catch (error) {
+    if (error.message === 'PROJECT_NOT_FOUND') {
+      return res.status(404).json({ error: 'Không tìm thấy dự án!' });
+    }
+    logger.error('Lỗi xác minh vùng nhạy cảm:', error);
+    return res.status(500).json({ error: 'Không thể cập nhật trạng thái xác minh vùng nhạy cảm!' });
+  }
+});
+
+// POST /api/projects - Lưu dự án (Tạo mới hoặc Cập nhật) — mở rộng với GIS fields & Sensitive Verification
 router.post('/', async (req, res) => {
   const userId = req.user.id;
   const { id, name, form_data, checklist_state, latitude, longitude, dia_chi_hien_thi, quan_huyen, phuong_xa } = req.body;
@@ -263,12 +376,45 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Tên dự án và dữ liệu biểu mẫu là bắt buộc!' });
   }
 
-  // Luôn thực thi và đồng bộ kết quả phân loại trên Backend từ CSDL (không tin snapshot từ client)
-  const evaluatedResult = await evaluateClassificationWithDb(form_data);
-
   try {
+    const resolvedLat = latitude !== undefined && latitude !== null && latitude !== ''
+      ? latitude
+      : form_data.latitude;
+    const resolvedLng = longitude !== undefined && longitude !== null && longitude !== ''
+      ? longitude
+      : form_data.longitude;
+
+    let spatialSnapshot = null;
+    if (resolvedLat !== undefined && resolvedLat !== null && resolvedLng !== undefined && resolvedLng !== null && resolvedLat !== '' && resolvedLng !== '') {
+      spatialSnapshot = await analyzeSpatialContextWithDb(resolvedLat, resolvedLng, { db });
+    }
+
+    const enrichedFormData = {
+      ...form_data,
+      ...(resolvedLat !== undefined && resolvedLat !== null ? { latitude: resolvedLat } : {}),
+      ...(resolvedLng !== undefined && resolvedLng !== null ? { longitude: resolvedLng } : {}),
+    };
+
     if (id) {
-      // CẬP NHẬT dự án hiện có
+      // Xác nhận quyền sở hữu dự án trước khi đồng bộ khai báo vùng nhạy cảm
+      const existingCheck = await db.query(
+        'SELECT id FROM projects WHERE id = $1 AND user_id = $2',
+        [id, userId]
+      );
+      if (!existingCheck || existingCheck.rowCount === 0) {
+        return res.status(403).json({ error: 'Không tìm thấy dự án hoặc bạn không có quyền cập nhật!' });
+      }
+
+      const sensitiveVerification = await upsertProjectSensitiveDeclaration(db, {
+        projectId: id,
+        declaredFlags: enrichedFormData,
+        declaredDetails: enrichedFormData.sensitiveDetails || {},
+        spatialSnapshot,
+        evidenceRef: enrichedFormData.sensitiveDetails?.evidenceRef || enrichedFormData.sensitiveEvidenceRef || null,
+      });
+
+      const evaluatedResult = await evaluateClassificationWithDb(enrichedFormData, { db, projectId: id });
+
       const updateRes = await db.query(
         `UPDATE projects 
          SET name = $1, form_data = $2, checklist_state = $3,
@@ -281,7 +427,7 @@ router.post('/', async (req, res) => {
          WHERE id = $4 AND user_id = $5 
          RETURNING *`,
         [
-          name, JSON.stringify(form_data), JSON.stringify(checklist_state || {}),
+          name, JSON.stringify(enrichedFormData), JSON.stringify(checklist_state || {}),
           id, userId,
           latitude || null, longitude || null,
           dia_chi_hien_thi || null, quan_huyen || null, phuong_xa || null,
@@ -294,23 +440,24 @@ router.post('/', async (req, res) => {
       }
 
       const project = updateRes.rows[0];
-      
-      // Ghi log bảo mật và truy vấn
       await logAudit(userId, ACTIONS.UPDATE_PROJECT, req, { id: project.id, name: project.name });
-      await logQuery(userId, 'classification', form_data, evaluatedResult);
+      await logQuery(userId, 'classification', enrichedFormData, evaluatedResult);
 
       return res.json({
         message: 'Cập nhật dự án thành công!',
-        project
+        project,
+        sensitiveVerification,
       });
     } else {
-      // TẠO MỚI dự án
+      // TẠO MỚI dự án: không bao giờ tin sensitiveCriteriaVerified thô từ client -> evaluatedResult giữ PENDING/NEEDS_LEGAL_VERIFICATION
+      const evaluatedResult = await evaluateClassificationWithDb(enrichedFormData, { db });
+
       const insertRes = await db.query(
         `INSERT INTO projects (user_id, name, form_data, checklist_state, latitude, longitude, dia_chi_hien_thi, quan_huyen, phuong_xa, classification_result) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
          RETURNING *`,
         [
-          userId, name, JSON.stringify(form_data), JSON.stringify(checklist_state || {}),
+          userId, name, JSON.stringify(enrichedFormData), JSON.stringify(checklist_state || {}),
           latitude || null, longitude || null,
           dia_chi_hien_thi || null, quan_huyen || null, phuong_xa || null,
           JSON.stringify(evaluatedResult)
@@ -318,14 +465,21 @@ router.post('/', async (req, res) => {
       );
 
       const project = insertRes.rows[0];
+      const sensitiveVerification = await upsertProjectSensitiveDeclaration(db, {
+        projectId: project.id,
+        declaredFlags: enrichedFormData,
+        declaredDetails: enrichedFormData.sensitiveDetails || {},
+        spatialSnapshot,
+        evidenceRef: enrichedFormData.sensitiveDetails?.evidenceRef || enrichedFormData.sensitiveEvidenceRef || null,
+      });
 
-      // Ghi log bảo mật và truy vấn
       await logAudit(userId, ACTIONS.CREATE_PROJECT, req, { id: project.id, name: project.name });
-      await logQuery(userId, 'classification', form_data, evaluatedResult);
+      await logQuery(userId, 'classification', enrichedFormData, evaluatedResult);
 
       return res.json({
         message: 'Lưu dự án thành công!',
-        project
+        project,
+        sensitiveVerification,
       });
     }
   } catch (error) {

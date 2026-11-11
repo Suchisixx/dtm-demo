@@ -300,7 +300,7 @@ onMounted(() => {
       <main class="app-content">
         <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
         <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
-        <ClassifyTab v-else-if="activePage === 'classify'" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
+        <ClassifyTab v-else-if="activePage === 'classify'" :currentUser="currentUser" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
         <QCVNTab v-else-if="activePage === 'qcvn'" :loadSampleId="pendingSampleId" @sample-loaded="pendingSampleId = null" />
         <MapTab v-else-if="activePage === 'map'" @view-project="handleViewProject" />
         <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />

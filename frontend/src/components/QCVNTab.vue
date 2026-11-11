@@ -111,7 +111,19 @@ const pasteArea = ref('')
 const sampleId = ref(null)
 const measuredValues = ref({})
 const receivingWaterConfirmed = ref(false)
+const flowRate = ref(null)
+const receivingWaterClass = ref('')
+const isExistingFacility = ref(false)
+const isUrbanArea = ref(false)
+const evaluationDate = ref(new Date().toISOString().slice(0, 10))
 const samplingPeriods = ref({ _default: '' })
+
+const serverSelection = ref(null)
+const serverEvaluation = ref(null)
+const isSelectingQcvn = ref(false)
+const isEvaluatingServer = ref(false)
+const selectionMismatchWarning = ref('')
+let evaluateServerTimer = null
 
 const loadedSamples = ref([])
 const currentPage = ref(1)
@@ -259,6 +271,142 @@ const activeSamplingPeriods = computed(() => {
   return p._default ? { _default: p._default } : {}
 })
 
+const buildQcvnSelectionPayload = (projectOverride = null) => {
+  const proj = projectOverride || linkedProject.value
+  const parsedFlow = (flowRate.value === '' || flowRate.value === null || flowRate.value === undefined)
+    ? null
+    : Number(flowRate.value)
+  return {
+    project_id: proj?.id || null,
+    nganh: proj?.nganh || proj?.form_data?.nganh || null,
+    sourceType: selectedType.value || null,
+    receivingWaterClass: receivingWaterClass.value || null,
+    receivingWaterConfirmed: Boolean(receivingWaterConfirmed.value && (!needsReceivingConfirmation.value || receivingWaterClass.value || selectedType.value === 'nuoc_mat')),
+    flowRate: parsedFlow !== null && !Number.isNaN(parsedFlow) ? parsedFlow : null,
+    isUrbanArea: Boolean(isUrbanArea.value),
+    isExistingFacility: Boolean(isExistingFacility.value),
+    evaluationDate: evaluationDate.value || new Date().toISOString().slice(0, 10),
+  }
+}
+
+const formatSelectionNotice = (sel) => {
+  if (!sel) return ''
+  if (sel.status === 'OK' && sel.qcvnId) {
+    const stdName = sel.applicableStandard || sel.qcvnId
+    const verInfo = sel.ruleVersion ? ` | v${sel.ruleVersion}` : ''
+    return `Server chọn QCVN: ${stdName} (${sel.ruleSource || 'DATABASE'}${verInfo})`
+  }
+  return `⚠ Cần rà soát (${sel.reason || sel.status || 'NEEDS_REVIEW'}): ${sel.message || 'Chưa đủ điều kiện chọn QCVN tự động.'}`
+}
+
+const requestServerQcvnSelection = async ({ projectOverride = null, clearSourceType = false } = {}) => {
+  isSelectingQcvn.value = true
+  try {
+    const payload = buildQcvnSelectionPayload(projectOverride)
+    if (clearSourceType) {
+      payload.sourceType = null
+    }
+    const res = await fetch(API.QCVN_SELECT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    if (res.ok) {
+      const data = await res.json()
+      serverSelection.value = data
+      selectionMismatchWarning.value = ''
+      if (data.status === 'OK' && data.qcvnId) {
+        isAutoMatching.value = true
+        if (data.sourceType) selectedType.value = data.sourceType
+        selectedSubType.value = data.qcvnId
+        await nextTick()
+        isAutoMatching.value = false
+      } else if (data.sourceType && clearSourceType) {
+        isAutoMatching.value = true
+        selectedType.value = data.sourceType
+        await nextTick()
+        isAutoMatching.value = false
+      }
+      autoMatchMessage.value = formatSelectionNotice(data)
+      return data
+    }
+    const errPayload = await res.json().catch(() => ({}))
+    serverSelection.value = {
+      status: 'NEEDS_REVIEW',
+      reason: errPayload.reason || `HTTP_${res.status}`,
+      message: errPayload.error || 'Không thể chọn QCVN từ máy chủ.',
+      isOfficialConclusion: false,
+      ruleSource: 'FALLBACK_UNVERIFIED',
+    }
+    autoMatchMessage.value = formatSelectionNotice(serverSelection.value)
+    return serverSelection.value
+  } catch (err) {
+    logger.error('Lỗi gọi POST /api/qcvns/select:', err)
+    serverSelection.value = {
+      status: 'NEEDS_REVIEW',
+      reason: 'SERVER_UNREACHABLE',
+      message: 'Không kết nối được API chọn QCVN phía máy chủ — kết luận hạ xuống Cần rà soát.',
+      isOfficialConclusion: false,
+      ruleSource: 'FALLBACK_UNVERIFIED',
+    }
+    autoMatchMessage.value = formatSelectionNotice(serverSelection.value)
+    return serverSelection.value
+  } finally {
+    isSelectingQcvn.value = false
+  }
+}
+
+const requestServerQcvnEvaluation = async () => {
+  if (!currentQcvn.value) {
+    serverEvaluation.value = null
+    return null
+  }
+  isEvaluatingServer.value = true
+  try {
+    const finalValues = {}
+    currentQcvn.value.tham_so.forEach(p => {
+      if (p.nhom) return
+      const val = measuredValues.value[p.key]
+      if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
+        finalValues[p.key] = parseFloat(val)
+      }
+    })
+    const selCtx = buildQcvnSelectionPayload()
+    const res = await fetch(API.QCVN_EVALUATE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sub_type: selectedSubType.value,
+        values: finalValues,
+        samplingPeriods: activeSamplingPeriods.value,
+        permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+        ...selCtx,
+      })
+    })
+    if (res.ok) {
+      const data = await res.json()
+      serverEvaluation.value = data.evaluation || null
+      if (data.serverSelection) {
+        serverSelection.value = data.serverSelection
+      }
+      if (data.evaluation?.reason === 'QCVN_SELECTION_MISMATCH') {
+        selectionMismatchWarning.value = data.evaluation.unverifiedReasons?.[0] || 'QCVN đã chọn lệch với kết quả server select.'
+      } else {
+        selectionMismatchWarning.value = ''
+      }
+      return data.evaluation
+    }
+    serverEvaluation.value = null
+    return null
+  } catch (err) {
+    logger.warn('Không thể đồng bộ đánh giá QCVN từ server:', err)
+    serverEvaluation.value = null
+    return null
+  } finally {
+    isEvaluatingServer.value = false
+  }
+}
+
 const sampleEvaluation = computed(() => {
   if (!currentQcvn.value) {
     return {
@@ -275,6 +423,10 @@ const sampleEvaluation = computed(() => {
       evaluatedParams: [],
       summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0, invalidPermitLimits: 0 },
     }
+  }
+
+  if (serverEvaluation.value && serverEvaluation.value.qcvnId === selectedSubType.value) {
+    return serverEvaluation.value
   }
 
   return evaluateQcvnSample({
@@ -418,7 +570,15 @@ const clearValues = () => {
   sampleName.value = ''
   sampleId.value = null
   receivingWaterConfirmed.value = false
+  flowRate.value = null
+  receivingWaterClass.value = ''
+  isExistingFacility.value = false
+  isUrbanArea.value = false
+  evaluationDate.value = new Date().toISOString().slice(0, 10)
   samplingPeriods.value = { _default: '' }
+  serverSelection.value = null
+  serverEvaluation.value = null
+  selectionMismatchWarning.value = ''
   unsavedChanges.value = false
   linkedProject.value = null
   projectSearchQuery.value = ''
@@ -448,115 +608,23 @@ const searchProjects = (query) => {
 
 const autoMatchQcvnFromProject = async (project) => {
   if (!project) return
-  const nganh = project.nganh || project.form_data?.nganh || ''
-  const nt = Number(project.nt || project.form_data?.nt || 0)
-  const receivingCol = project.form_data?.receivingWaterClass || null
+  const nganhCode = project.nganh || project.form_data?.nganh || ''
+  const ntVal = Number(project.nt || project.form_data?.nt || 0)
+  const receivingCol = project.form_data?.receivingWaterClass || ''
   const confirmedReceiving = Boolean(project.form_data?.receivingWaterConfirmed && receivingCol)
   const isExisting = Boolean(project.form_data?.isExistingFacility || project.form_data?.morongdt)
 
-  let matchedType = null
-  let matchedSubType = null
-  let reviewWarning = ''
+  isAutoMatching.value = true
+  flowRate.value = ntVal > 0 ? ntVal : null
+  receivingWaterClass.value = receivingCol
+  receivingWaterConfirmed.value = confirmedReceiving
+  isExistingFacility.value = isExisting
+  isUrbanArea.value = nganhCode === 'do_thi'
+  await nextTick()
+  isAutoMatching.value = false
 
-  // 1. Nhóm ngành công nghiệp chế biến / sản xuất / KCN -> Nước thải công nghiệp (QCVN 40:2025)
-  const industrialNganh = [
-    'che_bien_go', 'xi_mang', 'thep', 'hoa_chat', 'giay_bot',
-    'det_nhuom', 'thuc_pham', 'nhua_cao_su', 'cao_su_cb',
-    'duoc_pham', 'kcn'
-  ]
-
-  // 2. Nhóm đô thị / dịch vụ / chăn nuôi / y tế -> Nước thải sinh hoạt (QCVN 14:2025)
-  const domesticNganh = [
-    'do_thi', 'trung_tam_tm', 'khach_san', 'chan_nuoi', 'benh_vien'
-  ]
-
-  // 3. Nhóm thủy sản / nạo vét / thủy điện -> Nước mặt (QCVN 08:2023)
-  const surfaceWaterNganh = [
-    'nuoi_thuy_san', 'nao_vet', 'thuy_dien'
-  ]
-
-  // 4. Nhóm hạ tầng giao thông -> Không khí xung quanh (QCVN 05:2023)
-  const airNganh = [
-    'cao_toc', 'cang_bien'
-  ]
-
-  if (industrialNganh.includes(nganh)) {
-    matchedType = 'nuoc_thai_cn'
-    const decision = selectApplicableQcvn({
-      sourceType: 'nuoc_thai_cn',
-      receivingWaterClass: receivingCol,
-      receivingWaterConfirmed: confirmedReceiving,
-      flowRate: nt > 0 ? nt : null,
-      isExistingFacility: isExisting,
-      qcvnDatabase: runtimeQcvnData.value,
-      ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
-    })
-    if (decision.status === 'OK' && decision.qcvnId) {
-      matchedSubType = decision.qcvnId
-      receivingWaterConfirmed.value = confirmedReceiving
-    } else {
-      reviewWarning = decision.message || 'Cần bổ sung lưu lượng xả thải và xác nhận cột nguồn tiếp nhận trước khi chọn QCVN 40.'
-      receivingWaterConfirmed.value = false
-    }
-  } else if (domesticNganh.includes(nganh)) {
-    matchedType = 'nuoc_thai_sh'
-    const isUrban = nganh === 'do_thi'
-    const decision = selectApplicableQcvn({
-      sourceType: 'nuoc_thai_sh',
-      receivingWaterClass: receivingCol,
-      receivingWaterConfirmed: confirmedReceiving,
-      isUrbanArea: isUrban,
-      isExistingFacility: isExisting,
-      qcvnDatabase: runtimeQcvnData.value,
-      ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
-    })
-    if (decision.status === 'OK' && decision.qcvnId) {
-      matchedSubType = decision.qcvnId
-      receivingWaterConfirmed.value = confirmedReceiving
-    } else {
-      reviewWarning = decision.message || 'Cần xác nhận cột nguồn tiếp nhận trước khi chọn QCVN 14.'
-      receivingWaterConfirmed.value = false
-    }
-  } else if (surfaceWaterNganh.includes(nganh)) {
-    matchedType = 'nuoc_mat'
-    if (nganh === 'nuoi_thuy_san') {
-      matchedSubType = 'qcvn08_b'
-    } else if (nganh === 'nao_vet') {
-      matchedSubType = 'qcvn08_c'
-    } else {
-      matchedSubType = 'qcvn08_a'
-    }
-  } else if (airNganh.includes(nganh)) {
-    matchedType = 'khong_khi'
-    matchedSubType = 'qcvn05_24h'
-  }
-
-  if (matchedType && matchedSubType) {
-    isAutoMatching.value = true
-    selectedType.value = matchedType
-    selectedSubType.value = matchedSubType
-    await nextTick()
-    isAutoMatching.value = false
-
-    const typeLabels = {
-      nuoc_mat: 'Nước mặt (QCVN 08:2023)',
-      nuoc_thai_cn: 'Nước thải công nghiệp (QCVN 40:2025)',
-      nuoc_thai_sh: 'Nước thải sinh hoạt & đô thị (QCVN 14:2025)',
-      khi_thai_cn: 'Khí thải công nghiệp (QCVN 19:2024)',
-      khong_khi: 'Không khí xung quanh (QCVN 05:2023)',
-      nuoc_duoi_dat: 'Nước dưới đất (QCVN 09:2023)',
-      dat: 'Chất lượng đất (QCVN 03:2023)'
-    }
-    const subObj = (SUB_TYPES[matchedType] || []).find(s => s.value === matchedSubType)
-    autoMatchMessage.value = `Gợi ý quy chuẩn: ${typeLabels[matchedType] || matchedType} — ${subObj ? subObj.text : matchedSubType}`
-  } else if (reviewWarning) {
-    if (matchedType) {
-      selectedType.value = matchedType
-    }
-    autoMatchMessage.value = `⚠ Cần rà soát: ${reviewWarning}`
-  } else {
-    autoMatchMessage.value = ''
-  }
+  await requestServerQcvnSelection({ projectOverride: project, clearSourceType: true })
+  await requestServerQcvnEvaluation()
 }
 
 const selectLinkedProject = (project) => {
@@ -571,6 +639,9 @@ const selectLinkedProject = (project) => {
 const unlinkProject = () => {
   linkedProject.value = null
   autoMatchMessage.value = ''
+  serverSelection.value = null
+  serverEvaluation.value = null
+  selectionMismatchWarning.value = ''
   unsavedChanges.value = true
 }
 
@@ -595,6 +666,7 @@ const saveSample = async () => {
     })
   }
 
+  const selCtx = buildQcvnSelectionPayload()
   const payload = {
     id: sampleId.value,
     name: sampleName.value,
@@ -604,7 +676,12 @@ const saveSample = async () => {
     project_id: linkedProject.value?.id || null,
     samplingPeriods: activeSamplingPeriods.value,
     permitLimits: linkedProject.value?.form_data?.permitLimits || null,
-    receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
+    receivingWaterConfirmed: selCtx.receivingWaterConfirmed,
+    flowRate: selCtx.flowRate,
+    receivingWaterClass: selCtx.receivingWaterClass,
+    isExistingFacility: selCtx.isExistingFacility,
+    isUrbanArea: selCtx.isUrbanArea,
+    evaluationDate: selCtx.evaluationDate,
   }
 
   try {
@@ -619,6 +696,13 @@ const saveSample = async () => {
     if (res.ok) {
       const data = await res.json()
       const srvEval = data.evaluation
+      if (srvEval) serverEvaluation.value = srvEval
+      if (data.serverSelection) serverSelection.value = data.serverSelection
+      if (srvEval?.reason === 'QCVN_SELECTION_MISMATCH') {
+        selectionMismatchWarning.value = srvEval.unverifiedReasons?.[0] || 'Cảnh báo lệch QCVN so với thông số chọn phía server (QCVN_SELECTION_MISMATCH).'
+      } else {
+        selectionMismatchWarning.value = ''
+      }
       const statusSuffix = srvEval && !srvEval.isOfficialConclusion
         ? ` (Trạng thái Server: ${srvEval.overallStatus} — ${srvEval.trang_thai_tong_quat})`
         : ''
@@ -627,7 +711,8 @@ const saveSample = async () => {
       sampleId.value = data.sample.id
       fetchSamples(currentPage.value)
     } else {
-      alert('Đã xảy ra lỗi khi lưu mẫu kết quả quan trắc!')
+      const errData = await res.json().catch(() => ({}))
+      alert(errData.error || 'Đã xảy ra lỗi khi lưu mẫu kết quả quan trắc!')
     }
   } catch (err) {
     logger.error('Lỗi lưu mẫu:', err)
@@ -647,6 +732,16 @@ const selectSample = async (sample) => {
   measuredValues.value = sample.values || {}
   const details = sample.evaluation_details || {}
   receivingWaterConfirmed.value = Boolean(details.receivingWaterConfirmed)
+  flowRate.value = details.serverSelectionContext?.flowRate ?? null
+  receivingWaterClass.value = details.serverSelectionContext?.receivingWaterClass || ''
+  isExistingFacility.value = Boolean(details.serverSelectionContext?.isExistingFacility)
+  isUrbanArea.value = Boolean(details.serverSelectionContext?.isUrbanArea)
+  evaluationDate.value = details.evaluationDate || new Date().toISOString().slice(0, 10)
+  serverSelection.value = details.serverSelection || null
+  serverEvaluation.value = details.overallStatus ? { ...details, qcvnId: sample.sub_type, trang_thai_tong_quat: sample.trang_thai_tong_quat } : null
+  selectionMismatchWarning.value = details.reason === 'QCVN_SELECTION_MISMATCH'
+    ? (details.unverifiedReasons?.[0] || 'Mẫu từng lưu có cảnh báo lệch QCVN so với server select.')
+    : ''
   samplingPeriods.value = details.samplingPeriods && details.samplingPeriods._default
     ? { _default: details.samplingPeriods._default }
     : { _default: '' }
@@ -746,8 +841,39 @@ watch(selectedType, (newType) => {
   }
   measuredValues.value = {}
   receivingWaterConfirmed.value = false
+  receivingWaterClass.value = ''
+  serverSelection.value = null
+  serverEvaluation.value = null
+  selectionMismatchWarning.value = ''
   unsavedChanges.value = false
 })
+
+watch(
+  [flowRate, receivingWaterClass, receivingWaterConfirmed, isExistingFacility, isUrbanArea, evaluationDate],
+  () => {
+    if (isAutoMatching.value || isSelectingQcvn.value) return
+    clearTimeout(evaluateServerTimer)
+    evaluateServerTimer = setTimeout(async () => {
+      if (['nuoc_thai_cn', 'nuoc_thai_sh', 'nuoc_mat'].includes(selectedType.value) && (receivingWaterClass.value || flowRate.value !== null || isExistingFacility.value || receivingWaterConfirmed.value)) {
+        await requestServerQcvnSelection({ clearSourceType: false })
+      }
+      await requestServerQcvnEvaluation()
+    }, 350)
+  }
+)
+
+watch(
+  [selectedSubType, measuredValues, samplingPeriods],
+  () => {
+    unsavedChanges.value = true
+    if (isAutoMatching.value || isSelectingQcvn.value) return
+    clearTimeout(evaluateServerTimer)
+    evaluateServerTimer = setTimeout(() => {
+      requestServerQcvnEvaluation()
+    }, 350)
+  },
+  { deep: true }
+)
 
 watch(measuredValues, () => {
   unsavedChanges.value = true
@@ -992,6 +1118,10 @@ const showQuickPaste = ref(false)
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn-secondary" @click="requestServerQcvnEvaluation" :disabled="isEvaluatingServer" title="Gửi số liệu lên API /api/qcvns/evaluate để đối chiếu theo DB">
+            <i class="ti ti-server"></i>
+            <span>{{ isEvaluatingServer ? 'Đang đối chiếu...' : 'Đối chiếu Server' }}</span>
+          </button>
           <button type="button" class="btn-primary" @click="saveSample">
             <i class="ti ti-device-floppy"></i>
             <span>Lưu kết quả mẫu</span>
@@ -1019,17 +1149,43 @@ const showQuickPaste = ref(false)
         </div>
       </div>
 
-      <!-- Row 3: Completeness, Source Confirmation & Sampling Period Gates -->
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-        <label v-if="needsReceivingConfirmation"
-               style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer">
-          <input type="checkbox" v-model="receivingWaterConfirmed" />
-          <span>Đã xác nhận nguồn tiếp nhận &amp; Cột áp dụng (bắt buộc cho nước mặt / nước thải)</span>
-        </label>
+      <!-- Row 3: Completeness, Source Confirmation, Flow Rate & Sampling Period Gates -->
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <template v-if="needsReceivingConfirmation">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+            <label class="form-label" style="margin:0;white-space:nowrap">Cột / Phân vùng:</label>
+            <select v-model="receivingWaterClass" style="width:118px;height:34px;font-size:12.5px">
+              <option value="">Chưa chọn</option>
+              <option value="A">Cột A</option>
+              <option value="B">Cột B</option>
+              <option value="C" v-if="selectedType === 'nuoc_mat' || selectedType === 'nuoc_thai_cn'">Cột C</option>
+            </select>
+          </div>
+
+          <div v-if="selectedType === 'nuoc_thai_cn' || selectedType === 'nuoc_thai_sh'" style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+            <label class="form-label" style="margin:0;white-space:nowrap">Lưu lượng F (m³/ngày):</label>
+            <input type="number" v-model="flowRate" min="0" step="any" placeholder="VD: 120" style="width:105px;height:34px;font-size:12.5px" />
+          </div>
+
+          <label v-if="selectedType === 'nuoc_thai_sh'" style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+            <input type="checkbox" v-model="isUrbanArea" />
+            <span>Khu đô thị</span>
+          </label>
+
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+            <input type="checkbox" v-model="isExistingFacility" />
+            <span>Cơ sở hiện hữu / chuyển tiếp</span>
+          </label>
+
+          <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer">
+            <input type="checkbox" v-model="receivingWaterConfirmed" />
+            <span>Đã xác nhận nguồn tiếp nhận &amp; Cột áp dụng</span>
+          </label>
+        </template>
 
         <div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
           <label class="form-label" style="margin:0;white-space:nowrap">Chu kỳ lấy mẫu / trung bình:</label>
-          <select v-model="samplingPeriods._default" style="width:185px;height:34px;font-size:12.5px">
+          <select v-model="samplingPeriods._default" style="width:175px;height:34px;font-size:12.5px">
             <option value="">Theo quy định từng chỉ tiêu</option>
             <option value="1 giờ">Trung bình 1 giờ</option>
             <option value="8 giờ">Trung bình 8 giờ</option>
@@ -1038,11 +1194,30 @@ const showQuickPaste = ref(false)
           </select>
         </div>
 
+        <button type="button" class="btn-secondary btn-sm" :disabled="isSelectingQcvn" @click="requestServerQcvnSelection({ clearSourceType: false })" title="Gọi POST /api/qcvns/select xác định QCVN từ Server">
+          <i class="ti ti-sparkles"></i>
+          <span>{{ isSelectingQcvn ? 'Đang chọn...' : 'Chọn QCVN từ Server' }}</span>
+        </button>
+
         <span class="chip" :class="qcvnRuleSource === 'DATABASE' ? 'chip-info' : 'chip-gray'" style="margin-left:auto;font-size:11px">
           Catalog: {{ qcvnRuleSource }}
           <template v-if="currentQcvn?.status"> · {{ currentQcvn.status }}</template>
+          <template v-if="serverSelection?.ruleVersion"> · v{{ serverSelection.ruleVersion }}</template>
         </span>
       </div>
+    </div>
+
+    <!-- QCVN_SELECTION_MISMATCH / SERVER SELECTION ALERT -->
+    <div v-if="selectionMismatchWarning"
+         class="no-print"
+         style="margin-bottom:14px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--danger-border);background:var(--red-bg);color:var(--red);font-size:12.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <strong><i class="ti ti-alert-octagon"></i> Lệch lựa chọn QCVN so với Server (QCVN_SELECTION_MISMATCH):</strong>
+        {{ selectionMismatchWarning }}
+      </div>
+      <button v-if="serverSelection?.qcvnId" type="button" class="btn-secondary btn-sm" @click="requestServerQcvnSelection({ clearSourceType: false })">
+        Đồng bộ theo Server ({{ serverSelection.qcvnId }})
+      </button>
     </div>
 
     <!-- FALLBACK / VERIFICATION / INCOMPLETE BANNER (Q-02, Q-05, Q-10, Q-11) -->

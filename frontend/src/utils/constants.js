@@ -16,12 +16,20 @@ export const API = {
   LAWS: '/api/laws',
   QCVNS: '/api/qcvns',
   QCVN_SAMPLES: '/api/qcvns/samples',
+  QCVN_SELECT: '/api/qcvns/select',
+  QCVN_EVALUATE: '/api/qcvns/evaluate',
   CLASSIFY: '/api/classification/evaluate',
   CLASSIFY_METADATA: '/api/classification/metadata',
   CLASSIFY_SPATIAL_CHECK: '/api/classification/spatial-check',
   CLASSIFY_GIS_LAYERS: '/api/classification/gis-layers',
   ADMIN_USERS: '/api/admin/users',
   ADMIN_PROJECTS: '/api/admin/projects',
+  ADMIN_RULES_IMPACTS: '/api/admin/rules/impacts',
+  ADMIN_RULES_CANDIDATES: '/api/admin/rules/candidates',
+  ADMIN_RULES_CATALOG: '/api/admin/rules/catalog',
+  ADMIN_RULES_QCVN_VERIFY: '/api/admin/rules/qcvns',
+  ADMIN_RULES_QCVN_TRANSITIONAL: '/api/admin/rules/qcvns/transitional/upsert',
+  ADMIN_RULES_INDUSTRY_VERIFY: '/api/admin/rules/industries',
   CRAWLER_SETTINGS: '/api/crawler/settings',
   CRAWLER_RUN: '/api/crawler/run',
   CRAWLER_HISTORY: '/api/crawler/history',
@@ -32,6 +40,7 @@ export const API = {
 
 // Helper function cho endpoints có param
 export const projectQcvnSamples = (id) => `/api/projects/${id}/qcvn-samples`
+export const projectSensitiveVerification = (id) => `/api/projects/${id}/sensitive-verification`
 
 // Tile Layer configs (100% Free, No API Key Required — Modern, Landuse & Satellite Hybrid)
 export const CARTO_VOYAGER_URL = 'https://mt{s}.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}'

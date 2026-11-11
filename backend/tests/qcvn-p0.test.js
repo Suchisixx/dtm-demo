@@ -25,7 +25,7 @@ function createMockQcvnDb({ failQuery = false } = {}) {
       const trimmed = sql.trim().replace(/\s+/g, ' ');
       state.queries.push(trimmed);
 
-      if (/^ALTER TABLE/i.test(trimmed)) return { rows: [], rowCount: 0 };
+      if (/^(CREATE|ALTER) TABLE/i.test(trimmed)) return { rows: [], rowCount: 0 };
       if (trimmed.startsWith('SELECT id, standard_code, verification_status, publication_status, verified_by FROM qcvns WHERE id = $1')) {
         const rows = state.qcvns.filter(r => r.id === params[0]);
         return { rows, rowCount: rows.length };
@@ -311,4 +311,183 @@ test('QV-11 & QV-17 & Q-10 Range GPMT: Thieu chi tieu bat buoc, sai chu ky CO 8h
   assert.equal(validRangePass.overallStatus, 'PASS');
   assert.equal(validRangePass.trang_thai_tong_quat, 'dat');
   assert.equal(validRangePass.evaluatedParams[0].permitCompliant, true);
+});
+
+test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate & Admin transitional upsert', async () => {
+  const {
+    ensureQcvnSchema,
+    seedQcvnCatalog,
+    verifyAndPublishQcvn,
+    upsertTransitionalQcvn,
+  } = require('../services/rule-repository');
+  const {
+    selectQcvnForProjectWithDb,
+    getIndustryQcvnMapping,
+  } = require('../services/qcvn-service');
+
+  // Mock DB supporting qcvns, projects, and upsert/verify operations
+  const state = { qcvns: [] };
+  const mockDb = {
+    async query(sql, params = []) {
+      const s = String(sql).replace(/\s+/g, ' ').trim();
+      if (/^(CREATE|ALTER)/i.test(s)) return { rows: [], rowCount: 0 };
+      if (/SELECT id,.*FROM qcvns WHERE id = \$1/i.test(s)) {
+        const found = state.qcvns.filter(q => q.id === params[0]);
+        return { rows: found.map(q => ({ ...q })), rowCount: found.length };
+      }
+      if (/SELECT \* FROM qcvns WHERE id = \$1/i.test(s)) {
+        const found = state.qcvns.filter(q => q.id === params[0]);
+        return { rows: found, rowCount: found.length };
+      }
+      if (/INSERT INTO qcvns/i.test(s)) {
+        const isVerifiedInsert = /'VERIFIED'/.test(s);
+        const obj = isVerifiedInsert
+          ? {
+              id: params[0],
+              ten: params[1],
+              ap_dung: params[2],
+              tham_so: JSON.parse(params[3]),
+              standard_code: params[4],
+              standard_version: params[5],
+              status: params[6],
+              source_type: params[7],
+              column_code: params[8],
+              flow_range: params[9],
+              effective_from: params[10],
+              effective_to: params[11],
+              mandatory_for_all_from: params[12],
+              replaces: params[13] ? JSON.parse(params[13]) : null,
+              transition_rules: params[14] ? JSON.parse(params[14]) : null,
+              verification_status: 'VERIFIED',
+              publication_status: params[18] || 'PUBLISHED',
+              source_document: params[15],
+              rule_version: params[16],
+              verified_by: params[17],
+            }
+          : {
+              id: params[0],
+              ten: params[1],
+              ap_dung: params[2],
+              tham_so: JSON.parse(params[3]),
+              standard_code: params[4],
+              standard_version: params[5],
+              status: params[6],
+              source_type: params[7],
+              column_code: params[8],
+              flow_range: params[9],
+              effective_from: params[10],
+              effective_to: params[11],
+              mandatory_for_all_from: params[12],
+              replaces: params[13] ? JSON.parse(params[13]) : null,
+              transition_rules: params[14] ? JSON.parse(params[14]) : null,
+              verification_status: params[15] || 'NEEDS_LEGAL_VERIFICATION',
+              publication_status: params[16] || 'PUBLISHED',
+              rule_version: params[17] || '2026.1',
+              verified_by: null,
+            };
+        state.qcvns.push(obj);
+        return { rows: [obj], rowCount: 1 };
+      }
+      if (/UPDATE qcvns SET/i.test(s)) {
+        const q = state.qcvns.find(x => x.id === params[0]);
+        if (!q) return { rows: [], rowCount: 0 };
+        q.ten = params[1];
+        q.ap_dung = params[2];
+        q.tham_so = JSON.parse(params[3]);
+        q.status = params[6];
+        q.source_type = params[7];
+        q.column_code = params[8];
+        q.flow_range = params[9];
+        q.effective_from = params[10];
+        q.effective_to = params[11];
+        q.mandatory_for_all_from = params[12];
+        q.source_document = params[15];
+        q.rule_version = params[16];
+        q.verified_by = params[17];
+        q.publication_status = params[18] || 'PUBLISHED';
+        q.verification_status = 'VERIFIED';
+        return { rows: [q], rowCount: 1 };
+      }
+      if (/FROM qcvns ORDER BY id/i.test(s)) {
+        return { rows: state.qcvns, rowCount: state.qcvns.length };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  };
+
+  await ensureQcvnSchema(mockDb);
+  await seedQcvnCatalog(mockDb, { qcvnData: QCVN_DATA });
+
+  // Verify industry mapping covers all industry codes
+  assert.equal(getIndustryQcvnMapping('thep').sourceType, 'nuoc_thai_cn');
+  assert.equal(getIndustryQcvnMapping('khai_thac_ks').sourceType, 'nuoc_thai_cn');
+  assert.equal(getIndustryQcvnMapping('do_thi').isUrbanArea, true);
+
+  // Verify qcvn40_a_low as Admin
+  await verifyAndPublishQcvn(mockDb, {
+    id: 'qcvn40_a_low',
+    sourceDocument: 'QCVN 40:2025/BTNMT',
+    verifiedBy: 'admin',
+  });
+
+  // Server QCVN select for 'thep' new facility
+  const selOk = await selectQcvnForProjectWithDb({
+    nganh: 'thep',
+    receivingWaterClass: 'A',
+    receivingWaterConfirmed: true,
+    flowRate: 200,
+    isExistingFacility: false,
+  }, { db: mockDb });
+  assert.equal(selOk.status, 'OK');
+  assert.equal(selOk.sourceType, 'nuoc_thai_cn');
+  assert.equal(selOk.qcvnId, 'qcvn40_a_low');
+
+  // Missing flow rate fails closed
+  const selMissingFlow = await selectQcvnForProjectWithDb({
+    nganh: 'thep',
+    receivingWaterClass: 'A',
+    receivingWaterConfirmed: true,
+    flowRate: null,
+  }, { db: mockDb });
+  assert.equal(selMissingFlow.status, 'NEEDS_REVIEW');
+  assert.equal(selMissingFlow.reason, 'MISSING_FLOW_RATE');
+
+  // Existing facility in transitional window without qcvn40_2011_* must fail closed
+  const selTransMissing = await selectQcvnForProjectWithDb({
+    nganh: 'thep',
+    receivingWaterClass: 'B',
+    receivingWaterConfirmed: true,
+    flowRate: 200,
+    isExistingFacility: true,
+    evaluationDate: '2026-06-01',
+  }, { db: mockDb });
+  assert.equal(selTransMissing.status, 'NEEDS_REVIEW');
+  assert.equal(selTransMissing.reason, 'TRANSITION_TABLE_NOT_AVAILABLE');
+
+  // Admin inserts & verifies QCVN 40:2011 Cột B -> now resolves qcvn40_2011_b
+  await upsertTransitionalQcvn(mockDb, {
+    id: 'qcvn40_2011_b',
+    ten: 'QCVN 40:2011/BTNMT Cột B',
+    apDung: 'Cơ sở hiện hữu trước 2025',
+    columnCode: 'B',
+    effectiveFrom: '2011-12-15',
+    effectiveTo: '2026-12-31',
+    sourceDocument: 'TT 47/2011/TT-BTNMT',
+    verifiedBy: 'admin',
+    thamSo: [
+      { key: 'pH', ten: 'pH', don_vi: '-', loai: 'range', min: 5.5, max: 9, required: true },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 150, required: true },
+    ],
+  });
+
+  const selTransOk = await selectQcvnForProjectWithDb({
+    nganh: 'thep',
+    receivingWaterClass: 'B',
+    receivingWaterConfirmed: true,
+    flowRate: 200,
+    isExistingFacility: true,
+    evaluationDate: '2026-06-01',
+  }, { db: mockDb });
+  assert.equal(selTransOk.status, 'OK');
+  assert.equal(selTransOk.qcvnId, 'qcvn40_2011_b');
 });

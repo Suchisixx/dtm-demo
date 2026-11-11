@@ -1,13 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
+const jwt = require('jsonwebtoken');
 const { requireAuth } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const { paginate, buildPagination, logQuery } = require('../utils/helpers');
-const { ACTIONS } = require('../utils/constants');
+const { ACTIONS, JWT_SECRET, COOKIE_NAME, ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 const { loadQcvnCatalog } = require('../services/rule-repository');
-const { evaluateQcvnSampleWithDb } = require('../services/qcvn-service');
+const {
+  evaluateQcvnSampleWithDb,
+  selectQcvnForProjectWithDb,
+  INDUSTRY_TO_QCVN_SOURCE,
+} = require('../services/qcvn-service');
+
+function resolveOptionalUser(req) {
+  if (req.user) return req.user;
+  const token = req.cookies?.[COOKIE_NAME];
+  if (!token) return null;
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
 
 // GET /api/qcvns - Lấy toàn bộ danh sách QCVN kèm metadata đầy đủ từ PostgreSQL
 router.get('/', async (req, res) => {
@@ -35,6 +51,187 @@ router.get('/', async (req, res) => {
   } catch (error) {
     logger.error('Lỗi lấy danh sách QCVN:', error);
     return res.status(500).json({ error: 'Không thể tải dữ liệu quy chuẩn QCVN!' });
+  }
+});
+
+// POST /api/qcvns/select - Xác định QCVN áp dụng hoàn toàn phía Server
+router.post('/select', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const projectId = body.project_id ?? body.projectId ?? null;
+    const optionalUser = resolveOptionalUser(req);
+
+    if (projectId) {
+      if (!optionalUser) {
+        return res.status(401).json({ error: 'Vui lòng đăng nhập để chọn QCVN theo dự án đã lưu!' });
+      }
+      const ownerRes = await db.query(
+        'SELECT id, user_id FROM projects WHERE id = $1',
+        [Number(projectId)]
+      );
+      if (!ownerRes || ownerRes.rowCount === 0) {
+        return res.status(404).json({ error: 'Không tìm thấy dự án liên kết!' });
+      }
+      const ownerRow = ownerRes.rows[0];
+      if (optionalUser.role !== ROLES.ADMIN && ownerRow.user_id !== optionalUser.id) {
+        return res.status(403).json({ error: 'Bạn không có quyền truy cập dự án này!' });
+      }
+    }
+
+    const selection = await selectQcvnForProjectWithDb({
+      projectId,
+      nganh: body.nganh || null,
+      sourceType: body.sourceType || body.type || null,
+      receivingWaterClass: body.receivingWaterClass || null,
+      receivingWaterConfirmed: body.receivingWaterConfirmed,
+      flowRate: body.flowRate ?? null,
+      isUrbanArea: body.isUrbanArea,
+      isExistingFacility: body.isExistingFacility,
+      evaluationDate: body.evaluationDate || new Date().toISOString().slice(0, 10),
+    }, { db });
+
+    res.set('X-Rule-Source', selection.ruleSource || 'FALLBACK_UNVERIFIED');
+    return res.json({
+      ...selection,
+      industrySources: body.includeMapping ? INDUSTRY_TO_QCVN_SOURCE : undefined,
+    });
+  } catch (error) {
+    logger.error('Lỗi xác định QCVN phía server:', error);
+    return res.status(500).json({ error: 'Không thể xác định bộ QCVN áp dụng trên server!' });
+  }
+});
+
+async function runServerQcvnEvaluationWithSelection({
+  subType,
+  values,
+  samplingPeriods = {},
+  permitLimits = null,
+  receivingWaterConfirmed,
+  projectId = null,
+  nganh = null,
+  sourceType = null,
+  flowRate = null,
+  receivingWaterClass = null,
+  isUrbanArea = undefined,
+  isExistingFacility = undefined,
+  evaluationDate = undefined,
+}) {
+  const serverEvaluation = await evaluateQcvnSampleWithDb({
+    qcvnId: subType,
+    measuredValues: values,
+    samplingPeriods,
+    permitLimits,
+    receivingWaterConfirmed,
+  }, { db });
+
+  const hasSelectionContext = Boolean(
+    projectId
+    || nganh
+    || sourceType
+    || (flowRate !== null && flowRate !== undefined && flowRate !== '')
+    || receivingWaterClass
+    || isExistingFacility !== undefined
+    || isUrbanArea !== undefined
+  );
+
+  let serverSelection = null;
+  if (hasSelectionContext) {
+    serverSelection = await selectQcvnForProjectWithDb({
+      projectId,
+      nganh,
+      sourceType,
+      receivingWaterClass,
+      receivingWaterConfirmed,
+      flowRate,
+      isUrbanArea,
+      isExistingFacility,
+      evaluationDate: evaluationDate || new Date().toISOString().slice(0, 10),
+    }, { db });
+
+    const unverifiedReasons = Array.isArray(serverEvaluation.unverifiedReasons)
+      ? [...serverEvaluation.unverifiedReasons]
+      : [];
+
+    if (serverSelection.status !== 'OK') {
+      unverifiedReasons.push(serverSelection.message || 'Chưa đủ điều kiện xác định QCVN áp dụng phía server.');
+      Object.assign(serverEvaluation, {
+        overallStatus: 'NEEDS_REVIEW',
+        conclusionStatus: 'NEEDS_REVIEW',
+        trang_thai_tong_quat: 'can_ra_soat',
+        reason: serverSelection.reason || 'QCVN_SELECTION_NEEDS_REVIEW',
+        isOfficialConclusion: false,
+        canExportOfficialReport: false,
+        unverifiedReasons,
+      });
+    } else if (serverSelection.qcvnId && serverSelection.qcvnId !== subType) {
+      unverifiedReasons.push(
+        `Bộ QCVN gửi lên (${subType}) không khớp kết quả lựa chọn phía server (${serverSelection.qcvnId}). Hệ thống hạ trạng thái cần rà soát.`
+      );
+      Object.assign(serverEvaluation, {
+        overallStatus: 'NEEDS_REVIEW',
+        conclusionStatus: 'NEEDS_REVIEW',
+        trang_thai_tong_quat: 'can_ra_soat',
+        reason: 'QCVN_SELECTION_MISMATCH',
+        expectedQcvnId: serverSelection.qcvnId,
+        isOfficialConclusion: false,
+        canExportOfficialReport: false,
+        unverifiedReasons,
+      });
+    }
+  }
+
+  return { serverEvaluation, serverSelection };
+}
+
+// POST /api/qcvns/evaluate - Đối chiếu live bảng thông số quan trắc trên Server
+router.post('/evaluate', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const subType = body.sub_type || body.qcvnId;
+    const values = body.values || body.measuredValues;
+    if (!subType || !values || typeof values !== 'object') {
+      return res.status(400).json({ error: 'Vui lòng cung cấp mã quy chuẩn (sub_type/qcvnId) và giá trị thông số (values)!' });
+    }
+
+    const projectId = body.project_id ?? body.projectId ?? null;
+    if (projectId) {
+      const optionalUser = resolveOptionalUser(req);
+      if (!optionalUser) {
+        return res.status(401).json({ error: 'Vui lòng đăng nhập để đối chiếu theo dự án đã lưu!' });
+      }
+      const ownerRes = await db.query('SELECT id, user_id FROM projects WHERE id = $1', [Number(projectId)]);
+      if (!ownerRes || ownerRes.rowCount === 0) {
+        return res.status(404).json({ error: 'Không tìm thấy dự án liên kết!' });
+      }
+      if (optionalUser.role !== ROLES.ADMIN && ownerRes.rows[0].user_id !== optionalUser.id) {
+        return res.status(403).json({ error: 'Bạn không có quyền truy cập dự án này!' });
+      }
+    }
+
+    const { serverEvaluation, serverSelection } = await runServerQcvnEvaluationWithSelection({
+      subType,
+      values,
+      samplingPeriods: body.samplingPeriods || {},
+      permitLimits: body.permitLimits || null,
+      receivingWaterConfirmed: body.receivingWaterConfirmed,
+      projectId,
+      nganh: body.nganh || null,
+      sourceType: body.sourceType || body.type || null,
+      flowRate: body.flowRate ?? null,
+      receivingWaterClass: body.receivingWaterClass || null,
+      isUrbanArea: body.isUrbanArea,
+      isExistingFacility: body.isExistingFacility,
+      evaluationDate: body.evaluationDate,
+    });
+
+    res.set('X-Rule-Source', serverEvaluation.ruleSource || 'FALLBACK_UNVERIFIED');
+    return res.json({
+      evaluation: serverEvaluation,
+      serverSelection,
+    });
+  } catch (error) {
+    logger.error('Lỗi đối chiếu QCVN trên server:', error);
+    return res.status(500).json({ error: 'Không thể thực hiện đối chiếu QCVN trên server!' });
   }
 });
 
@@ -113,6 +310,12 @@ router.post('/samples', requireAuth, async (req, res) => {
     samplingPeriods = {},
     permitLimits = null,
     receivingWaterConfirmed,
+    sourceType = null,
+    flowRate = null,
+    receivingWaterClass = null,
+    isUrbanArea = undefined,
+    isExistingFacility = undefined,
+    evaluationDate = undefined,
   } = req.body;
 
   if (!name || !type || !sub_type || !values) {
@@ -120,13 +323,31 @@ router.post('/samples', requireAuth, async (req, res) => {
   }
 
   try {
-    // Luôn tự đánh giá lại mẫu phía Backend theo catalog QCVN trong DB
-    const serverEvaluation = await evaluateQcvnSampleWithDb({
-      qcvnId: sub_type,
-      measuredValues: values,
+    if (project_id) {
+      const projOwnerRes = await db.query('SELECT id, user_id FROM projects WHERE id = $1', [project_id]);
+      if (projOwnerRes && projOwnerRes.rowCount > 0) {
+        const projOwner = projOwnerRes.rows[0];
+        if (req.user.role !== ROLES.ADMIN && Number(projOwner.user_id) !== Number(userId)) {
+          return res.status(403).json({ error: 'Bạn không có quyền gắn mẫu quan trắc vào dự án của người dùng khác!' });
+        }
+      }
+    }
+
+    // Luôn tự đánh giá lại mẫu và kiểm chứng chéo chọn QCVN phía Backend theo catalog QCVN trong DB
+    const { serverEvaluation, serverSelection } = await runServerQcvnEvaluationWithSelection({
+      subType: sub_type,
+      values,
       samplingPeriods,
       permitLimits,
       receivingWaterConfirmed,
+      projectId: project_id || null,
+      nganh: req.body.nganh || null,
+      sourceType: sourceType || (project_id ? null : undefined),
+      flowRate,
+      receivingWaterClass,
+      isUrbanArea,
+      isExistingFacility,
+      evaluationDate,
     });
 
     const computedDbStatus = serverEvaluation.trang_thai_tong_quat || 'can_ra_soat';
@@ -135,6 +356,7 @@ router.post('/samples', requireAuth, async (req, res) => {
       conclusionStatus: serverEvaluation.conclusionStatus,
       preliminaryStatus: serverEvaluation.preliminaryStatus,
       reason: serverEvaluation.reason || null,
+      expectedQcvnId: serverEvaluation.expectedQcvnId || null,
       isOfficialConclusion: serverEvaluation.isOfficialConclusion,
       canExportOfficialReport: serverEvaluation.canExportOfficialReport,
       verificationStatus: serverEvaluation.verificationStatus,
@@ -147,6 +369,22 @@ router.post('/samples', requireAuth, async (req, res) => {
       samplingPeriods,
       permitLimits,
       receivingWaterConfirmed: receivingWaterConfirmed === true,
+      evaluationDate: evaluationDate || serverSelection?.resolvedContext?.evaluationDate || null,
+      serverSelectionContext: serverSelection?.resolvedContext || {
+        flowRate: flowRate !== undefined ? flowRate : null,
+        receivingWaterClass: receivingWaterClass || null,
+        isUrbanArea: Boolean(isUrbanArea),
+        isExistingFacility: Boolean(isExistingFacility),
+      },
+      serverSelection: serverSelection
+        ? {
+            status: serverSelection.status,
+            reason: serverSelection.reason || null,
+            qcvnId: serverSelection.qcvnId || null,
+            sourceType: serverSelection.sourceType || null,
+            resolvedContext: serverSelection.resolvedContext || null,
+          }
+        : null,
     };
 
     if (id) {

@@ -3,15 +3,16 @@ const router = express.Router();
 const db = require('../config/db');
 const logger = require('../utils/logger');
 const { evaluateClassificationWithDb, getClassificationMetadata } = require('../services/classification-service');
-const { analyzeSpatialContext, getAllGisLayers, haversineDistanceKm } = require('../services/spatial-gis-service');
+const { analyzeSpatialContextWithDb, getAllGisLayersWithDb, haversineDistanceKm } = require('../services/spatial-gis-service');
 
 // POST /api/classification/evaluate - Đánh giá và phân loại hồ sơ dự án từ Backend (nạp rule từ DB)
 router.post('/evaluate', async (req, res) => {
   try {
     const formData = req.body || {};
+    const projectId = formData.projectId ?? formData.project_id ?? null;
 
-    // Thực thi thuật toán phân loại và tra cứu luật từ PostgreSQL
-    const result = await evaluateClassificationWithDb(formData);
+    // Thực thi thuật toán phân loại và tra cứu luật từ PostgreSQL (kèm xác minh vùng nhạy cảm phía server)
+    const result = await evaluateClassificationWithDb(formData, { db, projectId });
 
     return res.json({
       success: true,
@@ -23,7 +24,7 @@ router.post('/evaluate', async (req, res) => {
   }
 });
 
-// POST /api/classification/spatial-check - Phân tích không gian GIS cho tọa độ (lat, lng)
+// POST /api/classification/spatial-check - Phân tích không gian GIS cho tọa độ (lat, lng) từ PostgreSQL
 router.post('/spatial-check', async (req, res) => {
   try {
     const { latitude, longitude, excludeProjectId } = req.body || {};
@@ -34,7 +35,7 @@ router.post('/spatial-check', async (req, res) => {
       return res.status(400).json({ error: 'Tọa độ không hợp lệ!' });
     }
 
-    const spatial = analyzeSpatialContext(lat, lng);
+    const spatial = await analyzeSpatialContextWithDb(lat, lng, { db });
 
     // Tìm các dự án lân cận trong bán kính 15 km từ CSDL
     let nearbyProjects = [];
@@ -59,7 +60,7 @@ router.post('/spatial-check', async (req, res) => {
             latitude: pLat,
             longitude: pLng,
             distanceKm: Number(distKm.toFixed(2)),
-            nhom: cr.nhom || 'Nhóm III',
+            nhom: cr.nhom || 'Cần rà soát',
             hs: cr.hs || '—',
             dia_chi: row.dia_chi_hien_thi || fd.tinh || ''
           });
@@ -83,12 +84,18 @@ router.post('/spatial-check', async (req, res) => {
   }
 });
 
-// GET /api/classification/gis-layers - Lấy dữ liệu lớp chuyên đề GIS (Vùng nhạy cảm, KCN, Biên giới)
-router.get('/gis-layers', (req, res) => {
-  return res.json({
-    success: true,
-    ...getAllGisLayers()
-  });
+// GET /api/classification/gis-layers - Lấy dữ liệu lớp chuyên đề GIS từ PostgreSQL (fallback an toàn)
+router.get('/gis-layers', async (req, res) => {
+  try {
+    const layers = await getAllGisLayersWithDb({ db });
+    return res.json({
+      success: true,
+      ...layers,
+    });
+  } catch (error) {
+    logger.error('Lỗi tải lớp GIS:', error);
+    return res.status(500).json({ error: 'Không thể tải dữ liệu lớp bản đồ GIS!' });
+  }
 });
 
 // GET /api/classification/metadata - Lấy danh mục ngành nghề (từ DB), công đoạn và vùng nhạy cảm

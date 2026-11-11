@@ -4,13 +4,24 @@ const db = require('../config/db');
 const { requireAuth } = require('../middleware/auth');
 const { ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
-const { IND_DB, CHECKLIST, evaluateClassification } = require('../services/classification-service');
+const {
+  IND_DB,
+  INDUSTRY_META,
+  CHECKLIST,
+  evaluateStoredProject,
+} = require('../services/classification-service');
+const { loadClassificationCatalog, loadGisLayers } = require('../services/rule-repository');
 
-// Nhãn hiển thị ngắn gọn cho các ngành nghề
+// Nhãn hiển thị ngắn gọn cho 39 ngành nghề (đồng bộ 1-1 với INDUSTRY_META)
 const INDUSTRY_LABELS = {
+  ...Object.fromEntries(
+    Object.entries(INDUSTRY_META).map(([k, v]) => [k, v.name])
+  ),
   che_bien_go: 'Chế biến gỗ / MDF',
-  xi_mang: 'Xi măng, VLXD',
+  xi_mang: 'Xi măng, clinker',
   thep: 'Luyện kim, sản xuất thép',
+  nhiet_dien: 'Nhiệt điện',
+  khai_thac_ks: 'Khai thác khoáng sản',
   hoa_chat: 'Hóa chất, phân bón',
   giay_bot: 'Giấy, bột giấy, carton',
   det_nhuom: 'Dệt nhuộm, vải sợi',
@@ -19,28 +30,61 @@ const INDUSTRY_LABELS = {
   cao_su_cb: 'Cao su chế biến (mủ khô)',
   duoc_pham: 'Dược phẩm, mỹ phẩm',
   dien_tu: 'Linh kiện điện tử, bán dẫn',
+  vat_lieu_xd: 'Vật liệu xây dựng',
   kcn: 'Khu công nghiệp / KCX',
+  khu_cong_nghe: 'Khu công nghệ cao / KKT',
+  xl_chat_thai: 'Xử lý chất thải rắn / nguy hại',
+  xl_nuoc_thai: 'Hệ thống XLNT tập trung',
+  khai_thac_nuoc: 'Khai thác nước mặt / dưới đất',
+  khai_thac_dau_khi: 'Khai thác dầu khí',
   do_thi: 'Khu đô thị, nhà ở, chung cư',
-  trung_tam_tm: 'Trung tâm thương mại, văn phòng',
   cao_toc: 'Đường cao tốc, quốc lộ',
-  cang_bien: 'Cảng biển, bến cảng',
-  thuy_dien: 'Thủy điện, năng lượng tái tạo',
-  benh_vien: 'Bệnh viện, cơ sở y tế',
+  duong_sat: 'Đường sắt / Metro',
+  cang_bien: 'Cảng biển, cảng sông',
+  cang_hang_khong: 'Cảng hàng không, sân bay',
+  trung_tam_tm: 'Trung tâm thương mại, siêu thị',
   khach_san: 'Khách sạn, resort, du lịch',
+  benh_vien: 'Bệnh viện, cơ sở y tế',
   nuoi_thuy_san: 'Nuôi trồng thủy sản',
+  nuoi_ts_bien: 'Nuôi trồng thủy sản biển',
+  xu_ly_ctnh: 'Xử lý chất thải nguy hại',
+  xu_ly_ctr: 'Xử lý chất thải rắn thông thường',
+  bai_rac: 'Bãi chôn lấp chất thải',
   chan_nuoi: 'Chăn nuôi gia súc, gia cầm',
-  nao_vet: 'Nạo vét luồng, kênh rạch'
+  thuy_dien: 'Thủy điện',
+  dien_mat_troi: 'Điện mặt trời',
+  dien_gio: 'Điện gió',
+  nao_vet: 'Nạo vét luồng, hồ chứa',
+  ho_chua: 'Hồ chứa, đập thủy lợi',
 };
 
 // Nhãn hiển thị cho các loại môi trường QCVN
 const QCVN_TYPE_LABELS = {
   nuoc_thai_cn: 'Nước thải công nghiệp (QCVN 40)',
   nuoc_thai_sh: 'Nước thải sinh hoạt (QCVN 14)',
+  khi_thai_cn: 'Khí thải công nghiệp (QCVN 19)',
   nuoc_mat: 'Nước mặt (QCVN 08)',
   khong_khi: 'Không khí xung quanh (QCVN 05)',
   dat: 'Chất lượng đất (QCVN 03)',
-  nuoc_duoi_dat: 'Nước dưới đất (QCVN 09)'
+  nuoc_duoi_dat: 'Nước dưới đất (QCVN 09)',
+  nuoc_ngam: 'Nước dưới đất (QCVN 09)'
 };
+
+async function loadSensitiveVerifMap() {
+  try {
+    const res = await db.query(
+      `SELECT project_id, declared_flags, declared_details, evidence_ref, verification_status, verified_by
+       FROM project_sensitive_verifications`
+    );
+    const map = new Map();
+    for (const r of (res?.rows || [])) {
+      map.set(Number(r.project_id), r);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
 
 // GET /api/dashboard/stats - Tổng hợp số liệu thống kê cho Dashboard
 router.get('/stats', requireAuth, async (req, res) => {
@@ -126,10 +170,20 @@ router.get('/stats', requireAuth, async (req, res) => {
         : Promise.resolve({ rows: [] })
     ]);
 
+    // Nạp runtime catalog phân loại & GIS 1 lần dùng chung cho mọi dự án trên Dashboard
+    const [catalogRes, gisRes, verifMap] = await Promise.all([
+      loadClassificationCatalog({ db }),
+      loadGisLayers({ db }),
+      loadSensitiveVerifMap(),
+    ]);
+    const activeCatalog = catalogRes.ok && catalogRes.catalog ? catalogRes.catalog : IND_DB;
+    const activeRuleSource = catalogRes.ok ? 'DATABASE' : 'FALLBACK_UNVERIFIED';
+    const activeGisLayers = gisRes.ok ? gisRes : null;
+
     // 1. Phân tích dữ liệu Dự án
     const byGroup = { 'Nhóm I': 0, 'Nhóm II': 0, 'Nhóm III': 0, 'Nhóm IV': 0 };
     const byDossier = { DTM: 0, GPMT: 0, DKMT: 0 };
-    const byAuthority = { cap_bo: 0, cap_so: 0, cap_huyen: 0 };
+    const byAuthority = { cap_bo: 0, cap_so: 0, cap_xa: 0, cap_huyen: 0 };
     const industryMap = {};
     const provinceMap = {};
 
@@ -137,6 +191,8 @@ router.get('/stats', requireAuth, async (req, res) => {
     let monitoredProjects = 0;
     let totalChecklistPercent = 0;
     let completedChecklistProjects = 0;
+    let needsReviewProjects = 0;
+    let unverifiedProjects = 0;
 
     let totalWastewater = 0;
     let totalAirEmission = 0;
@@ -155,24 +211,34 @@ router.get('/stats', requireAuth, async (req, res) => {
     };
 
     const projectHealthList = projectsRes.rows.map(row => {
-      const fd = row.form_data || {};
-      const fallbackCr = evaluateClassification(fd);
-      const cr = (row.classification_result && row.classification_result.nhom)
-        ? row.classification_result
-        : fallbackCr;
+      const evaluated = evaluateStoredProject(row, {
+        catalog: activeCatalog,
+        ruleSource: activeRuleSource,
+        fallbackReason: catalogRes.error || null,
+        gisLayers: activeGisLayers,
+        serverSensitiveVerification: verifMap.get(Number(row.id)) || null,
+      });
+      const fd = evaluated.formData || {};
 
-      const nhom = cr.nhom || fallbackCr.nhom || 'Nhóm III';
-      const hs = cr.hs || fallbackCr.hs || 'GPMT';
-      const tq = cr.tq || fallbackCr.tq || 'cap_so';
-      const coQuan = cr.coQuan || fallbackCr.coQuan || '—';
+      const nhom = evaluated.nhom;
+      const hs = evaluated.hs;
+      const tq = evaluated.tq;
+      const coQuan = evaluated.coQuan || '—';
 
-      if (byGroup[nhom] !== undefined) byGroup[nhom]++;
-      if (byDossier[hs] !== undefined) byDossier[hs]++;
-      if (byAuthority[tq] !== undefined) byAuthority[tq]++;
+      if (evaluated.conclusionStatus === 'NEEDS_REVIEW' || !nhom || !hs || !tq) {
+        needsReviewProjects++;
+      }
+      if (!evaluated.isOfficialConclusion) {
+        unverifiedProjects++;
+      }
+
+      if (nhom && byGroup[nhom] !== undefined) byGroup[nhom]++;
+      if (hs && byDossier[hs] !== undefined) byDossier[hs]++;
+      if (tq && byAuthority[tq] !== undefined) byAuthority[tq]++;
 
       // Ngành nghề
       const nganhCode = fd.nganh || 'khac';
-      const nganhLabel = INDUSTRY_LABELS[nganhCode] || (IND_DB[nganhCode]?.lbl?.split('(')[0]?.trim()) || 'Ngành khác';
+      const nganhLabel = INDUSTRY_LABELS[nganhCode] || activeCatalog?.[nganhCode]?.name || (IND_DB[nganhCode]?.lbl?.split('(')[0]?.trim()) || 'Ngành khác';
       if (fd.nganh) {
         industryMap[nganhCode] = industryMap[nganhCode] || { code: nganhCode, label: nganhLabel, count: 0 };
         industryMap[nganhCode].count++;
@@ -226,10 +292,12 @@ router.get('/stats', requireAuth, async (req, res) => {
         dia_chi: row.dia_chi_hien_thi || tinhName || '—',
         nganh: nganhCode,
         nganh_label: nganhLabel,
-        nhom,
-        hs,
-        tq,
+        nhom: nhom || 'Cần rà soát',
+        hs: hs || '—',
+        tq: tq || null,
         co_quan: coQuan,
+        conclusion_status: evaluated.conclusionStatus,
+        is_official_conclusion: evaluated.isOfficialConclusion,
         nt: ntVal,
         kt: ktVal,
         has_gis: hasGis,
@@ -260,7 +328,9 @@ router.get('/stats', requireAuth, async (req, res) => {
         total: 0,
         dat: 0,
         canh_bao: 0,
-        vuot_nguong: 0
+        vuot_nguong: 0,
+        chua_du_thong_so: 0,
+        can_ra_soat: 0
       };
     });
 
@@ -346,6 +416,8 @@ router.get('/stats', requireAuth, async (req, res) => {
       kpis: {
         totalProjects,
         highRiskProjects: (byGroup['Nhóm I'] || 0) + (byGroup['Nhóm II'] || 0),
+        needsReviewProjects,
+        unverifiedProjects,
         gisMappedProjects,
         monitoredProjects,
         avgChecklistPercent,
@@ -357,6 +429,7 @@ router.get('/stats', requireAuth, async (req, res) => {
         failSamples,
         incompleteSamples,
         reviewSamples,
+        needsReviewSamples: reviewSamples,
         complianceRate,
         totalLaws,
         validLaws,

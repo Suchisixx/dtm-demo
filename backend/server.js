@@ -21,6 +21,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/classification', require('./routes/classification'));
+app.use('/api/admin/rules', require('./routes/admin-rules'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/laws', require('./routes/laws'));
 app.use('/api/qcvns', require('./routes/qcvns'));

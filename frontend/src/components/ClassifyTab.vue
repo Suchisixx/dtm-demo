@@ -18,13 +18,15 @@ import {
   API,
   PROVINCE_COORDINATES,
   NHOM_COLORS,
-  projectQcvnSamples
+  projectQcvnSamples,
+  projectSensitiveVerification
 } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 
 const props = defineProps({
-  loadProjectId: { type: Number, default: null }
+  loadProjectId: { type: Number, default: null },
+  currentUser: { type: Object, default: null }
 })
 const emit = defineEmits(['project-loaded', 'view-qcvn-sample', 'view-law'])
 
@@ -37,6 +39,7 @@ const capacity = ref(0)
 const nt = ref(0)
 const kt = ref(0)
 const tinh = ref('')
+const evaluationDate = ref(new Date().toISOString().slice(0, 10))
 const latitude = ref(DEFAULT_LAT)
 const longitude = ref(DEFAULT_LNG)
 
@@ -139,6 +142,17 @@ const morongdt = ref(false)
 const ctnh = ref(false)
 const dtcong = ref(false)
 const epr = ref(false)
+
+// Khai báo định lượng vùng nhạy cảm (cần Admin xác minh phía server mới được phép nâng nhóm chính thức)
+const insideCoreProtectedZone = ref(false)
+const paddyConversionAreaHa = ref(0)
+const forestConversionAreaHa = ref(0)
+const sensitiveEvidenceRef = ref('')
+const serverSensitiveVerification = ref(null)
+const adminSensitiveNote = ref('')
+const adminSensitiveEvidence = ref('')
+const isUpdatingSensitiveVerification = ref(false)
+const sensitiveVerificationMessage = ref('')
 
 const flagRefsMap = {
   rung,
@@ -911,8 +925,10 @@ const buildClassifyFormData = () => {
     ? null
     : Number(capacity.value)
   return {
+    projectId: projectId.value || null,
     nganh: nganh.value,
     processStage: processStage.value || null,
+    evaluationDate: evaluationDate.value || new Date().toISOString().slice(0, 10),
     capacity: (parsedCap !== null && !Number.isNaN(parsedCap)) ? parsedCap : null,
     nt: parseFloat(nt.value) || 0,
     kt: parseFloat(kt.value) || 0,
@@ -932,7 +948,17 @@ const buildClassifyFormData = () => {
     morongdt: morongdt.value,
     ctnh: ctnh.value,
     dtcong: dtcong.value,
-    epr: epr.value
+    epr: epr.value,
+    insideCoreProtectedZone: insideCoreProtectedZone.value,
+    paddyConversionAreaHa: parseFloat(paddyConversionAreaHa.value) || 0,
+    forestConversionAreaHa: parseFloat(forestConversionAreaHa.value) || 0,
+    sensitiveEvidenceRef: sensitiveEvidenceRef.value || '',
+    sensitiveDetails: {
+      insideCoreProtectedZone: insideCoreProtectedZone.value,
+      paddyConversionAreaHa: parseFloat(paddyConversionAreaHa.value) || 0,
+      forestConversionAreaHa: parseFloat(forestConversionAreaHa.value) || 0,
+      evidenceRef: sensitiveEvidenceRef.value || ''
+    }
   }
 }
 
@@ -1015,6 +1041,11 @@ const saveProjectToServer = async (formData) => {
     if (res.ok) {
       const data = await res.json()
       projectId.value = data.project.id
+      if (data.sensitiveVerification !== undefined) {
+        serverSensitiveVerification.value = data.sensitiveVerification
+        adminSensitiveEvidence.value = data.sensitiveVerification?.evidence_ref || sensitiveEvidenceRef.value || ''
+        adminSensitiveNote.value = data.sensitiveVerification?.verification_note || ''
+      }
       if (data.project.classification_result) {
         result.value = data.project.classification_result
         classificationSnapshot.value = data.project.classification_result
@@ -1026,7 +1057,60 @@ const saveProjectToServer = async (formData) => {
   }
 }
 
-const selectProject = (project) => {
+const fetchProjectSensitiveVerification = async (projId) => {
+  if (!projId) return
+  try {
+    const res = await fetch(`${API.PROJECTS}/${projId}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.sensitiveVerification !== undefined) {
+        serverSensitiveVerification.value = data.sensitiveVerification
+        adminSensitiveEvidence.value = data.sensitiveVerification?.evidence_ref || sensitiveEvidenceRef.value || ''
+        adminSensitiveNote.value = data.sensitiveVerification?.verification_note || ''
+      }
+    }
+  } catch (err) {
+    logger.error('Lỗi tải trạng thái xác minh vùng nhạy cảm:', err)
+  }
+}
+
+const submitAdminSensitiveVerification = async (verificationStatus) => {
+  if (!projectId.value) {
+    alert('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm phía server.')
+    return
+  }
+  isUpdatingSensitiveVerification.value = true
+  sensitiveVerificationMessage.value = ''
+  try {
+    const res = await fetch(projectSensitiveVerification(projectId.value), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        verification_status: verificationStatus,
+        evidence_ref: adminSensitiveEvidence.value || sensitiveEvidenceRef.value || '',
+        verification_note: adminSensitiveNote.value || ''
+      })
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      sensitiveVerificationMessage.value = data.error || 'Không thể cập nhật xác minh vùng nhạy cảm.'
+      return
+    }
+    serverSensitiveVerification.value = data.sensitiveVerification || null
+    if (data.classification) {
+      result.value = data.classification
+      classificationSnapshot.value = data.classification
+    }
+    sensitiveVerificationMessage.value = data.message || `Đã cập nhật trạng thái: ${verificationStatus}`
+    fetchProjects(currentPage.value)
+  } catch (err) {
+    sensitiveVerificationMessage.value = err.message || 'Lỗi kết nối máy chủ.'
+  } finally {
+    isUpdatingSensitiveVerification.value = false
+  }
+}
+
+const selectProject = (project, extraSensitiveVerification = null) => {
   if (!project) return
   isLoadingSavedProject.value = true
   projectId.value = project.id
@@ -1036,6 +1120,7 @@ const selectProject = (project) => {
   const rawNganh = fd.nganh || ''
   nganh.value = rawNganh === 'san_bay' ? 'cang_hang_khong' : rawNganh
   processStage.value = fd.processStage || ''
+  evaluationDate.value = fd.evaluationDate || new Date().toISOString().slice(0, 10)
   capacity.value = (fd.capacity !== undefined && fd.capacity !== null) ? fd.capacity : (fd.cap || 0)
   nt.value = fd.nt || 0
   kt.value = fd.kt || 0
@@ -1055,6 +1140,20 @@ const selectProject = (project) => {
   ctnh.value = !!fd.ctnh
   dtcong.value = !!fd.dtcong
   epr.value = !!fd.epr
+
+  const sDetails = fd.sensitiveDetails || {}
+  insideCoreProtectedZone.value = !!(fd.insideCoreProtectedZone || sDetails.insideCoreProtectedZone)
+  paddyConversionAreaHa.value = Number(fd.paddyConversionAreaHa ?? sDetails.paddyConversionAreaHa ?? 0) || 0
+  forestConversionAreaHa.value = Number(fd.forestConversionAreaHa ?? sDetails.forestConversionAreaHa ?? 0) || 0
+  sensitiveEvidenceRef.value = fd.sensitiveEvidenceRef || sDetails.evidenceRef || ''
+  serverSensitiveVerification.value = extraSensitiveVerification || project.sensitiveVerification || null
+  adminSensitiveEvidence.value = serverSensitiveVerification.value?.evidence_ref || sensitiveEvidenceRef.value || ''
+  adminSensitiveNote.value = serverSensitiveVerification.value?.verification_note || ''
+  sensitiveVerificationMessage.value = ''
+
+  if (!extraSensitiveVerification && project.id) {
+    fetchProjectSensitiveVerification(project.id)
+  }
 
   latitude.value = project.latitude ? parseFloat(project.latitude) : (fd.latitude ? parseFloat(fd.latitude) : DEFAULT_LAT)
   longitude.value = project.longitude ? parseFloat(project.longitude) : (fd.longitude ? parseFloat(fd.longitude) : DEFAULT_LNG)
@@ -1095,6 +1194,7 @@ const createNewProject = () => {
   name.value = ''
   nganh.value = ''
   processStage.value = ''
+  evaluationDate.value = new Date().toISOString().slice(0, 10)
   capacity.value = 0
   nt.value = 0
   kt.value = 0
@@ -1114,6 +1214,14 @@ const createNewProject = () => {
   ctnh.value = false
   dtcong.value = false
   epr.value = false
+  insideCoreProtectedZone.value = false
+  paddyConversionAreaHa.value = 0
+  forestConversionAreaHa.value = 0
+  sensitiveEvidenceRef.value = ''
+  serverSensitiveVerification.value = null
+  adminSensitiveEvidence.value = ''
+  adminSensitiveNote.value = ''
+  sensitiveVerificationMessage.value = ''
 
   latitude.value = DEFAULT_LAT
   longitude.value = DEFAULT_LNG
@@ -1577,7 +1685,7 @@ watch(() => props.loadProjectId, async (newId) => {
       if (res.ok) {
         const data = await res.json()
         if (data.project) {
-          selectProject(data.project)
+          selectProject(data.project, data.sensitiveVerification || null)
         }
       }
     } catch (err) {
@@ -1689,6 +1797,14 @@ onUnmounted(() => {
         <div class="form-group">
           <label class="form-label">{{ capacityLabel }}</label>
           <input type="number" v-model="capacity" min="0" step="any" placeholder="Nhập quy mô công suất..." />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Thời điểm đánh giá / áp dụng quy định (evaluationDate)</label>
+          <input type="date" v-model="evaluationDate" />
+          <div style="font-size:11.5px;color:var(--text3);margin-top:4px">
+            Rule phân loại và thẩm quyền (Cấp Huyện lịch sử trước 01/07/2025 vs Cấp Xã từ 01/07/2025) được lọc theo ngày này.
+          </div>
         </div>
 
         <div class="form-block-title" style="margin-top:18px">
@@ -1983,6 +2099,43 @@ onUnmounted(() => {
               <input type="checkbox" v-model="dat_ngap"> Đất ngập nước (Ramsar)
             </label>
           </div>
+
+          <!-- Khai báo định lượng & Xác minh vùng nhạy cảm phía Server (Item 6) -->
+          <div style="margin-top:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <strong style="font-size:12px;color:var(--text)">Khai báo định lượng &amp; Hồ sơ chứng minh vùng nhạy cảm</strong>
+              <span v-if="serverSensitiveVerification || result?.sensitiveVerificationStatus"
+                    class="chip"
+                    :style="{
+                      fontSize: '11px',
+                      background: (serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus) === 'VERIFIED' ? '#EAF5EF' : '#FFFBEB',
+                      color: (serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus) === 'VERIFIED' ? '#25845B' : '#92400E',
+                      border: '1px solid var(--border)'
+                    }">
+                Server: {{ serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus || 'NOT_REQUIRED' }}
+              </span>
+            </div>
+            <label class="check-item" style="margin-bottom:8px">
+              <input type="checkbox" v-model="insideCoreProtectedZone"> Nằm trong phân khu bảo vệ nghiêm ngặt / vùng lõi khu bảo tồn
+            </label>
+            <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
+              <div>
+                <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất lúa 2 vụ (ha)</label>
+                <input type="number" v-model.number="paddyConversionAreaHa" min="0" step="0.01" placeholder="0" />
+              </div>
+              <div>
+                <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất rừng (ha)</label>
+                <input type="number" v-model.number="forestConversionAreaHa" min="0" step="0.01" placeholder="0" />
+              </div>
+            </div>
+            <div>
+              <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Tài liệu / Số văn bản trích lục tọa độ (nếu có)</label>
+              <input type="text" v-model="sensitiveEvidenceRef" placeholder="VD: VB xác nhận ranh giới BQL Rừng số .../QĐ..." />
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.4">
+              Theo nguyên tắc fail-closed: Thông số tự kê khai chỉ nâng nhóm chính thức sau khi Admin xác minh bản ghi <code>VERIFIED</code> trong CSDL.
+            </div>
+          </div>
         </div>
 
         <div class="form-group">
@@ -2127,6 +2280,54 @@ onUnmounted(() => {
                 <div class="info-box-val" :class="result.isOfficialConclusion ? 'green' : 'warn'">
                   {{ result.conclusionStatus || result.verificationStatus }}
                 </div>
+              </div>
+            </div>
+
+            <!-- Metadata Phiên bản Rule, Ngày hiệu lực, Server Sensitive Verification & GIS -->
+            <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:6px 14px">
+              <div><strong>Phiên bản rule:</strong> {{ result.appliedRuleVersion || result.ruleVersion || '—' }}</div>
+              <div>
+                <strong>Hiệu lực rule:</strong>
+                {{ result.appliedEffectiveFrom || '—' }} → {{ result.appliedEffectiveTo || 'Hiện hành' }}
+              </div>
+              <div>
+                <strong>Ngày đánh giá:</strong>
+                {{ result.evaluationDate || evaluationDate }}
+                <span v-if="result.isHistoricalEvaluation" style="color:var(--warn);font-weight:600">(Lịch sử)</span>
+              </div>
+              <div><strong>Xác minh nhạy cảm:</strong> {{ serverSensitiveVerification?.verification_status || result.sensitiveVerificationStatus || 'NOT_REQUIRED' }}</div>
+              <div><strong>Nguồn GIS:</strong> {{ result.gisSource || spatialData?.gisSource || 'DATABASE' }}</div>
+            </div>
+
+            <!-- Admin Panel Xác minh vùng nhạy cảm phía Server (PUT /api/projects/:id/sensitive-verification) -->
+            <div v-if="currentUser?.role === 'admin' && projectId"
+                 class="no-print"
+                 style="margin-top:12px;padding:12px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                <strong style="font-size:12.5px;color:var(--text)">
+                  <i class="ti ti-shield-check" style="color:var(--accent)"></i>
+                  Kiểm duyệt vùng nhạy cảm phía Server (Admin)
+                </strong>
+                <span style="font-size:11.5px;color:var(--text2)">
+                  Trạng thái hiện tại: <strong>{{ serverSensitiveVerification?.verification_status || result.sensitiveVerificationStatus || 'NONE' }}</strong>
+                </span>
+              </div>
+              <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
+                <input type="text" v-model="adminSensitiveEvidence" placeholder="Số văn bản / Chứng cứ ranh giới..." />
+                <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của Admin..." />
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <button type="button" class="btn-primary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('VERIFIED')">
+                  <i class="ti ti-check"></i>
+                  <span>Xác nhận hợp lệ (VERIFIED)</span>
+                </button>
+                <button type="button" class="btn-secondary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('REJECTED')">
+                  <i class="ti ti-x"></i>
+                  <span>Từ chối (REJECTED)</span>
+                </button>
+                <span v-if="sensitiveVerificationMessage" style="font-size:12px;color:var(--accent);font-weight:500">
+                  {{ sensitiveVerificationMessage }}
+                </span>
               </div>
             </div>
 

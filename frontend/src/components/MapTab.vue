@@ -21,32 +21,36 @@
 
           <div class="toolbar-select-group">
             <label>Nhóm:</label>
-            <select v-model="filterNhom" style="width:128px;height:36px">
+            <select v-model="filterNhom" style="width:136px;height:36px">
               <option value="">Tất cả nhóm</option>
               <option value="Nhóm I">Nhóm I</option>
               <option value="Nhóm II">Nhóm II</option>
               <option value="Nhóm III">Nhóm III</option>
               <option value="Nhóm IV">Nhóm IV</option>
+              <option value="Cần rà soát">Cần rà soát</option>
             </select>
           </div>
 
           <div class="toolbar-select-group">
             <label>Hồ sơ:</label>
-            <select v-model="filterHoSo" style="width:136px;height:36px">
+            <select v-model="filterHoSo" style="width:142px;height:36px">
               <option value="">Tất cả hồ sơ</option>
               <option value="ĐTM">ĐTM</option>
               <option value="GPMT">GPMT</option>
               <option value="ĐKMT">ĐKMT</option>
+              <option value="Chưa xác định">Chưa xác định</option>
             </select>
           </div>
 
           <div class="toolbar-select-group">
             <label>Quan trắc:</label>
-            <select v-model="filterQcvn" style="width:142px;height:36px">
+            <select v-model="filterQcvn" style="width:155px;height:36px">
               <option value="">Mọi trạng thái</option>
               <option value="vuot_nguong">Vượt ngưỡng</option>
               <option value="canh_bao">Cảnh báo</option>
-              <option value="dat_chuan">Đạt chuẩn</option>
+              <option value="dat">Đạt chuẩn</option>
+              <option value="chua_du_thong_so">Thiếu chỉ tiêu</option>
+              <option value="can_ra_soat">Cần rà soát</option>
             </select>
           </div>
 
@@ -91,15 +95,15 @@
               >
                 <div class="p-header">
                   <span class="p-nhom-badge" :style="{ backgroundColor: getNhomColor(p.nhom_du_an) }">
-                    {{ p.nhom_du_an }}
+                    {{ p.nhom_du_an || 'Cần rà soát' }}
                   </span>
-                  <span class="p-hs-badge">{{ p.loai_ho_so }}</span>
+                  <span class="p-hs-badge">{{ p.loai_ho_so || 'Chưa xác định' }}</span>
                   <span
                     v-if="p.quan_trac_gan_nhat_trang_thai"
                     class="p-qcvn-badge"
-                    :class="p.quan_trac_gan_nhat_trang_thai"
+                    :class="getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).cls"
                   >
-                    {{ p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? 'Vượt QCVN' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? 'Cảnh báo' : 'Đạt QCVN' }}
+                    {{ getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).listLabel }}
                   </span>
                 </div>
                 <div class="p-title">{{ p.ten_du_an }}</div>
@@ -190,6 +194,7 @@
               <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM / GPMT)</div>
               <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT / ĐKMT)</div>
               <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Ít nguy cơ)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #6B7280;"></span> Cần rà soát / Chưa đủ dữ liệu</div>
               <div class="legend-divider"></div>
               <div class="legend-item"><span class="color-ring" style="border-color: #7C3AED; background: rgba(139,92,246,0.2);"></span> Khu công nghiệp tập trung</div>
               <div class="legend-item"><span class="color-ring" style="border-color: #D65B5B; background: rgba(214,91,91,0.18);"></span> Khu bảo tồn / Di sản / Nguồn nước</div>
@@ -251,16 +256,42 @@ const uniqueProvinces = computed(() => {
 const filteredProjects = computed(() => {
   const q = normalizeString(searchQuery.value.trim())
   return projects.value.filter(p => {
-    const matchNhom = !filterNhom.value || p.nhom_du_an === filterNhom.value
-    const matchHoSo = !filterHoSo.value || (p.loai_ho_so || '').includes(filterHoSo.value)
-    const matchQcvn = !filterQcvn.value || p.quan_trac_gan_nhat_trang_thai === filterQcvn.value
+    const matchNhom = !filterNhom.value || (p.nhom_du_an || 'Cần rà soát') === filterNhom.value
+    const matchHoSo = !filterHoSo.value || (p.loai_ho_so || 'Chưa xác định').includes(filterHoSo.value)
+    const matchQcvn = !filterQcvn.value || (
+      filterQcvn.value === 'dat'
+        ? (p.quan_trac_gan_nhat_trang_thai === 'dat' || p.quan_trac_gan_nhat_trang_thai === 'dat_chuan')
+        : p.quan_trac_gan_nhat_trang_thai === filterQcvn.value
+    )
     const matchTinh = !filterTinh.value || p.tinh === filterTinh.value
     const matchSearch = !q || normalizeString(p.ten_du_an || '').includes(q) || normalizeString(p.dia_chi || '').includes(q)
     return matchNhom && matchHoSo && matchQcvn && matchTinh && matchSearch && p.latitude && p.longitude
   })
 })
 
-const getNhomColor = (nhom) => NHOM_COLORS[nhom] || NHOM_COLORS.default
+const getNhomColor = (nhom) => {
+  if (nhom === 'Cần rà soát') return '#6B7280'
+  return NHOM_COLORS[nhom] || NHOM_COLORS.default
+}
+
+const getQcvnBadgeMeta = (status) => {
+  switch (status) {
+    case 'vuot_nguong':
+      return { cls: 'vuot_nguong', listLabel: 'Vượt QCVN', popupLabel: 'Vượt ngưỡng', bg: '#FDF0F0', color: '#D65B5B' }
+    case 'canh_bao':
+      return { cls: 'canh_bao', listLabel: 'Cảnh báo', popupLabel: 'Cảnh báo', bg: '#FCF6EC', color: '#D99A38' }
+    case 'dat':
+    case 'dat_chuan':
+      return { cls: 'dat', listLabel: 'Đạt QCVN', popupLabel: 'Đạt chuẩn', bg: '#EAF5EF', color: '#25845B' }
+    case 'chua_du_thong_so':
+      return { cls: 'chua_du_thong_so', listLabel: 'Thiếu chỉ tiêu', popupLabel: 'Chưa đủ thông số', bg: '#EFF4F8', color: '#475569' }
+    case 'period_mismatch':
+      return { cls: 'can_ra_soat', listLabel: 'Lệch chu kỳ', popupLabel: 'Lệch chu kỳ lấy mẫu', bg: '#F3F4F6', color: '#4B5563' }
+    case 'can_ra_soat':
+    default:
+      return { cls: 'can_ra_soat', listLabel: 'Cần rà soát', popupLabel: 'Cần rà soát', bg: '#F3F4F6', color: '#4B5563' }
+  }
+}
 
 const switchBaseMap = (mode) => {
   activeBaseMap.value = mode
@@ -396,23 +427,25 @@ const updateMapMarkers = (shouldFit = true) => {
 
     const marker = window.L.marker([p.latitude, p.longitude], { icon: customIcon })
 
+    const qcvnMeta = p.quan_trac_gan_nhat_trang_thai ? getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai) : null
+
     const popupContent = `
       <div style="min-width:250px;max-width:290px;font-family:'Be Vietnam Pro',sans-serif;padding:4px 2px">
         <div style="font-weight:700;font-size:14px;margin-bottom:4px;color:#192A21;line-height:1.4">${p.ten_du_an || 'Chưa có tên'}</div>
         <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4">${p.dia_chi || p.tinh || 'Chưa có địa chỉ'}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
-          <span style="background:${color};color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.nhom_du_an}</span>
-          <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so}</span>
+          <span style="background:${color};color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.nhom_du_an || 'Cần rà soát'}</span>
+          <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so || 'Chưa xác định'}</span>
           <span style="background:#F0F4F1;color:#286B4F;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">R=${(radiusMeters / 1000).toFixed(1)}km</span>
         </div>
         <div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Thẩm quyền:</strong> ${p.co_quan || '—'}</div>
         ${(p.nt || p.kt) ? `<div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Phát thải:</strong> NT ${p.nt || 0} m³/ngđ • KT ${p.kt || 0} m³/h</div>` : ''}
         <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4"><strong style="color:#192A21">Phụ trách:</strong> ${p.user_name || '—'}</div>
-        ${p.quan_trac_gan_nhat_trang_thai ? `
+        ${qcvnMeta ? `
         <div style="font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:6px;line-height:1.4">
           <strong style="color:#192A21">Quan trắc:</strong>
-          <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#FDF0F0' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#FCF6EC' : '#EAF5EF'};color:${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? '#D65B5B' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? '#D99A38' : '#25845B'}">
-            ${p.quan_trac_gan_nhat_trang_thai === 'vuot_nguong' ? 'Vượt ngưỡng' : p.quan_trac_gan_nhat_trang_thai === 'canh_bao' ? 'Cảnh báo' : 'Đạt chuẩn'}
+          <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:${qcvnMeta.bg};color:${qcvnMeta.color}">
+            ${qcvnMeta.popupLabel}
           </span>
         </div>` : ''}
         <div style="margin-top:10px">
@@ -664,9 +697,18 @@ onUnmounted(() => {
   background: var(--warn-bg);
   color: var(--warn);
 }
+.p-qcvn-badge.dat,
 .p-qcvn-badge.dat_chuan {
   background: var(--success-bg);
   color: var(--success);
+}
+.p-qcvn-badge.chua_du_thong_so {
+  background: #EFF4F8;
+  color: #475569;
+}
+.p-qcvn-badge.can_ra_soat {
+  background: #F3F4F6;
+  color: #4B5563;
 }
 
 .p-title {

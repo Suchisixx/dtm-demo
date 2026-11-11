@@ -3,6 +3,8 @@
 // Căn cứ: Điều 25 Luật BVMT 2020, Nghị định 08/2022/NĐ-CP, Nghị định 48/2026/NĐ-CP (VBHN 49/2026)
 
 const EARTH_RADIUS_KM = 6371;
+const defaultDb = require('../config/db');
+const { loadGisLayers } = require('./rule-repository');
 
 function toRad(deg) {
   return (deg * Math.PI) / 180;
@@ -213,7 +215,11 @@ function calculateImpactRadius(nhom = 'Nhóm III', nt = 0, kt = 0) {
 /**
  * Phân tích bối cảnh không gian GIS cho một tọa độ (lat, lng)
  */
-function analyzeSpatialContext(lat, lng) {
+function analyzeSpatialContext(lat, lng, options = {}) {
+  const sensitiveZones = Array.isArray(options?.sensitiveZones) ? options.sensitiveZones : VIETNAM_SENSITIVE_ZONES;
+  const industrialParks = Array.isArray(options?.industrialParks) ? options.industrialParks : VIETNAM_INDUSTRIAL_PARKS;
+  const gisSource = options?.gisSource || 'STATIC_FIXTURE';
+
   const numLat = parseFloat(lat);
   const numLng = parseFloat(lng);
 
@@ -241,7 +247,7 @@ function analyzeSpatialContext(lat, lng) {
     kcn: false
   };
 
-  for (const zone of VIETNAM_SENSITIVE_ZONES) {
+  for (const zone of sensitiveZones) {
     const dist = haversineDistanceKm(numLat, numLng, zone.lat, zone.lng);
     const bufferThreshold = zone.radiusKm + 5; // Bao gồm vùng lõi + vùng đệm 5km
     if (dist <= bufferThreshold) {
@@ -252,7 +258,7 @@ function analyzeSpatialContext(lat, lng) {
         inCore,
         statusLabel: inCore ? 'Nằm trong phạm vi vùng bảo vệ' : 'Nằm sát hành lang / vùng đệm'
       });
-      autoFlags[zone.flagKey] = true;
+      if (zone.flagKey) autoFlags[zone.flagKey] = true;
     }
   }
 
@@ -261,7 +267,7 @@ function analyzeSpatialContext(lat, lng) {
   // 4. Kiểm tra nằm trong hoặc sát Khu công nghiệp (KCN)
   let nearestKcn = null;
   let minKcnDist = Infinity;
-  for (const kcn of VIETNAM_INDUSTRIAL_PARKS) {
+  for (const kcn of industrialParks) {
     const dist = haversineDistanceKm(numLat, numLng, kcn.lat, kcn.lng);
     if (dist < minKcnDist) {
       minKcnDist = dist;
@@ -321,6 +327,7 @@ function analyzeSpatialContext(lat, lng) {
   }
 
   return {
+    gisSource,
     coordinates: { latitude: numLat, longitude: numLng },
     borderDistanceKm: borderCheck.distanceKm,
     borderClosestPoint: borderCheck.closestPoint,
@@ -333,11 +340,47 @@ function analyzeSpatialContext(lat, lng) {
   };
 }
 
+async function analyzeSpatialContextWithDb(lat, lng, { db = defaultDb } = {}) {
+  const loaded = await loadGisLayers({ db });
+  if (loaded.ok) {
+    return analyzeSpatialContext(lat, lng, {
+      sensitiveZones: loaded.sensitiveZones,
+      industrialParks: loaded.industrialParks,
+      gisSource: 'DATABASE',
+    });
+  }
+  return analyzeSpatialContext(lat, lng, {
+    sensitiveZones: VIETNAM_SENSITIVE_ZONES,
+    industrialParks: VIETNAM_INDUSTRIAL_PARKS,
+    gisSource: 'FALLBACK_UNVERIFIED',
+  });
+}
+
 function getAllGisLayers() {
   return {
+    gisSource: 'STATIC_FIXTURE',
     sensitiveZones: VIETNAM_SENSITIVE_ZONES,
     industrialParks: VIETNAM_INDUSTRIAL_PARKS,
     landBorderPolyline: VIETNAM_LAND_BORDER_POLYLINE
+  };
+}
+
+async function getAllGisLayersWithDb({ db = defaultDb } = {}) {
+  const loaded = await loadGisLayers({ db });
+  if (loaded.ok) {
+    return {
+      gisSource: 'DATABASE',
+      sensitiveZones: loaded.sensitiveZones,
+      industrialParks: loaded.industrialParks,
+      landBorderPolyline: VIETNAM_LAND_BORDER_POLYLINE,
+    };
+  }
+  return {
+    gisSource: 'FALLBACK_UNVERIFIED',
+    fallbackReason: loaded.error || 'GIS_DB_UNAVAILABLE',
+    sensitiveZones: VIETNAM_SENSITIVE_ZONES,
+    industrialParks: VIETNAM_INDUSTRIAL_PARKS,
+    landBorderPolyline: VIETNAM_LAND_BORDER_POLYLINE,
   };
 }
 
@@ -345,7 +388,9 @@ module.exports = {
   haversineDistanceKm,
   calculateImpactRadius,
   analyzeSpatialContext,
+  analyzeSpatialContextWithDb,
   getAllGisLayers,
+  getAllGisLayersWithDb,
   VIETNAM_SENSITIVE_ZONES,
   VIETNAM_INDUSTRIAL_PARKS
 };

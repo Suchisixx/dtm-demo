@@ -276,4 +276,388 @@ test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua
   assert.ok(qcvnVue.includes("'cr': 'Cr_tong'"), 'MAP_KEYWORDS phai anh xa Cr_tong');
   assert.ok(qcvnVue.includes("'sunfua': 'Sulfide'"), 'MAP_KEYWORDS phai anh xa Sulfide');
   assert.ok(!initDbJs.includes('TRUNCATE TABLE'), 'init-db.js khong duoc chay TRUNCATE TABLE');
+
+  // Phase 2-3 Parity checks across MapTab, DashboardTab, ClassifyTab, QCVNTab, AdminTab
+  const mapVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/MapTab.vue'), 'utf8');
+  const dashboardVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/DashboardTab.vue'), 'utf8');
+  const adminVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/AdminTab.vue'), 'utf8');
+
+  assert.ok(!mapVue.includes('value="dat_chuan"'), 'MapTab khong con option dat_chuan sai contract');
+  assert.ok(mapVue.includes('value="chua_du_thong_so"'), 'MapTab phai co filter chua_du_thong_so');
+  assert.ok(mapVue.includes('value="can_ra_soat"'), 'MapTab phai co filter can_ra_soat');
+  assert.ok(mapVue.includes('getQcvnBadgeMeta'), 'MapTab phai dung shared helper getQcvnBadgeMeta');
+  assert.ok(mapVue.includes('value="Cần rà soát"'), 'MapTab phai co nhom Cần rà soát');
+
+  assert.ok(dashboardVue.includes("key: 'cap_xa'"), 'DashboardTab phai co cap_xa rieng biet');
+  assert.ok(dashboardVue.includes('getDashboardSampleBadge'), 'DashboardTab phai map du 5 trang thai QCVN');
+  assert.ok(dashboardVue.includes('needsReviewProjects'), 'DashboardTab phai ho tro needsReviewProjects KPI');
+
+  assert.ok(classifyVue.includes('evaluationDate'), 'ClassifyTab phai co input evaluationDate');
+  assert.ok(classifyVue.includes('insideCoreProtectedZone'), 'ClassifyTab phai co khai bao vung nhay cam');
+  assert.ok(classifyVue.includes('projectSensitiveVerification'), 'ClassifyTab phai ho tro xac minh Admin phia server');
+
+  assert.ok(!qcvnVue.includes('const industrialNganh ='), 'QCVNTab khong con mang industrialNganh hardcode');
+  assert.ok(!qcvnVue.includes('const domesticNganh ='), 'QCVNTab khong con mang domesticNganh hardcode');
+  assert.ok(qcvnVue.includes('API.QCVN_SELECT'), 'QCVNTab phai goi POST /api/qcvns/select');
+  assert.ok(qcvnVue.includes('API.QCVN_EVALUATE'), 'QCVNTab phai goi POST /api/qcvns/evaluate');
+
+  assert.ok(!adminVue.includes('IND_DB'), 'AdminTab khong duoc phu thuoc IND_DB tinh');
+  assert.ok(adminVue.includes('ADMIN_RULES_IMPACTS'), 'AdminTab phai ho tro tab kiem duyet law_rule_impacts');
+  assert.ok(adminVue.includes('ADMIN_RULES_CANDIDATES'), 'AdminTab phai ho tro duyet rule_candidates');
+  assert.ok(adminVue.includes('ADMIN_RULES_QCVN_TRANSITIONAL'), 'AdminTab phai ho tro nhap QCVN chuyen tiep');
+});
+
+test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /select+/evaluate+mismatch+IDOR, dashboard cap_xa & crawler PENDING_REVIEW', async () => {
+  const originalQuery = db.query.bind(db);
+  const { seedClassificationCatalog, seedQcvnCatalog } = require('../services/rule-repository');
+  const { detectImpactedRules, extractRuleCandidatesFromLaw } = require('../services/crawler-sync-service');
+  const { requireAdmin } = require('../middleware/auth');
+
+  const mem = {
+    industries: [],
+    legal_appendices: [],
+    classification_thresholds: [],
+    qcvns: [],
+    gis_layers: [],
+    sensitiveVerifications: [
+      {
+        id: 1,
+        project_id: 101,
+        declared_flags: { rung: true },
+        declared_details: { insideCoreProtectedZone: true },
+        verification_status: 'PENDING_VERIFICATION',
+        verified_by: null,
+        evidence_ref: null,
+        verification_note: null,
+      },
+    ],
+    projects: [
+      {
+        id: 101,
+        user_id: 1,
+        user_name: 'Chuyen vien A',
+        name: 'Du an Go khong hop le',
+        form_data: { nganh: 'nganh_khong_ton_tai', capacity: 100, nt: 0, kt: 0, tinh: 'Dong Nai' },
+        checklist_state: {},
+        latitude: '10.95',
+        longitude: '106.85',
+        dia_chi_hien_thi: 'Dong Nai',
+        quan_huyen: null,
+        phuong_xa: 'An Hoa',
+        classification_result: null,
+      },
+      {
+        id: 102,
+        user_id: 2,
+        user_name: 'Chuyen vien B',
+        name: 'Nha may Thep B',
+        form_data: { nganh: 'thep', processStage: 'rolling_only', capacity: 0.4, nt: 200, kt: 0, tinh: 'Ba Ria - Vung Tau', receivingWaterClass: 'A', receivingWaterConfirmed: true },
+        checklist_state: {},
+        latitude: '10.50',
+        longitude: '107.15',
+        dia_chi_hien_thi: 'Ba Ria - Vung Tau',
+        quan_huyen: null,
+        phuong_xa: null,
+        classification_result: { hs: 'DKMT', nhom: 'Nhóm IV', competentAuthority: { authorityLevel: 'cap_xa', label: 'UBND Cấp Xã' }, evaluationDate: '2026-06-01' },
+      },
+    ],
+    qcvn_samples: [
+      { id: 1, user_id: 1, project_id: 101, name: 'Mau Thieu', type: 'nuoc_mat', sub_type: 'qcvn08_a', trang_thai_tong_quat: 'chua_du_thong_so', overall_status: 'INCOMPLETE', created_at: new Date().toISOString() },
+      { id: 2, user_id: 1, project_id: 102, name: 'Mau Ra Soat', type: 'nuoc_thai_cn', sub_type: 'qcvn40_a_low', trang_thai_tong_quat: 'can_ra_soat', overall_status: 'NEEDS_REVIEW', created_at: new Date().toISOString() },
+    ],
+    laws: [
+      { id: 'nd_08_2022', ten: 'Nghi dinh 08/2022', so: '08/2022/ND-CP', status: 'valid' },
+    ],
+    law_rule_impacts: [],
+    rule_candidates: [],
+    audit_logs: [],
+    query_logs: [],
+    users: [{ id: 1, full_name: 'Admin', role: 'admin', username: 'admin' }],
+  };
+
+  const mockDb = {
+    async query(sql, params = []) {
+      const s = String(sql).replace(/\s+/g, ' ').trim();
+      if (/^(CREATE|ALTER)/i.test(s)) return { rows: [], rowCount: 0 };
+      if (/INSERT INTO industries/i.test(s)) {
+        const obj = { code: params[0], name: params[1], display_name: params[2], unit: params[3], verification_status: 'VERIFIED', publication_status: 'PUBLISHED' };
+        mem.industries.push(obj);
+        return { rows: [obj], rowCount: 1 };
+      }
+      if (/FROM industries WHERE code = \$1/i.test(s)) {
+        const hits = mem.industries.filter(i => i.code === params[0]);
+        return { rows: hits, rowCount: hits.length };
+      }
+      if (/SELECT \* FROM industries/i.test(s) || /FROM industries ORDER BY/i.test(s)) {
+        return { rows: mem.industries, rowCount: mem.industries.length };
+      }
+      if (/INSERT INTO legal_appendices/i.test(s)) return { rows: [], rowCount: 0 };
+      if (/SELECT code, appendix_code/i.test(s) || /SELECT \* FROM legal_appendices/i.test(s)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (/INSERT INTO classification_thresholds/i.test(s)) {
+        const obj = {
+          id: mem.classification_thresholds.length + 1,
+          industry_code: params[0],
+          process_stage: params[1],
+          min_value: params[2],
+          max_value: params[3],
+          operator: params[4],
+          unit: params[5],
+          capacity_scale: params[6],
+          project_group: params[7],
+          legal_doc_required: params[8],
+          tq: params[9],
+          historical_tq: params[10],
+          phu_luc: params[11],
+          legal_ref: params[12],
+          law_id: params[13],
+          effective_from: params[14],
+          effective_to: params[15],
+          verification_status: 'VERIFIED',
+          publication_status: 'PUBLISHED',
+          tier_order: params[18] ?? 0,
+          rule_version: params[19],
+        };
+        mem.classification_thresholds.push(obj);
+        return { rows: [obj], rowCount: 1 };
+      }
+      if (/SELECT id, industry_code, process_stage, verification_status/i.test(s)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (/FROM classification_thresholds/i.test(s)) {
+        if (/law_id = \$1/i.test(s)) {
+          const hits = mem.classification_thresholds.filter(t => t.law_id === params[0]);
+          return { rows: hits, rowCount: hits.length };
+        }
+        return { rows: mem.classification_thresholds, rowCount: mem.classification_thresholds.length };
+      }
+      if (/INSERT INTO qcvns/i.test(s)) {
+        const obj = {
+          id: params[0],
+          ten: params[1],
+          ap_dung: params[2],
+          tham_so: JSON.parse(params[3]),
+          standard_code: params[4],
+          standard_version: params[5],
+          status: params[6],
+          source_type: params[7],
+          column_code: params[8],
+          flow_range: params[9],
+          effective_from: params[10],
+          effective_to: params[11],
+          mandatory_for_all_from: params[12],
+          verification_status: 'VERIFIED',
+          publication_status: 'PUBLISHED',
+          rule_version: params[17] || '2026.2',
+        };
+        mem.qcvns.push(obj);
+        return { rows: [obj], rowCount: 1 };
+      }
+      if (/FROM qcvns WHERE id = \$1/i.test(s)) {
+        const hits = mem.qcvns.filter(q => q.id === params[0]);
+        return { rows: hits, rowCount: hits.length };
+      }
+      if (/FROM qcvns/i.test(s)) {
+        return { rows: mem.qcvns, rowCount: mem.qcvns.length };
+      }
+      if (/FROM gis_layers/i.test(s)) {
+        return { rows: mem.gis_layers, rowCount: mem.gis_layers.length };
+      }
+      if (/FROM project_sensitive_verifications WHERE project_id = \$1/i.test(s)) {
+        const v = mem.sensitiveVerifications.find(x => x.project_id === Number(params[0]));
+        return { rows: v ? [v] : [], rowCount: v ? 1 : 0 };
+      }
+      if (/UPDATE project_sensitive_verifications/i.test(s)) {
+        const v = mem.sensitiveVerifications[0];
+        v.verification_status = params[0];
+        v.verified_by = params[1];
+        v.evidence_ref = params[2];
+        v.verification_note = params[3];
+        return { rows: [v], rowCount: 1 };
+      }
+      if (/INSERT INTO project_sensitive_verifications/i.test(s)) {
+        const v = {
+          id: mem.sensitiveVerifications.length + 1,
+          project_id: Number(params[0]),
+          verification_status: params[4],
+          verified_by: params[5],
+          evidence_ref: params[7],
+          verification_note: params[8],
+        };
+        mem.sensitiveVerifications.push(v);
+        return { rows: [v], rowCount: 1 };
+      }
+      if (/SELECT .+ FROM projects WHERE id = \$1/i.test(s)) {
+        const p = mem.projects.find(x => x.id === Number(params[0]));
+        return { rows: p ? [p] : [], rowCount: p ? 1 : 0 };
+      }
+      if (/UPDATE projects SET classification_result = \$1 WHERE id = \$2/i.test(s)) {
+        const p = mem.projects.find(x => x.id === Number(params[1]));
+        if (p) p.classification_result = JSON.parse(params[0]);
+        return { rows: p ? [p] : [], rowCount: p ? 1 : 0 };
+      }
+      if (/FROM projects p/i.test(s)) {
+        return {
+          rows: mem.projects.map(p => ({ ...p, ten_du_an: p.name, quan_trac_gan_nhat_ngay: null, quan_trac_gan_nhat_trang_thai: 'chua_du_thong_so' })),
+          rowCount: mem.projects.length,
+        };
+      }
+      if (/SELECT \* FROM projects/i.test(s)) {
+        return { rows: mem.projects, rowCount: mem.projects.length };
+      }
+      if (/FROM qcvn_samples s/i.test(s)) {
+        return { rows: mem.qcvn_samples, rowCount: mem.qcvn_samples.length };
+      }
+      if (/SELECT \* FROM qcvn_samples/i.test(s)) {
+        return { rows: mem.qcvn_samples, rowCount: mem.qcvn_samples.length };
+      }
+      if (/INSERT INTO qcvn_samples/i.test(s)) {
+        const obj = { id: 99, name: params[1], type: params[2], sub_type: params[3], trang_thai_tong_quat: params[6], overall_status: params[7] };
+        return { rows: [obj], rowCount: 1 };
+      }
+      if (/SELECT COUNT\(\*\) AS total/i.test(s) && /FROM laws/i.test(s)) {
+        return { rows: [{ total: 1, valid_count: 1, amended_count: 0 }], rowCount: 1 };
+      }
+      if (/FROM users WHERE role/i.test(s)) {
+        return { rows: mem.users, rowCount: mem.users.length };
+      }
+      if (/FROM law_rule_impacts/i.test(s) && /SELECT/i.test(s)) {
+        return { rows: mem.law_rule_impacts.filter(i => i.law_id === params[0]), rowCount: mem.law_rule_impacts.length };
+      }
+      if (/INSERT INTO law_rule_impacts/i.test(s)) {
+        const row = { id: mem.law_rule_impacts.length + 1, law_id: params[0], event_action: params[2], target_type: params[3], target_id: params[4], status: 'OPEN' };
+        mem.law_rule_impacts.push(row);
+        return { rows: [row], rowCount: 1 };
+      }
+      if (/FROM rule_candidates/i.test(s) && /SELECT/i.test(s)) {
+        return { rows: mem.rule_candidates.filter(c => c.law_id === params[0]), rowCount: mem.rule_candidates.length };
+      }
+      if (/INSERT INTO rule_candidates/i.test(s)) {
+        const row = { id: mem.rule_candidates.length + 1, law_id: params[0], target_type: params[2], target_code: params[3], status: 'PENDING_REVIEW' };
+        mem.rule_candidates.push(row);
+        return { rows: [row], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    },
+  };
+
+  await seedClassificationCatalog(mockDb, { indDb: IND_DB, industryMeta: INDUSTRY_META });
+  await seedQcvnCatalog(mockDb, { qcvnData: QCVN_DATA });
+
+  db.query = mockDb.query;
+  try {
+    const projectsRouter = require('../routes/projects');
+    const qcvnsRouter = require('../routes/qcvns');
+    const dashboardRouter = require('../routes/dashboard');
+
+    // 1. GET /api/projects/geo must not crash and must return 'Cần rà soát' for invalid nganh (no 'Nhóm II' fallback)
+    const geoHandler = getRouteHandler(projectsRouter, 'get', '/geo');
+    const geoRes = createExpressMockRes();
+    await geoHandler({ user: { id: 1, role: 'admin' } }, geoRes);
+    assert.equal(geoRes.statusCode, 200);
+    assert.ok(Array.isArray(geoRes.body));
+    const badProj = geoRes.body.find(p => p.id === 101);
+    assert.equal(badProj.nhom_du_an, 'Cần rà soát');
+
+    // 2. Sensitive verification route requires Admin (non-admin blocked) and succeeds for Admin
+    const jwt = require('jsonwebtoken');
+    const { JWT_SECRET, COOKIE_NAME } = require('../utils/constants');
+    const staffToken = jwt.sign({ id: 2, role: 'staff', username: 'staff' }, JWT_SECRET);
+    const nonAdminRes = createExpressMockRes();
+    let passedNext = false;
+    requireAdmin({ cookies: { [COOKIE_NAME]: staffToken }, headers: {} }, nonAdminRes, () => { passedNext = true; });
+    assert.equal(passedNext, false);
+    assert.equal(nonAdminRes.statusCode, 403);
+
+    const sensHandler = getRouteHandler(projectsRouter, 'put', '/:id/sensitive-verification');
+    const sensRes = createExpressMockRes();
+    await sensHandler(
+      {
+        headers: {},
+        socket: {},
+        user: { id: 1, role: 'admin', username: 'admin' },
+        params: { id: '101' },
+        body: { verification_status: 'VERIFIED', evidence_ref: 'QĐ-123', verification_note: 'Ok' },
+      },
+      sensRes
+    );
+    assert.equal(sensRes.statusCode, 200);
+    assert.equal(sensRes.body.sensitiveVerification.verification_status, 'VERIFIED');
+
+    // 3. POST /api/qcvns/select & POST /api/qcvns/evaluate & mismatch gate
+    const selectHandler = getRouteHandler(qcvnsRouter, 'post', '/select');
+    const selRes = createExpressMockRes();
+    await selectHandler(
+      { headers: {}, body: { nganh: 'thep', receivingWaterClass: 'A', receivingWaterConfirmed: true, flowRate: 200, isExistingFacility: false } },
+      selRes
+    );
+    assert.equal(selRes.statusCode, 200);
+    assert.equal(selRes.body.qcvnId, 'qcvn40_a_low');
+
+    const evalHandler = getRouteHandler(qcvnsRouter, 'post', '/evaluate');
+    const mismatchRes = createExpressMockRes();
+    await evalHandler(
+      {
+        headers: {},
+        body: {
+          sub_type: 'qcvn08_a', // Mismatch vs server selection qcvn40_a_low for 'thep'
+          nganh: 'thep',
+          receivingWaterClass: 'A',
+          receivingWaterConfirmed: true,
+          flowRate: 200,
+          isExistingFacility: false,
+          values: { pH: 7.2, COD: 20 },
+        },
+      },
+      mismatchRes
+    );
+    assert.equal(mismatchRes.statusCode, 200);
+    assert.equal(mismatchRes.body.evaluation.reason, 'QCVN_SELECTION_MISMATCH');
+    assert.equal(mismatchRes.body.evaluation.trang_thai_tong_quat, 'can_ra_soat');
+
+    // 4. POST /api/qcvns/samples blocks IDOR project_id for non-owner staff
+    const postSampleHandler = getRouteHandler(qcvnsRouter, 'post', '/samples');
+    const idorRes = createExpressMockRes();
+    await postSampleHandler(
+      {
+        user: { id: 99, role: 'staff' },
+        body: { name: 'Mau IDOR', type: 'nuoc_thai_cn', sub_type: 'qcvn40_a_low', project_id: 102, values: { pH: 7 } },
+      },
+      idorRes
+    );
+    assert.equal(idorRes.statusCode, 403);
+
+    // 5. GET /api/dashboard/stats includes cap_xa, needsReviewProjects & does not count chua_du_thong_so/can_ra_soat into passSamples
+    const dashHandler = getRouteHandler(dashboardRouter, 'get', '/stats');
+    const dashRes = createExpressMockRes();
+    await dashHandler({ user: { id: 1, role: 'admin' }, query: {} }, dashRes);
+    assert.equal(dashRes.statusCode, 200);
+    assert.equal(dashRes.body.kpis.passSamples, 0);
+    assert.equal(dashRes.body.kpis.incompleteSamples, 1);
+    assert.equal(dashRes.body.kpis.needsReviewSamples, 1);
+    assert.equal(dashRes.body.kpis.needsReviewProjects >= 1, true);
+    assert.equal(typeof dashRes.body.distributions.byAuthority.cap_xa, 'number');
+
+    // 6. Crawler sync service detects impacts & extracts PENDING_REVIEW candidates only
+    const impacted = await detectImpactedRules({
+      lawId: 'nd_08_2022',
+      lawTitle: 'Nghi dinh 08/2022 QCVN 40:2025',
+      so: '08/2022/ND-CP',
+      eventAction: 'AUTO_CRAWL_UPDATE',
+    }, { db: mockDb });
+    assert.ok(impacted.length >= 1);
+    assert.equal(impacted[0].status, 'OPEN');
+
+    const extracted = await extractRuleCandidatesFromLaw({
+      id: 'tt_99_2026',
+      ten: 'Thong tu ban hanh QCVN 40:2025',
+      so: '99/2026/TT-BTNMT',
+      dieu_khoang: [{ tieu_de: 'Dieu 1', noi_dung: 'Ap dung Phu luc III va QCVN 40:2025/BTNMT' }],
+    }, { db: mockDb });
+    assert.ok(extracted.length >= 1);
+    assert.ok(extracted.every(c => c.status === 'PENDING_REVIEW'));
+  } finally {
+    db.query = originalQuery;
+  }
 });
