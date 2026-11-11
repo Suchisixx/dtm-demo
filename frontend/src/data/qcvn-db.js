@@ -1,7 +1,13 @@
 // frontend/src/data/qcvn-db.js
-// Cơ sở dữ liệu Quy chuẩn Kỹ thuật Quốc gia về Môi trường (QCVN) & Bộ máy Đối chiếu sau Kiểm toán Pháp lý
+// Dữ liệu seed / fixture Quy chuẩn Kỹ thuật Quốc gia về Môi trường (QCVN).
+// Thuật toán đối chiếu chuẩn đặt tại frontend/src/utils/qcvn-evaluator.js (dùng chung cho UI & Backend DB runtime).
 // Lưu ý kiểm toán pháp lý: Các giá trị giới hạn chưa đối chiếu trực tiếp từ bản PDF đóng dấu chính thức
 // được gắn cờ verificationStatus: 'NEEDS_LEGAL_VERIFICATION'.
+
+import {
+  selectApplicableQcvn as coreSelectApplicableQcvn,
+  evaluateQcvnSample as coreEvaluateQcvnSample,
+} from '../utils/qcvn-evaluator.js';
 
 export const QCVN_SCHEMA_VERSION = '2026.2-audit';
 
@@ -766,266 +772,28 @@ export const QCVN_DATA = {
 };
 
 /**
- * Cây quyết định chọn bộ QCVN, Cột (A/B/C), khoảng lưu lượng (F1/F2/F3) và điều khoản chuyển tiếp (Q08, Q09, T09, T10, T11, T15)
+ * Wrapper tương thích cho cây quyết định chọn QCVN.
+ * Khi caller không truyền catalog từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
  */
-export function selectApplicableQcvn({
-  sourceType = 'nuoc_thai_cn',
-  receivingWaterClass = null, // 'A' | 'B' | 'C'
-  flowRate = null, // m3/ngay
-  isUrbanArea = false,
-  isExistingFacility = false,
-  evaluationDate = new Date().toISOString().slice(0, 10),
-} = {}) {
-  // T11: Nếu là nước thải nhưng thiếu thông tin nguồn tiếp nhận -> trả NEEDS_REVIEW, không tự chọn cột
-  if ((sourceType === 'nuoc_thai_cn' || sourceType === 'nuoc_thai_sh') && !receivingWaterClass) {
-    return {
-      status: 'NEEDS_REVIEW',
-      reason: 'MISSING_RECEIVING_WATER_CLASS',
-      message: 'Thiếu thông tin phân vùng/mục đích sử dụng nguồn nước tiếp nhận (Cột A, B hoặc C). Hệ thống không tự động chọn cột và không kết luận đạt/không đạt.',
-      qcvnId: null,
-    };
-  }
-
-  const col = (receivingWaterClass || 'B').toUpperCase();
-  if (!['A', 'B', 'C'].includes(col) && (sourceType === 'nuoc_thai_cn' || sourceType === 'nuoc_thai_sh')) {
-    return {
-      status: 'NEEDS_REVIEW',
-      reason: 'INVALID_RECEIVING_WATER_CLASS',
-      message: `Cột nguồn tiếp nhận "${receivingWaterClass}" không hợp lệ (chỉ chấp nhận A, B, C).`,
-      qcvnId: null,
-    };
-  }
-
-  if (sourceType === 'nuoc_thai_cn') {
-    if (flowRate === null || flowRate === undefined || isNaN(Number(flowRate)) || Number(flowRate) <= 0) {
-      return {
-        status: 'NEEDS_REVIEW',
-        reason: 'MISSING_FLOW_RATE',
-        message: 'Thiếu lưu lượng xả thải F (m³/ngày đêm) để xác định khoảng lưu lượng F1 (≤50), F2 (50–2.000) hay F3 (≥2.000).',
-        qcvnId: null,
-      };
-    }
-    const f = Number(flowRate);
-    let flowKey = 'low'; // F2
-    let flowCode = 'F2';
-    if (f <= 50) {
-      flowKey = 'f1';
-      flowCode = 'F1';
-    } else if (f >= 2000) {
-      flowKey = 'high';
-      flowCode = 'F3';
-    }
-
-    const qcvnId = `qcvn40_${col.toLowerCase()}_${flowKey}`;
-    const qcvnObj = QCVN_DATA[qcvnId];
-    const inTransition = Boolean(isExistingFacility && evaluationDate < (qcvnObj?.mandatoryForAllFrom || '2032-01-01'));
-
-    return {
-      status: 'OK',
-      qcvnId,
-      column: col,
-      flowCode,
-      inTransition,
-      applicableStandard: inTransition ? 'QCVN 40:2011/BTNMT (theo điều khoản chuyển tiếp đến 31/12/2031)' : 'QCVN 40:2025/BTNMT',
-      transitionRule: inTransition && qcvnObj?.transitionRules?.[0] ? qcvnObj.transitionRules[0] : null,
-    };
-  }
-
-  if (sourceType === 'nuoc_thai_sh') {
-    const prefix = isUrbanArea ? 'qcvn14_urban' : 'qcvn14';
-    const qcvnId = `${prefix}_${col.toLowerCase()}`;
-    const qcvnObj = QCVN_DATA[qcvnId];
-    const inTransition = Boolean(isExistingFacility && evaluationDate < (qcvnObj?.mandatoryForAllFrom || '2032-01-01'));
-
-    return {
-      status: 'OK',
-      qcvnId,
-      column: col,
-      inTransition,
-      applicableStandard: inTransition ? 'QCVN 14:2008/BTNMT (theo điều khoản chuyển tiếp đến 31/12/2031)' : 'QCVN 14:2025/BTNMT',
-      transitionRule: inTransition && qcvnObj?.transitionRules?.[0] ? qcvnObj.transitionRules[0] : null,
-    };
-  }
-
-  if (sourceType === 'khi_thai_cn') {
-    const inTransition = Boolean(isExistingFacility && evaluationDate < '2032-01-01');
-    const colKey = (receivingWaterClass || 'B').toLowerCase() === 'a' ? 'a' : 'b';
-    const qcvnId = inTransition ? 'qcvn19_2009_b' : `qcvn19_2024_${colKey}`;
-    return {
-      status: 'OK',
-      qcvnId,
-      column: colKey.toUpperCase(),
-      inTransition,
-      applicableStandard: inTransition ? 'QCVN 19:2009/BTNMT (Chuyển tiếp)' : 'QCVN 19:2024/BTNMT',
-    };
-  }
-
-  return {
-    status: 'OK',
-    qcvnId: SUB_TYPES[sourceType]?.[0]?.value || null,
-    inTransition: false,
-  };
+export function selectApplicableQcvn(options = {}) {
+  const hasCustomCatalog = options.qcvnDatabase && Object.keys(options.qcvnDatabase).length > 0;
+  return coreSelectApplicableQcvn({
+    ...options,
+    qcvnDatabase: hasCustomCatalog ? options.qcvnDatabase : QCVN_DATA,
+    subTypes: options.subTypes || SUB_TYPES,
+    ruleSource: options.ruleSource || (hasCustomCatalog ? 'DATABASE' : 'FALLBACK_UNVERIFIED'),
+  });
 }
 
 /**
- * Đánh giá mẫu quan trắc so với QCVN và giới hạn riêng trong GPMT (Q10, Q11, Q12, T11–T18)
+ * Wrapper tương thích cho evaluator đối chiếu mẫu quan trắc.
+ * Khi caller không truyền catalog từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
  */
-export function evaluateQcvnSample({
-  qcvnId,
-  measuredValues = {},
-  samplingPeriods = {},
-  permitLimits = null,
-  receivingWaterConfirmed = true,
-  qcvnDatabase = QCVN_DATA,
-} = {}) {
-  if (!receivingWaterConfirmed) {
-    return {
-      overallStatus: 'NEEDS_REVIEW',
-      trang_thai_tong_quat: 'can_ra_soat',
-      reason: 'MISSING_RECEIVING_SOURCE',
-      evaluatedParams: [],
-      summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0 },
-    };
-  }
-
-  const qcvn = qcvnDatabase[qcvnId];
-  if (!qcvn) {
-    return {
-      overallStatus: 'NEEDS_REVIEW',
-      trang_thai_tong_quat: 'can_ra_soat',
-      reason: 'UNKNOWN_QCVN',
-      evaluatedParams: [],
-      summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0 },
-    };
-  }
-
-  let pass = 0;
-  let near = 0;
-  let fail = 0;
-  let missingRequired = 0;
-  let periodMismatch = 0;
-
-  const evaluatedParams = (qcvn.tham_so || []).map(p => {
-    if (p.nhom) return p;
-
-    // Tương thích ngược nếu mẫu cũ lưu Cr3 thay vì Cr_tong
-    const rawVal = measuredValues[p.key] !== undefined
-      ? measuredValues[p.key]
-      : (p.key === 'Cr_tong' ? measuredValues.Cr3 : undefined);
-    const val = (rawVal !== undefined && rawVal !== '' && rawVal !== null) ? parseFloat(rawVal) : undefined;
-    const isRequired = p.required !== false;
-
-    if (val === undefined || isNaN(val)) {
-      if (isRequired) missingRequired++;
-      return {
-        ...p,
-        value: undefined,
-        status: null,
-        qcvnCompliant: null,
-        permitCompliant: null,
-      };
-    }
-
-    // T17 (Q11): Kiểm tra chu kỳ trung bình (ví dụ CO 8 giờ không được so với mẫu đo trung bình 24 giờ)
-    const samplePeriod = samplingPeriods[p.key] || samplingPeriods._default;
-    if (samplePeriod && p.averagingPeriod && samplePeriod !== p.averagingPeriod) {
-      periodMismatch++;
-      return {
-        ...p,
-        value: val,
-        status: 'period_mismatch',
-        qcvnCompliant: null,
-        permitCompliant: null,
-        periodMismatchNote: `Sai chu kỳ trung bình: Thông số yêu cầu chu kỳ ${p.averagingPeriod} nhưng mẫu đo ở chu kỳ ${samplePeriod}.`,
-      };
-    }
-
-    // Đánh giá theo giới hạn QCVN (T13, T14)
-    let status = 'pass';
-    let qcvnCompliant = true;
-
-    if (p.loai === 'range') {
-      if (val < p.min || val > p.max) {
-        status = 'fail';
-        qcvnCompliant = false;
-      } else if (val > p.min && val < p.max && (val < p.min * 1.05 || val > p.max * 0.95)) {
-        status = 'near';
-      }
-    } else if (p.loai === 'min') {
-      if (val < p.gioi_han) {
-        status = 'fail';
-        qcvnCompliant = false;
-      } else if (val > p.gioi_han && val < p.gioi_han * 1.2) {
-        status = 'near';
-      }
-    } else {
-      // max: T13 — Kết quả đo đúng bằng giới hạn (val === p.gioi_han) là ĐẠT (qcvnCompliant = true)
-      if (val > p.gioi_han) {
-        status = 'fail';
-        qcvnCompliant = false;
-      } else if (val > p.gioi_han * 0.8 && val < p.gioi_han) {
-        status = 'near';
-      }
-    }
-
-    // T18 (Q12): Đánh giá riêng với giới hạn trong GPMT (nếu có)
-    let permitLimit = permitLimits && permitLimits[p.key] !== undefined ? parseFloat(permitLimits[p.key]) : null;
-    let permitCompliant = null;
-    if (permitLimit !== null && !isNaN(permitLimit)) {
-      if (p.loai === 'min') {
-        permitCompliant = val >= permitLimit;
-      } else {
-        permitCompliant = val <= permitLimit;
-      }
-      if (!permitCompliant) {
-        status = 'fail';
-      }
-    }
-
-    if (status === 'fail') fail++;
-    else if (status === 'near') near++;
-    else pass++;
-
-    return {
-      ...p,
-      value: val,
-      status,
-      qcvnCompliant,
-      permitLimit,
-      permitCompliant,
-    };
+export function evaluateQcvnSample(options = {}) {
+  const hasCustomCatalog = options.qcvnDatabase && Object.keys(options.qcvnDatabase).length > 0;
+  return coreEvaluateQcvnSample({
+    ...options,
+    qcvnDatabase: hasCustomCatalog ? options.qcvnDatabase : QCVN_DATA,
+    ruleSource: options.ruleSource || (hasCustomCatalog ? 'DATABASE' : 'FALLBACK_UNVERIFIED'),
   });
-
-  const total = pass + near + fail;
-  let overallStatus = 'PASS';
-  let trang_thai_tong_quat = 'dat';
-
-  if (fail > 0) {
-    overallStatus = 'FAIL';
-    trang_thai_tong_quat = 'vuot_nguong';
-  } else if (periodMismatch > 0) {
-    overallStatus = 'NEEDS_REVIEW';
-    trang_thai_tong_quat = 'can_ra_soat';
-  } else if (total === 0 || missingRequired > 0) {
-    // Q10 & T12: Thiếu thông số bắt buộc -> trả INCOMPLETE, tuyệt đối không kết luận PASS ('dat')
-    overallStatus = 'INCOMPLETE';
-    trang_thai_tong_quat = 'chua_du_thong_so';
-  } else if (near > 0) {
-    overallStatus = 'PASS_WITH_WARNING';
-    trang_thai_tong_quat = 'canh_bao';
-  }
-
-  return {
-    overallStatus,
-    trang_thai_tong_quat,
-    evaluatedParams,
-    summary: {
-      total,
-      pass,
-      near,
-      fail,
-      missingRequired,
-      periodMismatch,
-    },
-  };
 }

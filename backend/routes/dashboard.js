@@ -268,14 +268,18 @@ router.get('/stats', requireAuth, async (req, res) => {
     let passSamples = 0;
     let warnSamples = 0;
     let failSamples = 0;
+    let incompleteSamples = 0;
+    let reviewSamples = 0;
 
     samplesRes.rows.forEach(s => {
-      const status = s.trang_thai_tong_quat || 'dat';
+      const status = s.trang_thai_tong_quat || 'can_ra_soat';
       if (s.project_id) linkedSamples++;
 
-      if (status === 'vuot_nguong') failSamples++;
+      if (status === 'dat') passSamples++;
       else if (status === 'canh_bao') warnSamples++;
-      else passSamples++;
+      else if (status === 'vuot_nguong') failSamples++;
+      else if (status === 'chua_du_thong_so') incompleteSamples++;
+      else reviewSamples++;
 
       const tKey = s.type || 'nuoc_mat';
       if (!qcvnByTypeMap[tKey]) {
@@ -285,19 +289,23 @@ router.get('/stats', requireAuth, async (req, res) => {
           total: 0,
           dat: 0,
           canh_bao: 0,
-          vuot_nguong: 0
+          vuot_nguong: 0,
+          chua_du_thong_so: 0,
+          can_ra_soat: 0
         };
       }
       qcvnByTypeMap[tKey].total++;
-      if (status === 'vuot_nguong') qcvnByTypeMap[tKey].vuot_nguong++;
+      if (status === 'dat') qcvnByTypeMap[tKey].dat++;
       else if (status === 'canh_bao') qcvnByTypeMap[tKey].canh_bao++;
-      else qcvnByTypeMap[tKey].dat++;
+      else if (status === 'vuot_nguong') qcvnByTypeMap[tKey].vuot_nguong++;
+      else if (status === 'chua_du_thong_so') qcvnByTypeMap[tKey].chua_du_thong_so++;
+      else qcvnByTypeMap[tKey].can_ra_soat++;
     });
 
     const totalSamples = samplesRes.rows.length;
     const complianceRate = totalSamples > 0
       ? Math.round((passSamples / totalSamples) * 100)
-      : 100;
+      : 0;
 
     const alertSamples = samplesRes.rows
       .filter(s => s.trang_thai_tong_quat === 'vuot_nguong' || s.trang_thai_tong_quat === 'canh_bao')
@@ -347,6 +355,8 @@ router.get('/stats', requireAuth, async (req, res) => {
         passSamples,
         warnSamples,
         failSamples,
+        incompleteSamples,
+        reviewSamples,
         complianceRate,
         totalLaws,
         validLaws,

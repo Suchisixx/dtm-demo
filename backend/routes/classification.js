@@ -2,16 +2,16 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const logger = require('../utils/logger');
-const { evaluateClassification, IND_DB, SENSITIVE_AREAS } = require('../services/classification-service');
+const { evaluateClassificationWithDb, getClassificationMetadata } = require('../services/classification-service');
 const { analyzeSpatialContext, getAllGisLayers, haversineDistanceKm } = require('../services/spatial-gis-service');
 
-// POST /api/classification/evaluate - Đánh giá và phân loại hồ sơ dự án từ Backend
+// POST /api/classification/evaluate - Đánh giá và phân loại hồ sơ dự án từ Backend (nạp rule từ DB)
 router.post('/evaluate', async (req, res) => {
   try {
     const formData = req.body || {};
 
-    // Thực thi thuật toán phân loại và tra cứu luật trên Backend
-    const result = evaluateClassification(formData);
+    // Thực thi thuật toán phân loại và tra cứu luật từ PostgreSQL
+    const result = await evaluateClassificationWithDb(formData);
 
     return res.json({
       success: true,
@@ -91,12 +91,15 @@ router.get('/gis-layers', (req, res) => {
   });
 });
 
-// GET /api/classification/metadata - Lấy danh mục ngành nghề và danh mục vùng nhạy cảm
-router.get('/metadata', (req, res) => {
-  return res.json({
-    industries: IND_DB,
-    sensitiveAreas: SENSITIVE_AREAS
-  });
+// GET /api/classification/metadata - Lấy danh mục ngành nghề (từ DB), công đoạn và vùng nhạy cảm
+router.get('/metadata', async (req, res) => {
+  try {
+    const metadata = await getClassificationMetadata();
+    return res.json(metadata);
+  } catch (error) {
+    logger.error('Lỗi lấy danh mục phân loại:', error);
+    return res.status(500).json({ error: 'Không thể tải danh mục ngành nghề!' });
+  }
 });
 
 module.exports = router;

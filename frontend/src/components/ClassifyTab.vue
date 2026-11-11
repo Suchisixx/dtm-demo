@@ -32,12 +32,19 @@ const emit = defineEmits(['project-loaded', 'view-qcvn-sample', 'view-law'])
 const projectId = ref(null)
 const name = ref('')
 const nganh = ref('')
+const processStage = ref('')
 const capacity = ref(0)
 const nt = ref(0)
 const kt = ref(0)
 const tinh = ref('')
 const latitude = ref(DEFAULT_LAT)
 const longitude = ref(DEFAULT_LNG)
+
+// Runtime Catalog Metadata từ API/PostgreSQL (A-01, A-02, A-05)
+const industriesCatalog = ref({})
+const metadataRuleSource = ref('LOADING')
+const metadataFallbackReason = ref('')
+const isLoadingSavedProject = ref(false)
 
 // GIS State
 const diaChiHienThi = ref('')
@@ -833,22 +840,80 @@ const findMatchingProvince = (provName) => {
 }
 
 const capacityLabel = computed(() => {
-  return getCapacityLabel(nganh.value)
+  return getCapacityLabel(nganh.value, industriesCatalog.value)
 })
 
-const handleClassify = async (shouldSave = true) => {
-  if (shouldSave) {
-    if (!name.value || !name.value.trim()) { alert('Vui lòng nhập tên dự án!'); return }
-    if (!nganh.value) { alert('Vui lòng chọn loại hình dự án!'); return }
-    if (parseFloat(capacity.value) < 0) { alert('Vui lòng nhập quy mô / công suất hợp lệ!'); return }
-    if (!tinh.value && !selectedProvince.value) { alert('Vui lòng chọn Tỉnh / Thành phố hoặc chấm vị trí trên bản đồ!'); return }
-  } else {
-    if (!nganh.value) return
-  }
+const currentIndustryMeta = computed(() => {
+  return industriesCatalog.value[nganh.value] || null
+})
 
-  const formData = {
+const availableProcessStages = computed(() => {
+  return currentIndustryMeta.value?.processStages || []
+})
+
+const groupedIndustryOptions = computed(() => {
+  const entries = Object.entries(industriesCatalog.value || {})
+  const groupOrder = [
+    'Công nghiệp chế biến & Chế tạo',
+    'Khai thác Khoáng sản & Năng lượng',
+    'Hạ tầng Kỹ thuật, Giao thông & Môi trường',
+    'Y tế, Du lịch & Nông — Lâm — Thủy sản',
+    'Ngành nghề khác',
+  ]
+  const buckets = new Map()
+  for (const [code, ind] of entries) {
+    const label = ind.groupLabel || 'Ngành nghề khác'
+    if (!buckets.has(label)) buckets.set(label, [])
+    buckets.get(label).push({ code, name: ind.name || code, ...ind })
+  }
+  const ordered = []
+  for (const g of groupOrder) {
+    if (buckets.has(g)) {
+      ordered.push({ groupLabel: g, items: buckets.get(g) })
+      buckets.delete(g)
+    }
+  }
+  for (const [g, items] of buckets.entries()) {
+    ordered.push({ groupLabel: g, items })
+  }
+  return ordered
+})
+
+watch(nganh, () => {
+  if (isLoadingSavedProject.value) return
+  const validKeys = new Set((availableProcessStages.value || []).map(s => s.key))
+  if (!validKeys.has(processStage.value)) {
+    processStage.value = ''
+  }
+})
+
+const fetchClassificationMetadata = async () => {
+  try {
+    const res = await fetch(API.CLASSIFY_METADATA)
+    if (res.ok) {
+      const data = await res.json()
+      industriesCatalog.value = data.industries || {}
+      metadataRuleSource.value = data.ruleSource || 'FALLBACK_UNVERIFIED'
+      metadataFallbackReason.value = data.fallbackReason || ''
+    } else {
+      metadataRuleSource.value = 'FALLBACK_UNVERIFIED'
+      metadataFallbackReason.value = `HTTP_${res.status}`
+    }
+  } catch (err) {
+    logger.error('Lỗi tải danh mục ngành nghề từ API:', err)
+    metadataRuleSource.value = 'FALLBACK_UNVERIFIED'
+    metadataFallbackReason.value = err.message || 'NETWORK_ERROR'
+  }
+}
+
+const buildClassifyFormData = () => {
+  const parsedCap = (capacity.value === '' || capacity.value === null || capacity.value === undefined)
+    ? null
+    : Number(capacity.value)
+  return {
     nganh: nganh.value,
-    capacity: parseFloat(capacity.value) || 0,
+    processStage: processStage.value || null,
+    capacity: (parsedCap !== null && !Number.isNaN(parsedCap)) ? parsedCap : null,
     nt: parseFloat(nt.value) || 0,
     kt: parseFloat(kt.value) || 0,
     tinh: tinh.value,
@@ -869,6 +934,26 @@ const handleClassify = async (shouldSave = true) => {
     dtcong: dtcong.value,
     epr: epr.value
   }
+}
+
+const handleClassify = async (shouldSave = true) => {
+  if (shouldSave) {
+    if (!name.value || !name.value.trim()) { alert('Vui lòng nhập tên dự án!'); return }
+    if (!nganh.value) { alert('Vui lòng chọn loại hình dự án!'); return }
+    if (availableProcessStages.value.length > 0 && !processStage.value) {
+      alert('Ngành nghề này bắt buộc phải chọn công đoạn / loại nhiên liệu (processStage)!')
+      return
+    }
+    const parsedCap = (capacity.value === '' || capacity.value === null || capacity.value === undefined)
+      ? NaN
+      : Number(capacity.value)
+    if (Number.isNaN(parsedCap) || parsedCap < 0) { alert('Vui lòng nhập quy mô / công suất hợp lệ (>= 0)!'); return }
+    if (!tinh.value && !selectedProvince.value) { alert('Vui lòng chọn Tỉnh / Thành phố hoặc chấm vị trí trên bản đồ!'); return }
+  } else {
+    if (!nganh.value) return
+  }
+
+  const formData = buildClassifyFormData()
 
   try {
     const res = await fetch(API.CLASSIFY, {
@@ -887,14 +972,7 @@ const handleClassify = async (shouldSave = true) => {
             ...data.result.spatialAnalysis
           }
         }
-        classificationSnapshot.value = {
-          hs: data.result.hs,
-          nhom: data.result.nhom,
-          coQuan: data.result.coQuan,
-          thoiHan: data.result.thoiHan,
-          tq: data.result.tq,
-          impactRadiusMeters: data.result.impactRadiusMeters
-        }
+        classificationSnapshot.value = data.result
         if (markerInstance && window.L) {
           markerInstance.setIcon(createProjectPinIcon())
         }
@@ -930,14 +1008,17 @@ const saveProjectToServer = async (formData) => {
         longitude: longitude.value,
         dia_chi_hien_thi: diaChiHienThi.value || `${phuongXa.value ? phuongXa.value + ', ' : ''}${tinh.value}`,
         quan_huyen: quanHuyen.value || null,
-        phuong_xa: phuongXa.value || null,
-        classification_result: classificationSnapshot.value || null
+        phuong_xa: phuongXa.value || null
       })
     })
 
     if (res.ok) {
       const data = await res.json()
       projectId.value = data.project.id
+      if (data.project.classification_result) {
+        result.value = data.project.classification_result
+        classificationSnapshot.value = data.project.classification_result
+      }
       fetchProjects(currentPage.value)
     }
   } catch (err) {
@@ -947,11 +1028,14 @@ const saveProjectToServer = async (formData) => {
 
 const selectProject = (project) => {
   if (!project) return
+  isLoadingSavedProject.value = true
   projectId.value = project.id
   name.value = project.name || ''
 
   const fd = project.form_data || {}
-  nganh.value = fd.nganh || ''
+  const rawNganh = fd.nganh || ''
+  nganh.value = rawNganh === 'san_bay' ? 'cang_hang_khong' : rawNganh
+  processStage.value = fd.processStage || ''
   capacity.value = (fd.capacity !== undefined && fd.capacity !== null) ? fd.capacity : (fd.cap || 0)
   nt.value = fd.nt || 0
   kt.value = fd.kt || 0
@@ -1001,12 +1085,16 @@ const selectProject = (project) => {
   handleClassify(false)
   runSpatialCheck(latitude.value, longitude.value)
   fetchQcvnHistory(project.id)
+  nextTick(() => {
+    isLoadingSavedProject.value = false
+  })
 }
 
 const createNewProject = () => {
   projectId.value = null
   name.value = ''
   nganh.value = ''
+  processStage.value = ''
   capacity.value = 0
   nt.value = 0
   kt.value = 0
@@ -1076,29 +1164,17 @@ const handleDeleteProject = async (id) => {
 const toggleChecklistItem = (itemIndex) => {
   checklistState.value[itemIndex] = !checklistState.value[itemIndex]
   if (projectId.value) {
-    const formData = {
-      nganh: nganh.value,
-      capacity: parseFloat(capacity.value) || 0,
-      nt: parseFloat(nt.value) || 0,
-      kt: parseFloat(kt.value) || 0,
-      tinh: tinh.value,
-      rung: rung.value,
-      lua: lua.value,
-      bg: bg.value,
-      bao_ton: bao_ton.value,
-      di_san: di_san.value,
-      ven_bien: ven_bien.value,
-      nguon_nc: nguon_nc.value,
-      dat_ngap: dat_ngap.value,
-      kcn: kcn.value,
-      phanky: phanky.value,
-      morongdt: morongdt.value,
-      ctnh: ctnh.value,
-      dtcong: dtcong.value,
-      epr: epr.value
-    }
+    const formData = buildClassifyFormData()
     saveProjectToServer(formData)
   }
+}
+
+const exportOfficialReport = () => {
+  if (!result.value || !result.value.canExportOfficialReport) {
+    alert('Không thể xuất báo cáo kết luận chính thức khi rule chưa hoàn tất xác minh pháp lý hoặc dữ liệu đầu vào chưa đầy đủ.')
+    return
+  }
+  window.print()
 }
 
 const progressPercent = computed(() => {
@@ -1514,6 +1590,7 @@ watch(() => props.loadProjectId, async (newId) => {
 const showProjectsDrawer = ref(false)
 
 onMounted(async () => {
+  await fetchClassificationMetadata()
   await fetchStaticGisLayers()
   fetchProjects()
   initMap()
@@ -1581,47 +1658,32 @@ onUnmounted(() => {
         <div class="form-group">
           <label class="form-label">Loại hình sản xuất / kinh doanh *</label>
           <select v-model="nganh">
-            <option value="">Chọn ngành nghề dự án (28 nhóm ngành theo NĐ 08/2022 &amp; VBHN 49/2026)...</option>
-            <optgroup label="Công nghiệp chế biến &amp; Chế tạo">
-              <option value="che_bien_go">Chế biến gỗ / Sản xuất MDF, ván sàn</option>
-              <option value="giay_bot">Giấy, bột giấy, carton</option>
-              <option value="det_nhuom">Dệt, nhuộm, hoàn tất vải sợi</option>
-              <option value="thuc_pham">Chế biến thực phẩm, đồ uống, thủy sản</option>
-              <option value="hoa_chat">Hóa chất, phân bón NPK, thuốc BVTV</option>
-              <option value="nhua_cao_su">Nhựa, cao su tổng hợp</option>
-              <option value="cao_su_cb">Cao su chế biến (mủ khô)</option>
-              <option value="duoc_pham">Dược phẩm, sinh phẩm, mỹ phẩm</option>
-              <option value="xi_mang">Xi măng, clinker</option>
-              <option value="thep">Luyện kim, sản xuất thép, phôi thép</option>
-              <option value="vat_lieu_xd">Vật liệu xây dựng (gạch, ngói, gốm sứ)</option>
-              <option value="dien_tu">Điện tử, bán dẫn, linh kiện công nghệ</option>
-            </optgroup>
-            <optgroup label="Khai thác Khoáng sản &amp; Năng lượng">
-              <option value="khai_thac_ks">Khai thác khoáng sản rắn (than, quặng, đá, cát)</option>
-              <option value="khai_thac_dau_khi">Khai thác dầu khí</option>
-              <option value="nhiet_dien">Nhiệt điện (than, khí, sinh khối)</option>
-              <option value="thuy_dien">Thủy điện, năng lượng tái tạo</option>
-              <option value="dien_hat_nhan">Nhà máy điện hạt nhân</option>
-            </optgroup>
-            <optgroup label="Hạ tầng Kỹ thuật, Giao thông &amp; Môi trường">
-              <option value="kcn">Khu công nghiệp / KCX / Khu công nghệ cao</option>
-              <option value="do_thi">Khu đô thị, nhà ở, chung cư</option>
-              <option value="trung_tam_tm">Trung tâm thương mại, siêu thị, văn phòng</option>
-              <option value="cao_toc">Đường cao tốc, quốc lộ, đường sắt</option>
-              <option value="san_bay">Cảng hàng không, sân bay</option>
-              <option value="cang_bien">Cảng biển, bến cảng nước sâu</option>
-              <option value="cang_song">Cảng thủy nội địa, bến sông</option>
-              <option value="bai_rac">Khu xử lý, chôn lấp chất thải rắn / Rác thải</option>
-              <option value="xl_nuoc_thai">Hệ thống xử lý nước thải tập trung</option>
-              <option value="nao_vet">Nạo vét luồng hàng hải, kênh rạch</option>
-            </optgroup>
-            <optgroup label="Y tế, Du lịch &amp; Nông — Lâm — Thủy sản">
-              <option value="benh_vien">Bệnh viện, phòng khám, cơ sở y tế</option>
-              <option value="khach_san">Khách sạn, resort, khu du lịch sinh thái</option>
-              <option value="nuoi_thuy_san">Nuôi trồng thủy sản (ao, lồng bè)</option>
-              <option value="chan_nuoi">Chăn nuôi gia súc, gia cầm tập trung</option>
+            <option value="">Chọn ngành nghề dự án ({{ Object.keys(industriesCatalog).length }} nhóm ngành từ CSDL)...</option>
+            <option v-if="nganh && !industriesCatalog[nganh]" :value="nganh">
+              [Mã cũ không tồn tại trong danh mục hợp lệ: {{ nganh }}]
+            </option>
+            <optgroup v-for="grp in groupedIndustryOptions" :key="grp.groupLabel" :label="grp.groupLabel">
+              <option v-for="ind in grp.items" :key="ind.code" :value="ind.code">
+                {{ ind.name }}
+              </option>
             </optgroup>
           </select>
+          <div v-if="metadataRuleSource === 'FALLBACK_UNVERIFIED'" style="font-size:11.5px;color:var(--warn);margin-top:4px">
+            <i class="ti ti-alert-triangle"></i> Không tải được danh mục từ PostgreSQL ({{ metadataFallbackReason || 'FALLBACK' }}). Kết luận sẽ chuyển trạng thái Cần rà soát.
+          </div>
+        </div>
+
+        <div class="form-group" v-if="availableProcessStages.length > 0">
+          <label class="form-label">Công đoạn / Công nghệ / Nhiên liệu *</label>
+          <select v-model="processStage">
+            <option value="">Chọn công đoạn hoặc nhiên liệu áp dụng...</option>
+            <option v-for="st in availableProcessStages" :key="st.key" :value="st.key">
+              {{ st.label }}
+            </option>
+          </select>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:4px">
+            Ngành này bắt buộc chọn đúng công đoạn/nhiên liệu theo Phụ lục II, III, IV.
+          </div>
         </div>
 
         <div class="form-group">
@@ -1966,35 +2028,78 @@ onUnmounted(() => {
         </div>
 
         <div v-else class="fade-up">
+          <!-- Legal Verification & Completeness Gate Banner (A-04, A-05) -->
+          <div v-if="!result.isOfficialConclusion"
+               style="margin-bottom:14px;padding:14px 16px;border-radius:var(--radius);border:1px solid #F59E0B;background:#FFFBEB;color:#92400E">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:700;font-size:13.5px">
+              <span>
+                <i class="ti ti-shield-exclamation"></i>
+                {{ result.conclusionStatus === 'NEEDS_REVIEW'
+                  ? 'Cần rà soát — Không thể kết luận tự động (NEEDS_REVIEW)'
+                  : 'Kết quả gợi ý sơ bộ — Cần chuyên viên xác minh pháp lý (NEEDS_LEGAL_VERIFICATION)' }}
+              </span>
+              <span class="chip" style="background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font-size:11px">
+                Nguồn rule: {{ result.ruleSource || 'UNKNOWN' }} | v{{ result.ruleVersion || '—' }}
+              </span>
+            </div>
+            <ul v-if="result.unverifiedReasons && result.unverifiedReasons.length" style="margin:8px 0 0 18px;padding:0;font-size:12px;line-height:1.5">
+              <li v-for="(reason, idx) in result.unverifiedReasons" :key="'uv-' + idx">{{ reason }}</li>
+            </ul>
+            <div style="margin-top:8px;font-size:11.5px;font-style:italic">
+              * Chức năng xuất báo cáo kết luận chính thức đang bị khóa ở trạng thái này cho tới khi đủ dữ liệu và quy tắc được xác minh pháp lý.
+            </div>
+          </div>
+
           <!-- Executive Summary Card -->
           <div class="result-hero">
-            <div class="result-main">
-              <div class="result-icon">
-                <i class="ti ti-shield-check"></i>
+            <div class="result-main" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
+                <div class="result-icon">
+                  <i class="ti" :class="result.isOfficialConclusion ? 'ti-shield-check' : 'ti-alert-circle'"></i>
+                </div>
+                <div style="flex:1;min-width:0">
+                  <div class="result-label">
+                    {{ result.hi?.label || result.errorMessage || 'Chưa đủ điều kiện kết luận chính thức' }}
+                  </div>
+                  <div class="result-sub">
+                    {{ result.nhom || result.preliminary?.nhom || 'Chưa xác định nhóm' }}
+                    {{ result.isPreliminary ? ' (Sơ bộ — chưa xác minh pháp lý)' : ' — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026 & VBHN 49)' }}
+                  </div>
+                </div>
               </div>
-              <div style="flex:1;min-width:0">
-                <div class="result-label">{{ result.hi.label }}</div>
-                <div class="result-sub">{{ result.nhom }} — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026 &amp; VBHN 49)</div>
-              </div>
+              <button type="button"
+                      class="btn-secondary btn-sm"
+                      :disabled="!result.canExportOfficialReport"
+                      :title="result.canExportOfficialReport ? 'Xuất / In kết luận chính thức' : 'Bị khóa: rule chưa xác minh pháp lý hoặc dữ liệu chưa hợp lệ'"
+                      :style="!result.canExportOfficialReport ? 'opacity:0.5;cursor:not-allowed' : ''"
+                      @click="exportOfficialReport">
+                <i class="ti ti-printer"></i>
+                <span>{{ result.canExportOfficialReport ? 'In kết luận chính thức' : 'Đã khóa xuất chính thức' }}</span>
+              </button>
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-              <span class="chip" :class="result.hi.class">{{ result.hs }}</span>
-              <span class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
+              <span class="chip" :class="result.hi?.class || 'chip-gray'">
+                {{ result.hs ? (result.isPreliminary ? `${result.hs} (Sơ bộ)` : result.hs) : 'CHƯA XÁC ĐỊNH' }}
+              </span>
+              <span v-if="result.coQuan" class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
                 <i class="ti ti-building-bank"></i> {{ result.coQuan }}
               </span>
-              <span class="chip chip-gray">
+              <span v-if="result.thoiHan" class="chip chip-gray">
                 <i class="ti ti-clock"></i> {{ result.thoiHan }}
               </span>
               <span v-if="result.phuluc && result.phuluc !== '—'" class="chip chip-info">{{ result.phuluc }}</span>
-              <span class="chip chip-gray" title="Bán kính ảnh hưởng môi trường dự kiến trên GIS">
+              <span v-for="ob in (result.environmentalObligations || [])" :key="'ob-' + ob" class="chip chip-info">
+                Nghĩa vụ: {{ ob }}
+              </span>
+              <span v-if="result.impactRadiusMeters" class="chip chip-gray" title="Bán kính ảnh hưởng môi trường dự kiến trên GIS">
                 <i class="ti ti-radar-2" style="color:var(--accent)"></i> Bán kính tác động: {{ (estimatedImpactRadius / 1000).toFixed(1) }} km
               </span>
             </div>
 
             <div style="font-size:12.5px;color:var(--text2);padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
               <div>
-                <strong style="color:var(--text)">Căn cứ pháp lý trực tiếp:</strong> {{ result.ref }}
+                <strong style="color:var(--text)">Căn cứ pháp lý trực tiếp:</strong> {{ result.ref || 'Chưa xác định' }}
               </div>
               <button v-if="result.ref_law_id" type="button" class="btn-secondary btn-sm" @click="emit('view-law', result.ref_law_id)">
                 <i class="ti ti-scale"></i>
@@ -2004,23 +2109,34 @@ onUnmounted(() => {
 
             <div class="info-grid">
               <div class="info-box">
-                <div class="info-box-label">Loại hồ sơ</div>
-                <div class="info-box-val">{{ result.hs }}</div>
+                <div class="info-box-label">Loại hồ sơ {{ result.isPreliminary ? '(Sơ bộ)' : '' }}</div>
+                <div class="info-box-val">{{ result.hs || 'CHƯA XÁC ĐỊNH' }}</div>
               </div>
               <div class="info-box">
-                <div class="info-box-label">Nhóm dự án</div>
-                <div class="info-box-val">{{ result.nhom }}</div>
+                <div class="info-box-label">Nhóm dự án {{ result.isPreliminary ? '(Sơ bộ)' : '' }}</div>
+                <div class="info-box-val">{{ result.nhom || 'CHƯA XÁC ĐỊNH' }}</div>
               </div>
               <div class="info-box">
                 <div class="info-box-label">Thẩm quyền</div>
                 <div class="info-box-val" :class="{ 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
-                  {{ result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'UBND Tỉnh (Sở NN&MT)' : result.tq === 'cap_xa' ? 'UBND Cấp Xã' : 'UBND Cấp Huyện (Cũ)' }}
+                  {{ !result.tq ? 'Chưa xác định' : result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'UBND Tỉnh (Sở NN&MT)' : result.tq === 'cap_xa' ? 'UBND Cấp Xã' : 'UBND Cấp Huyện (Cũ)' }}
                 </div>
               </div>
               <div class="info-box">
-                <div class="info-box-label">Thời hạn thẩm định</div>
-                <div class="info-box-val">{{ result.thoiHan }}</div>
+                <div class="info-box-label">Trạng thái xác minh</div>
+                <div class="info-box-val" :class="result.isOfficialConclusion ? 'green' : 'warn'">
+                  {{ result.conclusionStatus || result.verificationStatus }}
+                </div>
               </div>
+            </div>
+
+            <!-- Chi tiết Cơ quan & Đơn vị chuyên môn (Bước 3) -->
+            <div v-if="result.competentAuthority && result.competentAuthority.competentAgency"
+                 style="margin-top:12px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px">
+              <div><strong>Người có thẩm quyền:</strong> {{ result.competentAuthority.competentPerson }}</div>
+              <div><strong>Cơ quan có thẩm quyền:</strong> {{ result.competentAuthority.competentAgency }}</div>
+              <div><strong>Cơ quan tiếp nhận:</strong> {{ result.competentAuthority.receivingAgency }}</div>
+              <div><strong>Đơn vị thẩm định:</strong> {{ result.competentAuthority.processingUnit }}</div>
             </div>
 
             <!-- Tóm tắt Định vị Không gian trong Kết quả -->

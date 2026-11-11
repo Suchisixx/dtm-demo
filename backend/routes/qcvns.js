@@ -6,22 +6,31 @@ const { logAudit } = require('../utils/audit');
 const { paginate, buildPagination, logQuery } = require('../utils/helpers');
 const { ACTIONS } = require('../utils/constants');
 const logger = require('../utils/logger');
+const { loadQcvnCatalog } = require('../services/rule-repository');
+const { evaluateQcvnSampleWithDb } = require('../services/qcvn-service');
 
-// GET /api/qcvns - Lấy toàn bộ danh sách QCVN (Công khai)
+// GET /api/qcvns - Lấy toàn bộ danh sách QCVN kèm metadata đầy đủ từ PostgreSQL
 router.get('/', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM qcvns');
-    
-    // Ánh xạ thành object dạng: { id: { ten, ap_dung, tham_so }, ... }
-    const qcvnsObj = {};
-    result.rows.forEach(row => {
-      qcvnsObj[row.id] = {
-        ten: row.ten,
-        ap_dung: row.ap_dung,
-        tham_so: Array.isArray(row.tham_so) ? row.tham_so : (typeof row.tham_so === 'string' ? JSON.parse(row.tham_so) : [])
-      };
-    });
+    const loaded = await loadQcvnCatalog({ db });
+    if (!loaded.ok || !loaded.catalog || Object.keys(loaded.catalog).length === 0) {
+      res.set('X-Rule-Source', 'FALLBACK_UNVERIFIED');
+      return res.status(503).json({
+        error: 'Danh mục QCVN từ cơ sở dữ liệu hiện không khả dụng hoặc chưa có bản ghi ban hành.',
+        ruleSource: 'FALLBACK_UNVERIFIED',
+        reason: loaded.error || 'EMPTY_QCVNS_TABLE'
+      });
+    }
 
+    const qcvnsObj = {};
+    for (const [id, item] of Object.entries(loaded.catalog)) {
+      qcvnsObj[id] = {
+        ...item,
+        ruleSource: 'DATABASE'
+      };
+    }
+
+    res.set('X-Rule-Source', 'DATABASE');
     return res.json(qcvnsObj);
   } catch (error) {
     logger.error('Lỗi lấy danh sách QCVN:', error);
@@ -91,24 +100,78 @@ router.get('/samples/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/qcvns/samples - Lưu mẫu kết quả quan trắc (Tạo mới hoặc Cập nhật)
+// POST /api/qcvns/samples - Lưu mẫu kết quả quan trắc (Luôn đánh giá lại ở Server)
 router.post('/samples', requireAuth, async (req, res) => {
   const userId = req.user.id;
-  const { id, name, type, sub_type, values, project_id, trang_thai_tong_quat } = req.body;
+  const {
+    id,
+    name,
+    type,
+    sub_type,
+    values,
+    project_id,
+    samplingPeriods = {},
+    permitLimits = null,
+    receivingWaterConfirmed,
+  } = req.body;
 
   if (!name || !type || !sub_type || !values) {
     return res.status(400).json({ error: 'Vui lòng cung cấp đầy đủ thông tin bắt buộc (Tên mẫu, Loại quy chuẩn, và Dữ liệu thông số)!' });
   }
 
   try {
+    // Luôn tự đánh giá lại mẫu phía Backend theo catalog QCVN trong DB
+    const serverEvaluation = await evaluateQcvnSampleWithDb({
+      qcvnId: sub_type,
+      measuredValues: values,
+      samplingPeriods,
+      permitLimits,
+      receivingWaterConfirmed,
+    });
+
+    const computedDbStatus = serverEvaluation.trang_thai_tong_quat || 'can_ra_soat';
+    const evaluationDetails = {
+      overallStatus: serverEvaluation.overallStatus,
+      conclusionStatus: serverEvaluation.conclusionStatus,
+      preliminaryStatus: serverEvaluation.preliminaryStatus,
+      reason: serverEvaluation.reason || null,
+      isOfficialConclusion: serverEvaluation.isOfficialConclusion,
+      canExportOfficialReport: serverEvaluation.canExportOfficialReport,
+      verificationStatus: serverEvaluation.verificationStatus,
+      ruleSource: serverEvaluation.ruleSource,
+      ruleVersion: serverEvaluation.ruleVersion,
+      unverifiedReasons: serverEvaluation.unverifiedReasons || [],
+      qcvnComplianceStatus: serverEvaluation.qcvnComplianceStatus,
+      permitComplianceStatus: serverEvaluation.permitComplianceStatus,
+      summary: serverEvaluation.summary,
+      samplingPeriods,
+      permitLimits,
+      receivingWaterConfirmed: receivingWaterConfirmed === true,
+    };
+
     if (id) {
       // Cập nhật mẫu hiện có
       const updateRes = await db.query(
         `UPDATE qcvn_samples 
-         SET name = $1, type = $2, sub_type = $3, values = $4, project_id = $5, trang_thai_tong_quat = $6
-         WHERE id = $7 AND user_id = $8 
+         SET name = $1, type = $2, sub_type = $3, values = $4, project_id = $5,
+             trang_thai_tong_quat = $6, overall_status = $7, evaluation_details = $8,
+             evaluated_rule_version = $9, evaluated_verification_status = $10
+         WHERE id = $11 AND user_id = $12 
          RETURNING *`,
-        [name, type, sub_type, JSON.stringify(values), project_id || null, trang_thai_tong_quat || null, id, userId]
+        [
+          name,
+          type,
+          sub_type,
+          JSON.stringify(values),
+          project_id || null,
+          computedDbStatus,
+          serverEvaluation.overallStatus,
+          JSON.stringify(evaluationDetails),
+          serverEvaluation.ruleVersion || null,
+          serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+          id,
+          userId,
+        ]
       );
 
       if (updateRes.rowCount === 0) {
@@ -116,33 +179,51 @@ router.post('/samples', requireAuth, async (req, res) => {
       }
 
       const sample = updateRes.rows[0];
-      
+
       // Ghi log bảo mật và truy vấn
       await logAudit(userId, ACTIONS.UPDATE_QCVN_SAMPLE, req, { id: sample.id, name: sample.name });
-      await logQuery(userId, 'qcvn_comparison', { type, sub_type, values }, { name });
+      await logQuery(userId, 'qcvn_comparison', { type, sub_type, values }, { name, overallStatus: serverEvaluation.overallStatus });
 
       return res.json({
         message: 'Cập nhật mẫu kết quả quan trắc thành công!',
-        sample
+        sample,
+        evaluation: serverEvaluation,
       });
     } else {
       // Tạo mẫu mới
       const insertRes = await db.query(
-        `INSERT INTO qcvn_samples (user_id, name, type, sub_type, values, project_id, trang_thai_tong_quat) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) 
-         RETURNING *`,
-        [userId, name, type, sub_type, JSON.stringify(values), project_id || null, trang_thai_tong_quat || null]
+        `INSERT INTO qcvn_samples (
+          user_id, name, type, sub_type, values, project_id,
+          trang_thai_tong_quat, overall_status, evaluation_details,
+          evaluated_rule_version, evaluated_verification_status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *`,
+        [
+          userId,
+          name,
+          type,
+          sub_type,
+          JSON.stringify(values),
+          project_id || null,
+          computedDbStatus,
+          serverEvaluation.overallStatus,
+          JSON.stringify(evaluationDetails),
+          serverEvaluation.ruleVersion || null,
+          serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+        ]
       );
 
       const sample = insertRes.rows[0];
 
       // Ghi log bảo mật và truy vấn
       await logAudit(userId, ACTIONS.CREATE_QCVN_SAMPLE, req, { id: sample.id, name: sample.name });
-      await logQuery(userId, 'qcvn_comparison', { type, sub_type, values }, { name });
+      await logQuery(userId, 'qcvn_comparison', { type, sub_type, values }, { name, overallStatus: serverEvaluation.overallStatus });
 
       return res.json({
         message: 'Lưu mẫu kết quả quan trắc thành công!',
-        sample
+        sample,
+        evaluation: serverEvaluation,
       });
     }
   } catch (error) {

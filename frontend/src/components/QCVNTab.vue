@@ -48,8 +48,8 @@ const MAP_KEYWORDS = {
   'crom iii': 'Cr3',
   'crom 3': 'Cr3',
   'cr3': 'Cr3',
-  'crom': 'Cr',
-  'cr': 'Cr',
+  'crom': 'Cr_tong',
+  'cr': 'Cr_tong',
   'thuy ngan': 'Hg',
   'mercury': 'Hg',
   'hg': 'Hg',
@@ -74,9 +74,9 @@ const MAP_KEYWORDS = {
   'clo': 'Cl2',
   'chlorine': 'Cl2',
   'cl2': 'Cl2',
-  'sunfua': 'S',
-  'sulfide': 'S',
-  's': 'S',
+  'sunfua': 'Sulfide',
+  'sulfide': 'Sulfide',
+  's': 'Sulfide',
   'dau mo': 'Oil',
   'oil': 'Oil',
   'coliform': 'Coliform',
@@ -103,11 +103,15 @@ const MAP_KEYWORDS = {
 // State
 const selectedType = ref('nuoc_mat')
 const selectedSubType = ref('qcvn08_a')
-const runtimeQcvnData = ref({ ...QCVN_DATA })
+const runtimeQcvnData = ref({})
+const qcvnRuleSource = ref('LOADING')
+const qcvnCatalogError = ref('')
 const sampleName = ref('')
 const pasteArea = ref('')
 const sampleId = ref(null)
 const measuredValues = ref({})
+const receivingWaterConfirmed = ref(false)
+const samplingPeriods = ref({ _default: '' })
 
 const loadedSamples = ref([])
 const currentPage = ref(1)
@@ -124,11 +128,22 @@ const projectSearchRef = ref(null)
 const autoMatchMessage = ref('')
 const isAutoMatching = ref(false)
 
+const resolveParamKeyForActiveQcvn = (candidateKey) => {
+  const params = currentQcvn.value?.tham_so || []
+  const keySet = new Set(params.filter(p => !p.nhom && p.key).map(p => p.key))
+  if (keySet.size === 0) return candidateKey
+  if (keySet.has(candidateKey)) return candidateKey
+  if (candidateKey === 'NO2N' && keySet.has('NO2')) return 'NO2'
+  if (candidateKey === 'Cr_tong' && keySet.has('Cr')) return 'Cr'
+  if (candidateKey === 'Sulfide' && keySet.has('S')) return 'S'
+  return candidateKey
+}
+
 const matchKey = (nameStr) => {
   const norm = removeAccents(nameStr.toLowerCase().trim())
-  if (MAP_KEYWORDS[norm]) return MAP_KEYWORDS[norm]
+  if (MAP_KEYWORDS[norm]) return resolveParamKeyForActiveQcvn(MAP_KEYWORDS[norm])
   for (const [kw, key] of Object.entries(MAP_KEYWORDS)) {
-    if (norm.includes(kw)) return key
+    if (norm.includes(kw)) return resolveParamKeyForActiveQcvn(key)
   }
   return null
 }
@@ -209,139 +224,165 @@ watch([selectedType, selectedSubType, paramPageSize], () => {
 const fetchQcvnCatalog = async () => {
   try {
     const res = await fetch(API.QCVNS || '/api/qcvns')
+    const headerSource = res.headers.get('X-Rule-Source')
     if (res.ok) {
       const dbData = await res.json()
       if (dbData && typeof dbData === 'object' && Object.keys(dbData).length > 0) {
-        runtimeQcvnData.value = { ...QCVN_DATA, ...dbData }
+        runtimeQcvnData.value = dbData
+        qcvnRuleSource.value = headerSource || 'DATABASE'
+        qcvnCatalogError.value = ''
+        return
       }
     }
+    const errPayload = await res.json().catch(() => ({}))
+    runtimeQcvnData.value = QCVN_DATA
+    qcvnRuleSource.value = 'FALLBACK_UNVERIFIED'
+    qcvnCatalogError.value = errPayload.error || `HTTP_${res.status}`
   } catch (err) {
     logger.error('Lỗi đồng bộ danh mục QCVN từ API:', err)
+    runtimeQcvnData.value = QCVN_DATA
+    qcvnRuleSource.value = 'FALLBACK_UNVERIFIED'
+    qcvnCatalogError.value = err.message || 'NETWORK_ERROR'
   }
 }
 
 const currentQcvn = computed(() => {
-  return runtimeQcvnData.value[selectedSubType.value] || QCVN_DATA[selectedSubType.value] || null
+  return runtimeQcvnData.value[selectedSubType.value] || null
 })
 
-const getEvaluation = (p, val) => {
-  if (val === undefined || val === null || isNaN(val) || val === '') {
-    return { status: 'empty', label: '—', ratio: null }
-  }
-  
-  if (p.loai === 'range') {
-    if (p.min === undefined || p.max === undefined) {
-      return { status: 'empty', label: '—', ratio: null }
-    }
-    if (val < p.min || val > p.max) {
-      return { status: 'fail', label: '✗ Vượt ngưỡng', ratio: null }
-    } else {
-      const range = p.max - p.min
-      const distMin = range > 0 ? (val - p.min) / range : 0.5
-      const distMax = range > 0 ? (p.max - val) / range : 0.5
-      const status = (val > p.min && val < p.max && (distMin < 0.05 || distMax < 0.05)) ? 'near' : 'pass'
-      return {
-        status,
-        label: status === 'near' ? '⚠ Gần giới hạn' : '✓ Đạt',
-        ratio: null
-      }
-    }
-  } else if (p.loai === 'min') {
-    const ratio = (p.gioi_han && p.gioi_han > 0) ? (val / p.gioi_han) : 1
-    if (val < p.gioi_han) {
-      return { status: 'fail', label: '✗ Thấp hơn ngưỡng', ratio }
-    } else {
-      const status = (val > p.gioi_han && ratio < 1.1) ? 'near' : 'pass'
-      return {
-        status,
-        label: status === 'near' ? '⚠ Gần giới hạn' : '✓ Đạt',
-        ratio
-      }
-    }
-  } else {
-    if (p.note === 'Không phát hiện' || p.gioi_han === 0) {
-      const status = val > 0 ? 'fail' : 'pass'
-      return {
-        status,
-        label: status === 'fail' ? '✗ Phát hiện' : '✓ KPH (Không phát hiện)',
-        ratio: null
-      }
-    } else {
-      const ratio = (p.gioi_han && p.gioi_han > 0) ? (val / p.gioi_han) : (val > 0 ? Infinity : 0)
-      // T13: Kết quả đo đúng bằng giới hạn (val === p.gioi_han) là ĐẠT ('pass')
-      if (val > p.gioi_han) {
-        return { status: 'fail', label: `✗ Vượt ${Number.isFinite(ratio) ? ratio.toFixed(2) + 'x' : 'ngưỡng'}`, ratio }
-      } else if (ratio > 0.8 && val < p.gioi_han) {
-        return { status: 'near', label: `⚠ ${Math.round(ratio * 100)}% ngưỡng`, ratio }
-      } else {
-        return { status: 'pass', label: `✓ Đạt (${Math.round(ratio * 100)}%)`, ratio }
-      }
+const needsReceivingConfirmation = computed(() => {
+  return ['nuoc_mat', 'nuoc_thai_cn', 'nuoc_thai_sh'].includes(selectedType.value)
+})
+
+const activeSamplingPeriods = computed(() => {
+  const p = samplingPeriods.value || {}
+  return p._default ? { _default: p._default } : {}
+})
+
+const sampleEvaluation = computed(() => {
+  if (!currentQcvn.value) {
+    return {
+      overallStatus: 'NEEDS_REVIEW',
+      conclusionStatus: 'NEEDS_REVIEW',
+      preliminaryStatus: null,
+      trang_thai_tong_quat: 'can_ra_soat',
+      reason: 'UNKNOWN_QCVN',
+      isOfficialConclusion: false,
+      canExportOfficialReport: false,
+      verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+      ruleSource: qcvnRuleSource.value,
+      unverifiedReasons: ['Chưa tải được dữ liệu quy chuẩn cho mã đã chọn.'],
+      evaluatedParams: [],
+      summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0, invalidPermitLimits: 0 },
     }
   }
-}
+
+  return evaluateQcvnSample({
+    qcvnId: selectedSubType.value,
+    measuredValues: measuredValues.value,
+    samplingPeriods: activeSamplingPeriods.value,
+    permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+    receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
+    qcvnDatabase: runtimeQcvnData.value,
+    ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
+  })
+})
 
 const evaluatedParams = computed(() => {
   if (!currentQcvn.value || !Array.isArray(currentQcvn.value.tham_so)) return []
-  const permitLimits = linkedProject.value?.form_data?.permitLimits || null
+
+  // Dùng kết quả từ 1 evaluator chuẩn (nếu bị gate nguồn tiếp nhận trả mảng rỗng -> vẫn render cấu trúc bảng thông số để người dùng nhập)
+  const rawEvaluated = sampleEvaluation.value.evaluatedParams
+  const evalMap = new Map()
+  if (Array.isArray(rawEvaluated) && rawEvaluated.length > 0) {
+    rawEvaluated.forEach(item => {
+      if (!item.nhom && item.key) evalMap.set(item.key, item)
+    })
+  }
+
   return currentQcvn.value.tham_so.map(p => {
     if (p.nhom) return p
+
+    const evalItem = evalMap.get(p.key)
     const rawVal = measuredValues.value
       ? (measuredValues.value[p.key] !== undefined ? measuredValues.value[p.key] : (p.key === 'Cr_tong' ? measuredValues.value.Cr3 : undefined))
       : undefined
     const val = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? parseFloat(rawVal) : NaN
-    const evalResult = getEvaluation(p, val)
 
-    // Q12 & T18: Đối chiếu riêng với giới hạn trong GPMT (nếu có)
-    const permitLimit = permitLimits && permitLimits[p.key] !== undefined ? parseFloat(permitLimits[p.key]) : null
-    if (!isNaN(val) && permitLimit !== null && !isNaN(permitLimit)) {
-      const permitFail = p.loai === 'min' ? val < permitLimit : val > permitLimit
-      if (permitFail) {
-        evalResult.status = 'fail'
-        evalResult.label = `✗ Vượt GPMT (${permitLimit})`
-      }
-    }
-    
-    // Calculate fill width & color for progress bar representation
+    let status = 'empty'
+    let label = '—'
+    let ratio = null
     let fillWidth = 0
     let fillColor = '#2E7D50'
-    if (evalResult.ratio !== null && evalResult.ratio !== undefined && typeof evalResult.ratio === 'number' && !isNaN(evalResult.ratio)) {
-      if (p.loai === 'min') {
-        fillWidth = Math.min(Math.max(evalResult.ratio * 50, 0), 100)
-      } else {
-        fillWidth = Math.min(Math.max(evalResult.ratio * 100, 0), 100)
+
+    if (evalItem && evalItem.value !== undefined) {
+      status = evalItem.status || 'empty'
+      if (p.loai === 'min' && p.gioi_han > 0) {
+        ratio = evalItem.value / p.gioi_han
+      } else if (p.loai !== 'range' && p.gioi_han > 0) {
+        ratio = evalItem.value / p.gioi_han
+      } else if (p.loai !== 'range' && p.gioi_han === 0) {
+        ratio = evalItem.value > 0 ? Infinity : 0
       }
-      fillColor = evalResult.status === 'fail' ? '#C0392B' : evalResult.status === 'near' ? '#D4860A' : '#2E7D50'
-    } else if (p.loai === 'range' && evalResult.status !== 'empty' && !isNaN(val) && p.max > p.min) {
-      const pct = ((val - p.min) / (p.max - p.min)) * 100
-      fillWidth = Math.min(Math.max(pct, 0), 100)
-      fillColor = evalResult.status === 'fail' ? '#C0392B' : evalResult.status === 'near' ? '#D4860A' : '#2E7D50'
+
+      if (status === 'period_mismatch') {
+        label = '⚠ Sai chu kỳ đo'
+        fillColor = '#D4860A'
+      } else if (status === 'can_ra_soat') {
+        label = '⚠ Cần rà soát GPMT'
+        fillColor = '#D4860A'
+      } else if (status === 'fail') {
+        if (evalItem.permitCompliant === false) {
+          label = `✗ Vượt GPMT (${evalItem.permitLimit})`
+        } else if (p.note === 'Không phát hiện' || p.gioi_han === 0) {
+          label = '✗ Phát hiện'
+        } else if (p.loai === 'min') {
+          label = '✗ Thấp hơn ngưỡng'
+        } else {
+          label = ratio && Number.isFinite(ratio) ? `✗ Vượt ${ratio.toFixed(2)}x` : '✗ Vượt ngưỡng'
+        }
+        fillColor = '#C0392B'
+      } else if (status === 'near') {
+        label = ratio ? `⚠ ${Math.round(ratio * 100)}% ngưỡng` : '⚠ Gần giới hạn'
+        fillColor = '#D4860A'
+      } else if (status === 'pass') {
+        if (p.note === 'Không phát hiện' || p.gioi_han === 0) {
+          label = '✓ KPH (Không phát hiện)'
+        } else {
+          label = ratio !== null ? `✓ Đạt (${Math.round(ratio * 100)}%)` : '✓ Đạt'
+        }
+        fillColor = '#2E7D50'
+      }
+
+      if (ratio !== null && typeof ratio === 'number' && !Number.isNaN(ratio)) {
+        fillWidth = p.loai === 'min'
+          ? Math.min(Math.max(ratio * 50, 0), 100)
+          : Math.min(Math.max(ratio * 100, 0), 100)
+      } else if (p.loai === 'range' && p.max > p.min) {
+        const pct = ((evalItem.value - p.min) / (p.max - p.min)) * 100
+        fillWidth = Math.min(Math.max(pct, 0), 100)
+      }
     }
 
     return {
       ...p,
-      value: isNaN(val) ? undefined : val,
-      permitLimit,
-      ...evalResult,
+      value: Number.isNaN(val) ? undefined : val,
+      status,
+      label,
+      ratio,
       fillWidth,
-      fillColor
+      fillColor,
+      permitLimit: evalItem?.permitLimit ?? null,
+      permitCompliant: evalItem?.permitCompliant ?? null,
+      qcvnCompliant: evalItem?.qcvnCompliant ?? null,
+      permitNote: evalItem?.permitNote || null,
+      periodMismatchNote: evalItem?.periodMismatchNote || null,
     }
   })
 })
 
 const summary = computed(() => {
-  let total = 0, pass = 0, near = 0, fail = 0, missingRequired = 0
-  evaluatedParams.value.forEach(p => {
-    if (p.nhom) return
-    if (p.value === undefined || p.value === null || isNaN(p.value)) {
-      if (p.required !== false) missingRequired++
-      return
-    }
-    total++
-    if (p.status === 'pass') pass++
-    else if (p.status === 'near') near++
-    else if (p.status === 'fail') fail++
-  })
-  return { total, pass, near, fail, missingRequired }
+  return sampleEvaluation.value.summary || { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0, invalidPermitLimits: 0 }
 })
 
 const handleQuickPaste = () => {
@@ -376,6 +417,8 @@ const clearValues = () => {
   pasteArea.value = ''
   sampleName.value = ''
   sampleId.value = null
+  receivingWaterConfirmed.value = false
+  samplingPeriods.value = { _default: '' }
   unsavedChanges.value = false
   linkedProject.value = null
   projectSearchQuery.value = ''
@@ -407,10 +450,13 @@ const autoMatchQcvnFromProject = async (project) => {
   if (!project) return
   const nganh = project.nganh || project.form_data?.nganh || ''
   const nt = Number(project.nt || project.form_data?.nt || 0)
-  const isSensitive = !!(project.form_data?.bg || project.form_data?.rung || project.form_data?.lua)
+  const receivingCol = project.form_data?.receivingWaterClass || null
+  const confirmedReceiving = Boolean(project.form_data?.receivingWaterConfirmed && receivingCol)
+  const isExisting = Boolean(project.form_data?.isExistingFacility || project.form_data?.morongdt)
 
   let matchedType = null
   let matchedSubType = null
+  let reviewWarning = ''
 
   // 1. Nhóm ngành công nghiệp chế biến / sản xuất / KCN -> Nước thải công nghiệp (QCVN 40:2025)
   const industrialNganh = [
@@ -424,7 +470,7 @@ const autoMatchQcvnFromProject = async (project) => {
     'do_thi', 'trung_tam_tm', 'khach_san', 'chan_nuoi', 'benh_vien'
   ]
 
-  // 3. Nhóm thủy sản / nạo vét / thủy điện -> Nước mặt (QCVN 08-MT:2015)
+  // 3. Nhóm thủy sản / nạo vét / thủy điện -> Nước mặt (QCVN 08:2023)
   const surfaceWaterNganh = [
     'nuoi_thuy_san', 'nao_vet', 'thuy_dien'
   ]
@@ -436,23 +482,41 @@ const autoMatchQcvnFromProject = async (project) => {
 
   if (industrialNganh.includes(nganh)) {
     matchedType = 'nuoc_thai_cn'
-    const receivingCol = isSensitive ? 'A' : (project.form_data?.receivingWaterClass || 'B')
     const decision = selectApplicableQcvn({
       sourceType: 'nuoc_thai_cn',
       receivingWaterClass: receivingCol,
-      flowRate: nt > 0 ? nt : 100
+      receivingWaterConfirmed: confirmedReceiving,
+      flowRate: nt > 0 ? nt : null,
+      isExistingFacility: isExisting,
+      qcvnDatabase: runtimeQcvnData.value,
+      ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
     })
-    matchedSubType = decision.qcvnId || (isSensitive ? 'qcvn40_a_low' : 'qcvn40_b_low')
+    if (decision.status === 'OK' && decision.qcvnId) {
+      matchedSubType = decision.qcvnId
+      receivingWaterConfirmed.value = confirmedReceiving
+    } else {
+      reviewWarning = decision.message || 'Cần bổ sung lưu lượng xả thải và xác nhận cột nguồn tiếp nhận trước khi chọn QCVN 40.'
+      receivingWaterConfirmed.value = false
+    }
   } else if (domesticNganh.includes(nganh)) {
     matchedType = 'nuoc_thai_sh'
     const isUrban = nganh === 'do_thi'
-    const receivingCol = isSensitive ? 'A' : (project.form_data?.receivingWaterClass || 'B')
     const decision = selectApplicableQcvn({
       sourceType: 'nuoc_thai_sh',
       receivingWaterClass: receivingCol,
-      isUrbanArea: isUrban
+      receivingWaterConfirmed: confirmedReceiving,
+      isUrbanArea: isUrban,
+      isExistingFacility: isExisting,
+      qcvnDatabase: runtimeQcvnData.value,
+      ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
     })
-    matchedSubType = decision.qcvnId || (isSensitive ? 'qcvn14_a' : 'qcvn14_b')
+    if (decision.status === 'OK' && decision.qcvnId) {
+      matchedSubType = decision.qcvnId
+      receivingWaterConfirmed.value = confirmedReceiving
+    } else {
+      reviewWarning = decision.message || 'Cần xác nhận cột nguồn tiếp nhận trước khi chọn QCVN 14.'
+      receivingWaterConfirmed.value = false
+    }
   } else if (surfaceWaterNganh.includes(nganh)) {
     matchedType = 'nuoc_mat'
     if (nganh === 'nuoi_thuy_san') {
@@ -477,14 +541,19 @@ const autoMatchQcvnFromProject = async (project) => {
     const typeLabels = {
       nuoc_mat: 'Nước mặt (QCVN 08:2023)',
       nuoc_thai_cn: 'Nước thải công nghiệp (QCVN 40:2025)',
-      nuoc_thai_sh: 'Nước thải sinh hoạt (QCVN 14:2025)',
+      nuoc_thai_sh: 'Nước thải sinh hoạt & đô thị (QCVN 14:2025)',
       khi_thai_cn: 'Khí thải công nghiệp (QCVN 19:2024)',
       khong_khi: 'Không khí xung quanh (QCVN 05:2023)',
       nuoc_duoi_dat: 'Nước dưới đất (QCVN 09:2023)',
       dat: 'Chất lượng đất (QCVN 03:2023)'
     }
     const subObj = (SUB_TYPES[matchedType] || []).find(s => s.value === matchedSubType)
-    autoMatchMessage.value = `Gợi ý quy chuẩn: ${typeLabels[matchedType] || matchedType} — ${subObj ? subObj.text : matchedSubType} (Cần xác nhận nguồn tiếp nhận & điều khoản chuyển tiếp)`
+    autoMatchMessage.value = `Gợi ý quy chuẩn: ${typeLabels[matchedType] || matchedType} — ${subObj ? subObj.text : matchedSubType}`
+  } else if (reviewWarning) {
+    if (matchedType) {
+      selectedType.value = matchedType
+    }
+    autoMatchMessage.value = `⚠ Cần rà soát: ${reviewWarning}`
   } else {
     autoMatchMessage.value = ''
   }
@@ -506,12 +575,7 @@ const unlinkProject = () => {
 }
 
 const computeOverallStatus = () => {
-  const s = summary.value
-  if (s.fail > 0) return 'vuot_nguong'
-  // Q10 & T12: Không kết luận 'dat' nếu chưa nhập dữ liệu hoặc còn thiếu chỉ tiêu bắt buộc
-  if (s.total === 0 || s.missingRequired > 0) return 'chua_du_thong_so'
-  if (s.near > 0) return 'canh_bao'
-  return 'dat'
+  return sampleEvaluation.value.trang_thai_tong_quat || 'can_ra_soat'
 }
 
 const saveSample = async () => {
@@ -538,7 +602,9 @@ const saveSample = async () => {
     sub_type: selectedSubType.value,
     values: finalValues,
     project_id: linkedProject.value?.id || null,
-    trang_thai_tong_quat: computeOverallStatus()
+    samplingPeriods: activeSamplingPeriods.value,
+    permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+    receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
   }
 
   try {
@@ -552,7 +618,11 @@ const saveSample = async () => {
     
     if (res.ok) {
       const data = await res.json()
-      alert(data.message || 'Lưu mẫu kết quả quan trắc thành công!')
+      const srvEval = data.evaluation
+      const statusSuffix = srvEval && !srvEval.isOfficialConclusion
+        ? ` (Trạng thái Server: ${srvEval.overallStatus} — ${srvEval.trang_thai_tong_quat})`
+        : ''
+      alert((data.message || 'Lưu mẫu kết quả quan trắc thành công!') + statusSuffix)
       unsavedChanges.value = false
       sampleId.value = data.sample.id
       fetchSamples(currentPage.value)
@@ -564,16 +634,24 @@ const saveSample = async () => {
   }
 }
 
-const selectSample = (sample) => {
+const selectSample = async (sample) => {
   if (unsavedChanges.value && !confirm('Bạn có thay đổi chưa lưu. Có chắc chắn muốn mở mẫu này và ghi đè dữ liệu hiện tại?')) {
     return
   }
 
+  isAutoMatching.value = true
   sampleId.value = sample.id
   sampleName.value = sample.name
   selectedType.value = sample.type
   selectedSubType.value = sample.sub_type
   measuredValues.value = sample.values || {}
+  const details = sample.evaluation_details || {}
+  receivingWaterConfirmed.value = Boolean(details.receivingWaterConfirmed)
+  samplingPeriods.value = details.samplingPeriods && details.samplingPeriods._default
+    ? { _default: details.samplingPeriods._default }
+    : { _default: '' }
+  await nextTick()
+  isAutoMatching.value = false
   unsavedChanges.value = false
 
   // Khôi phục liên kết dự án
@@ -612,14 +690,19 @@ const handleDeleteSample = async (id) => {
 
 const exportTxt = () => {
   if (!currentQcvn.value) return
+  if (!sampleEvaluation.value.canExportOfficialReport) {
+    alert(`Không thể xuất báo cáo kết luận chính thức ở trạng thái ${sampleEvaluation.value.overallStatus}. Vui lòng bổ sung đầy đủ chỉ tiêu/nguồn tiếp nhận hoặc hoàn tất xác minh pháp lý trước.`)
+    return
+  }
   const now = new Date().toLocaleString('vi-VN')
   let lines = [
     '═══════════════════════════════════════════════════════',
-    `KẾT QUẢ SO SÁNH QCVN`,
+    `KẾT QUẢ SO SÁNH QCVN (${sampleEvaluation.value.overallStatus})`,
     `Ngày: ${now}`,
     `Tên mẫu / Vị trí: ${sampleName.value || 'Mẫu không rõ tên'}`,
     `QCVN áp dụng: ${currentQcvn.value.ten}`,
     `Mục đích: ${currentQcvn.value.ap_dung}`,
+    `Nguồn rule: ${sampleEvaluation.value.ruleSource} | Version: ${sampleEvaluation.value.ruleVersion || '—'}`,
     ...(linkedProject.value ? [
       `Dự án liên kết: ${linkedProject.value.ten_du_an}`,
       ...(linkedProject.value.loai_ho_so ? [`Loại hồ sơ: ${linkedProject.value.loai_ho_so} — ${linkedProject.value.nhom_du_an || ''}`] : []),
@@ -633,7 +716,7 @@ const exportTxt = () => {
     if (p.nhom) { lines.push(`\n── ${p.nhom} ──`); return }
     const val = p.value !== undefined && p.value !== null && !isNaN(p.value) ? p.value.toString() : '—'
     const limitStr = p.loai === 'range' ? `${p.min}–${p.max}` : p.loai === 'min' ? `≥${p.gioi_han}` : (p.note || `≤${p.gioi_han}`)
-    const resultText = p.status === 'fail' ? 'VƯỢT NGƯỠNG' : p.status === 'near' ? 'CẢNH BÁO' : p.status === 'pass' ? 'ĐẠT' : '—'
+    const resultText = p.status === 'fail' ? 'VƯỢT NGƯỠNG' : p.status === 'near' ? 'CẢNH BÁO' : p.status === 'pass' ? 'ĐẠT' : p.status === 'period_mismatch' ? 'SAI CHU KỲ ĐO' : p.status === 'can_ra_soat' ? 'CẦN RÀ SOÁT' : '—'
     lines.push(`${p.ten.padEnd(30)} ${p.don_vi.padEnd(12)} Giới hạn: ${limitStr.padEnd(12)} Kết quả: ${val.padEnd(10)} → ${resultText}`)
   })
   lines.push('\n═══════════════════════════════════════════════════════')
@@ -647,6 +730,10 @@ const exportTxt = () => {
 }
 
 const exportPDF = () => {
+  if (!sampleEvaluation.value.canExportOfficialReport) {
+    alert(`Đã khóa xuất PDF kết luận chính thức ở trạng thái ${sampleEvaluation.value.overallStatus}. Vui lòng bổ sung đầy đủ dữ liệu và sử dụng bộ QCVN đã xác minh pháp lý.`)
+    return
+  }
   window.print()
 }
 
@@ -658,6 +745,7 @@ watch(selectedType, (newType) => {
     selectedSubType.value = list[0].value
   }
   measuredValues.value = {}
+  receivingWaterConfirmed.value = false
   unsavedChanges.value = false
 })
 
@@ -908,11 +996,19 @@ const showQuickPaste = ref(false)
             <i class="ti ti-device-floppy"></i>
             <span>Lưu kết quả mẫu</span>
           </button>
-          <button type="button" class="btn-secondary" @click="exportPDF">
+          <button type="button" class="btn-secondary"
+                  :disabled="!sampleEvaluation.canExportOfficialReport"
+                  :style="!sampleEvaluation.canExportOfficialReport ? 'opacity:0.5;cursor:not-allowed' : ''"
+                  :title="sampleEvaluation.canExportOfficialReport ? 'Xuất báo cáo chính thức' : 'Đã khóa: mẫu chưa đủ điều kiện kết luận chính thức'"
+                  @click="exportPDF">
             <i class="ti ti-printer"></i>
             <span>Xuất PDF / In</span>
           </button>
-          <button type="button" class="btn-secondary" @click="exportTxt">
+          <button type="button" class="btn-secondary"
+                  :disabled="!sampleEvaluation.canExportOfficialReport"
+                  :style="!sampleEvaluation.canExportOfficialReport ? 'opacity:0.5;cursor:not-allowed' : ''"
+                  :title="sampleEvaluation.canExportOfficialReport ? 'Tải file kết luận chính thức' : 'Đã khóa: mẫu chưa đủ điều kiện kết luận chính thức'"
+                  @click="exportTxt">
             <i class="ti ti-download"></i>
             <span>Xuất Text</span>
           </button>
@@ -921,6 +1017,62 @@ const showQuickPaste = ref(false)
             <span>Làm mới</span>
           </button>
         </div>
+      </div>
+
+      <!-- Row 3: Completeness, Source Confirmation & Sampling Period Gates -->
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <label v-if="needsReceivingConfirmation"
+               style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer">
+          <input type="checkbox" v-model="receivingWaterConfirmed" />
+          <span>Đã xác nhận nguồn tiếp nhận &amp; Cột áp dụng (bắt buộc cho nước mặt / nước thải)</span>
+        </label>
+
+        <div style="display:flex;align-items:center;gap:8px;font-size:12.5px">
+          <label class="form-label" style="margin:0;white-space:nowrap">Chu kỳ lấy mẫu / trung bình:</label>
+          <select v-model="samplingPeriods._default" style="width:185px;height:34px;font-size:12.5px">
+            <option value="">Theo quy định từng chỉ tiêu</option>
+            <option value="1 giờ">Trung bình 1 giờ</option>
+            <option value="8 giờ">Trung bình 8 giờ</option>
+            <option value="24 giờ">Trung bình 24 giờ</option>
+            <option value="Năm">Trung bình Năm</option>
+          </select>
+        </div>
+
+        <span class="chip" :class="qcvnRuleSource === 'DATABASE' ? 'chip-info' : 'chip-gray'" style="margin-left:auto;font-size:11px">
+          Catalog: {{ qcvnRuleSource }}
+          <template v-if="currentQcvn?.status"> · {{ currentQcvn.status }}</template>
+        </span>
+      </div>
+    </div>
+
+    <!-- FALLBACK / VERIFICATION / INCOMPLETE BANNER (Q-02, Q-05, Q-10, Q-11) -->
+    <div v-if="qcvnRuleSource === 'FALLBACK_UNVERIFIED' || !sampleEvaluation.isOfficialConclusion"
+         class="no-print"
+         style="margin-bottom:16px;padding:12px 16px;border-radius:var(--radius);border:1px solid #F59E0B;background:#FFFBEB;color:#92400E;font-size:12.5px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:700">
+        <span>
+          <i class="ti ti-alert-triangle"></i>
+          Trạng thái đánh giá: {{ sampleEvaluation.overallStatus }} (Lưu DB: {{ sampleEvaluation.trang_thai_tong_quat }})
+          <template v-if="sampleEvaluation.preliminaryStatus && sampleEvaluation.preliminaryStatus !== sampleEvaluation.overallStatus">
+            · Đánh giá kỹ thuật sơ bộ: {{ sampleEvaluation.preliminaryStatus }}
+          </template>
+        </span>
+        <span style="font-size:11.5px;font-weight:600">
+          {{ sampleEvaluation.canExportOfficialReport ? 'Đủ điều kiện xuất chính thức' : 'Đã khóa xuất kết luận chính thức' }}
+        </span>
+      </div>
+      <div v-if="qcvnCatalogError" style="margin-top:4px;font-weight:600">
+        Cảnh báo kết nối API QCVN ({{ qcvnCatalogError }}): Đang ở chế độ fallback cục bộ — mọi kết quả mang tính rà soát.
+      </div>
+      <ul v-if="sampleEvaluation.unverifiedReasons && sampleEvaluation.unverifiedReasons.length"
+          style="margin:6px 0 0 18px;padding:0;line-height:1.5">
+        <li v-for="(reason, idx) in sampleEvaluation.unverifiedReasons" :key="'qr-' + idx">{{ reason }}</li>
+      </ul>
+      <div v-if="summary.missingRequired > 0" style="margin-top:4px">
+        • Còn thiếu <strong>{{ summary.missingRequired }}</strong> chỉ tiêu bắt buộc chưa nhập số liệu (INCOMPLETE — không thể kết luận Đạt).
+      </div>
+      <div v-if="summary.periodMismatch > 0" style="margin-top:4px">
+        • Phát hiện <strong>{{ summary.periodMismatch }}</strong> chỉ tiêu lệch chu kỳ trung bình lấy mẫu (PERIOD_MISMATCH — cần rà soát).
       </div>
     </div>
 
@@ -1007,10 +1159,14 @@ const showQuickPaste = ref(false)
                   <span class="print-only">{{ p.value !== undefined && p.value !== null && !isNaN(p.value) ? p.value : '—' }}</span>
                 </td>
                 <td>
-                  <span v-if="p.status === 'empty'" class="result-empty">—</span>
+                  <span v-if="p.status === 'empty'" class="result-empty">
+                    {{ p.required !== false ? '— (Bắt buộc)' : '—' }}
+                  </span>
                   <span v-else-if="p.status === 'pass'" class="result-pass">{{ p.label || '✓ Đạt' }}</span>
                   <span v-else-if="p.status === 'near'" class="result-near">{{ p.label || 'Cảnh báo' }}</span>
                   <span v-else-if="p.status === 'fail'" class="result-fail">{{ p.label || '✗ Vượt ngưỡng' }}</span>
+                  <span v-else-if="p.status === 'period_mismatch'" class="result-near" :title="p.periodMismatchNote">{{ p.label || '⚠ Sai chu kỳ đo' }}</span>
+                  <span v-else-if="p.status === 'can_ra_soat'" class="result-near" :title="p.permitNote">{{ p.label || '⚠ Cần rà soát' }}</span>
                 </td>
                 <td>
                   <div v-if="p.status !== 'empty' && typeof p.ratio === 'number' && !isNaN(p.ratio)" style="display:flex;align-items:center;gap:8px">

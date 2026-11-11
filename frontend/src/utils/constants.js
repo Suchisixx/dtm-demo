@@ -14,6 +14,7 @@ export const API = {
   PROJECTS: '/api/projects',
   PROJECTS_GEO: '/api/projects/geo',
   LAWS: '/api/laws',
+  QCVNS: '/api/qcvns',
   QCVN_SAMPLES: '/api/qcvns/samples',
   CLASSIFY: '/api/classification/evaluate',
   CLASSIFY_METADATA: '/api/classification/metadata',

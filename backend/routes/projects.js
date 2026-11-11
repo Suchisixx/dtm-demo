@@ -7,7 +7,7 @@ const { paginate, buildPagination, logQuery } = require('../utils/helpers');
 const { ACTIONS, ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 
-const { evaluateClassification } = require('../services/classification-service');
+const { evaluateClassificationWithDb } = require('../services/classification-service');
 const { calculateImpactRadius } = require('../services/spatial-gis-service');
 
 // ── GIS API (trước requireAuth vì route /geo cũng cần auth nhưng query khác) ──
@@ -263,8 +263,8 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Tên dự án và dữ liệu biểu mẫu là bắt buộc!' });
   }
 
-  // Luôn thực thi và đồng bộ kết quả phân loại trên Backend
-  const evaluatedResult = req.body.classification_result || evaluateClassification(form_data);
+  // Luôn thực thi và đồng bộ kết quả phân loại trên Backend từ CSDL (không tin snapshot từ client)
+  const evaluatedResult = await evaluateClassificationWithDb(form_data);
 
   try {
     if (id) {

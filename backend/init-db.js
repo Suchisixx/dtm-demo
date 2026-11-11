@@ -2,8 +2,14 @@ const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+const {
+  ensureClassificationSchema,
+  ensureQcvnSchema,
+  seedClassificationCatalog,
+  seedQcvnCatalog,
+} = require('./services/rule-repository');
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -461,111 +467,43 @@ async function initDatabase() {
       console.error('⚠️ Không thể đồng bộ laws:', e.message);
     }
 
-    // 5. Đồng bộ QCVN từ frontend/src/data/qcvn-db.js vào database (Q13)
-    try {
-      console.log('Đang đồng bộ QCVN từ frontend/src/data/qcvn-db.js...');
-      const qcvnsPath = path.join(__dirname, '../frontend/src/data/qcvn-db.js');
-      const qcvnsCode = fs.readFileSync(qcvnsPath, 'utf8')
-        .replace(/export\s+const\s+/g, 'const ')
-        .replace(/export\s+function\s+/g, 'function ') + '\n;globalThis.__QCVN_DATA__ = QCVN_DATA;';
-      const sandbox = { globalThis: {} };
-      vm.createContext(sandbox);
-      vm.runInContext(qcvnsCode, sandbox);
-      const qcvnsData = sandbox.globalThis.__QCVN_DATA__ || {};
+    const schemaOnly = process.argv.includes('--schema-only');
+    const forceSeed = process.argv.includes('--force-seed');
 
-      for (const id of Object.keys(qcvnsData)) {
-        const qcvn = qcvnsData[id];
-        const checkQcvn = await targetClient.query('SELECT 1 FROM qcvns WHERE id = $1', [id]);
-        if (checkQcvn.rowCount === 0) {
-          await targetClient.query(
-            `INSERT INTO qcvns (id, ten, ap_dung, tham_so) 
-             VALUES ($1, $2, $3, $4)`,
-            [
-              id,
-              qcvn.ten,
-              qcvn.ap_dung || null,
-              JSON.stringify(qcvn.tham_so || [])
-            ]
-          );
-        } else {
-          await targetClient.query(
-            `UPDATE qcvns 
-             SET ten = $1, ap_dung = $2, tham_so = $3 
-             WHERE id = $4`,
-            [
-              qcvn.ten,
-              qcvn.ap_dung || null,
-              JSON.stringify(qcvn.tham_so || []),
-              id
-            ]
-          );
-        }
-      }
-      console.log(`✔ Đã đồng bộ ${Object.keys(qcvnsData).length} quy chuẩn QCVN vào cơ sở dữ liệu.`);
-    } catch (e) {
-      console.error('⚠️ Không thể đồng bộ qcvn-db.js:', e.message);
+    await ensureQcvnSchema(targetClient);
+    await ensureClassificationSchema(targetClient);
+    console.log('✔ Đã kiểm tra và bổ sung các cột metadata pháp lý (migration an toàn, không xóa dữ liệu).');
+
+    if (schemaOnly) {
+      console.log('--- HOÀN TẤT MIGRATION SCHEMA (--schema-only) ---');
+      return;
     }
 
-    // 6. Đồng bộ Ngành nghề & Ngưỡng phân loại từ backend/services/classification-service.js vào database
+    // 5. Seed QCVN an toàn từ frontend/src/data/qcvn-db.js (không ghi đè dữ liệu đã VERIFIED/PUBLISHED)
     try {
-      console.log('Đang đồng bộ Ngành nghề & Ngưỡng phân loại từ classification-service.js...');
-      const { IND_DB: indDb } = require('./services/classification-service');
-      
-      // Xóa dữ liệu cũ trong các bảng phân loại để tránh xung đột khoá ngoại hoặc trùng lặp khi chạy lại
-      await targetClient.query('TRUNCATE TABLE classification_thresholds CASCADE');
-      await targetClient.query('TRUNCATE TABLE legal_appendices CASCADE');
-      await targetClient.query('TRUNCATE TABLE industries CASCADE');
+      console.log('Đang seed danh mục QCVN (idempotent, bảo toàn bản ghi VERIFIED)...');
+      const { QCVN_DATA, QCVN_SCHEMA_VERSION } = require('../frontend/src/data/qcvn-db.js');
+      const qcvnStats = await seedQcvnCatalog(targetClient, {
+        qcvnData: QCVN_DATA || {},
+        ruleVersion: QCVN_SCHEMA_VERSION || '2026.2-audit',
+        force: forceSeed,
+      });
+      console.log(`✔ Seed QCVN hoàn tất: thêm mới ${qcvnStats.inserted}, bổ sung metadata ${qcvnStats.enriched}, giữ nguyên ${qcvnStats.skippedVerified} bản ghi đã duyệt.`);
+    } catch (e) {
+      console.error('⚠️ Không thể seed danh mục QCVN:', e.message);
+    }
 
-      for (const code of Object.keys(indDb)) {
-        const industry = indDb[code];
-        const cleanName = industry.lbl.replace(/\s*\(.*\)\s*$/, '').trim();
-        
-        await targetClient.query(
-          `INSERT INTO industries (code, name, risk_level) 
-           VALUES ($1, $2, $3)`,
-          [code, cleanName, 'medium']
-        );
-        
-        const tiers = industry.t || [];
-        for (let i = 0; i < tiers.length; i++) {
-          const tier = tiers[i];
-          const appendixId = `app_${code}_${i}`;
-          const plParts = (tier.phu_luc || '').split(',');
-          const appendixName = plParts[0] ? plParts[0].trim() : 'Phụ lục không tên';
-          const itemNumber = plParts[1] ? plParts[1].trim() : '';
-          
-          let lawId = null;
-          if (tier.ref) {
-            if (tier.ref.includes('08/2022') || tier.ref.includes('49/2026')) {
-              lawId = 'nd_08_2022';
-            } else if (tier.ref.includes('2020')) {
-              lawId = 'luat_bvmt_2020';
-            }
-          }
-          
-          await targetClient.query(
-            `INSERT INTO legal_appendices (id, law_id, appendix_name, item_number, content_summary) 
-             VALUES ($1, $2, $3, $4, $5)`,
-            [appendixId, lawId, appendixName, itemNumber, `Quy định quy mô công suất cho loại hình ${cleanName} (${tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'})`]
-          );
-          
-          let maxValue = null;
-          if (i > 0) {
-            maxValue = tiers[i - 1].min;
-          }
-          
-          const unitMatch = industry.lbl.match(/\((.*)\)/);
-          const unit = unitMatch ? unitMatch[1] : '';
-          const projectGroup = tier.projectGroup || (tier.hs === 'DTM' && tier.tq === 'cap_bo' ? 'Nhóm I' : tier.hs === 'DTM' ? 'Nhóm II' : tier.hs === 'GPMT' ? 'Nhóm III' : 'Nhóm IV');
-          
-          await targetClient.query(
-            `INSERT INTO classification_thresholds (industry_code, min_value, max_value, unit, project_group, legal_doc_required, appendix_id) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            [code, tier.min, maxValue, unit, projectGroup, tier.hs, appendixId]
-          );
-        }
-      }
-      console.log(`✔ Đã đồng bộ toàn bộ ngành nghề và ngưỡng phân loại vào cơ sở dữ liệu.`);
+    // 6. Seed Ngành nghề & Ngưỡng phân loại (gồm cả t và 6 processRules, không TRUNCATE)
+    try {
+      console.log('Đang seed Ngành nghề & Ngưỡng phân loại từ classification-service.js...');
+      const { IND_DB: indDb, INDUSTRY_META, RULE_SCHEMA_VERSION } = require('./services/classification-service');
+      const classStats = await seedClassificationCatalog(targetClient, {
+        indDb: indDb || {},
+        industryMeta: INDUSTRY_META || {},
+        ruleVersion: RULE_SCHEMA_VERSION || '2026.2-audit',
+        force: forceSeed,
+      });
+      console.log(`✔ Seed phân loại hoàn tất: thêm ${classStats.industriesInserted} ngành, cập nhật ${classStats.industriesEnriched}, chèn ${classStats.thresholdsInserted} ngưỡng (gồm processRules), giữ nguyên ${classStats.skippedVerified} nhóm ngưỡng đã duyệt.`);
     } catch (e) {
       console.error('⚠️ Không thể đồng bộ ngành nghề từ classification-service.js:', e.message);
     }

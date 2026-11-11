@@ -1,10 +1,100 @@
 // backend/services/classification-service.js
 // Dịch vụ Phân loại Hồ sơ Môi trường & Xác định Thẩm quyền (Kiến trúc 3 bước độc lập sau Kiểm toán Pháp lý)
+const defaultDb = require('../config/db');
+const { loadClassificationCatalog } = require('./rule-repository');
 const { calculateImpactRadius, analyzeSpatialContext } = require('./spatial-gis-service');
 
 const RULE_SCHEMA_VERSION = '2026.2-audit';
 const TWO_TIER_GOV_EFFECTIVE_DATE = '2025-07-01';
 const VBHN_49_EFFECTIVE_DATE = '2026-01-29';
+
+const INDUSTRY_ALIASES = {
+  san_bay: 'cang_hang_khong',
+};
+
+const INDUSTRY_META = {
+  che_bien_go: { name: 'Chế biến gỗ, dăm gỗ, ván nhân tạo (MDF, ván sàn)', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  xi_mang: { name: 'Xi măng, clinker', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  thep: {
+    name: 'Luyện kim, sản xuất thép, phôi thép',
+    groupLabel: 'Công nghiệp chế biến & Chế tạo',
+    processStages: [
+      { key: 'ore_smelting', label: 'Luyện kim / Luyện gang thép từ quặng hoặc phế liệu' },
+      { key: 'rolling_only', label: 'Chỉ cán, kéo, tạo hình thép (không luyện kim)' },
+    ],
+  },
+  nhiet_dien: {
+    name: 'Nhiệt điện (than, khí, sinh khối)',
+    groupLabel: 'Khai thác Khoáng sản & Năng lượng',
+    processStages: [
+      { key: 'coal_fired', label: 'Nhiệt điện than / Nhiên liệu rắn' },
+      { key: 'gas_fired', label: 'Nhiệt điện khí / Tua-bin khí' },
+    ],
+  },
+  khai_thac_ks: { name: 'Khai thác khoáng sản rắn (than, quặng, đá, cát)', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  hoa_chat: {
+    name: 'Hóa chất, phân bón hóa học, thuốc BVTV',
+    groupLabel: 'Công nghiệp chế biến & Chế tạo',
+    processStages: [
+      { key: 'basic_inorganic_or_pesticide', label: 'Sản xuất hóa chất cơ bản / phân bón hóa học / thuốc BVTV' },
+      { key: 'blending_packaging_only', label: 'Chỉ phối trộn, sang chiết, đóng gói (không phản ứng hóa học)' },
+    ],
+  },
+  giay_bot: {
+    name: 'Giấy, bột giấy, carton',
+    groupLabel: 'Công nghiệp chế biến & Chế tạo',
+    processStages: [
+      { key: 'pulp_or_recycled', label: 'Có sản xuất bột giấy hoặc tái chế giấy phế liệu' },
+      { key: 'paper_from_commercial_pulp', label: 'Chỉ sản xuất giấy từ bột giấy thương phẩm' },
+    ],
+  },
+  det_nhuom: {
+    name: 'Dệt, nhuộm, hoàn tất vải sợi',
+    groupLabel: 'Công nghiệp chế biến & Chế tạo',
+    processStages: [
+      { key: 'dyeing_washing', label: 'Có công đoạn nhuộm, giặt mài, hoàn tất hóa chất' },
+      { key: 'weaving_garment_no_dyeing', label: 'Chỉ dệt, may mặc (không nhuộm/giặt mài)' },
+    ],
+  },
+  thuc_pham: { name: 'Chế biến thực phẩm, đồ uống, thủy sản', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  nhua_cao_su: { name: 'Nhựa, cao su tổng hợp', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  cao_su_cb: { name: 'Chế biến mủ cao su tự nhiên (mủ khô)', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  duoc_pham: { name: 'Dược phẩm, sinh phẩm, mỹ phẩm', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  dien_tu: {
+    name: 'Điện tử, bán dẫn, linh kiện công nghệ',
+    groupLabel: 'Công nghiệp chế biến & Chế tạo',
+    processStages: [
+      { key: 'surface_chemical_or_component', label: 'Sản xuất linh kiện / có xử lý bề mặt, mạ, hóa chất' },
+      { key: 'assembly_only', label: 'Chỉ lắp ráp đơn thuần (không xử lý bề mặt/hóa chất)' },
+    ],
+  },
+  vat_lieu_xd: { name: 'Vật liệu xây dựng (gạch, ngói, gốm sứ)', groupLabel: 'Công nghiệp chế biến & Chế tạo' },
+  kcn: { name: 'Khu công nghiệp / KCX / Khu kinh tế', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  khu_cong_nghe: { name: 'Khu công nghệ cao, cụm công nghiệp', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  xl_chat_thai: { name: 'Cơ sở tái chế, xử lý chất thải rắn', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  xl_nuoc_thai: { name: 'Hệ thống xử lý nước thải tập trung', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  khai_thac_nuoc: { name: 'Khai thác tài nguyên nước mặt / nước dưới đất', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  khai_thac_dau_khi: { name: 'Khai thác dầu khí', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  do_thi: { name: 'Khu đô thị, nhà ở, chung cư', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  cao_toc: { name: 'Đường cao tốc, quốc lộ, đường bộ', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  duong_sat: { name: 'Đường sắt, đường sắt đô thị (metro)', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  cang_bien: { name: 'Cảng biển, bến cảng nước sâu', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  cang_hang_khong: { name: 'Cảng hàng không, sân bay', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  trung_tam_tm: { name: 'Trung tâm thương mại, siêu thị, văn phòng', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  khach_san: { name: 'Khách sạn, resort, khu du lịch sinh thái', groupLabel: 'Y tế, Du lịch & Nông — Lâm — Thủy sản' },
+  benh_vien: { name: 'Bệnh viện, phòng khám, cơ sở y tế', groupLabel: 'Y tế, Du lịch & Nông — Lâm — Thủy sản' },
+  nuoi_thuy_san: { name: 'Nuôi trồng thủy sản nước ngọt / nước lợ', groupLabel: 'Y tế, Du lịch & Nông — Lâm — Thủy sản' },
+  nuoi_ts_bien: { name: 'Nuôi trồng thủy sản trên biển / lồng bè', groupLabel: 'Y tế, Du lịch & Nông — Lâm — Thủy sản' },
+  xu_ly_ctnh: { name: 'Xử lý, tiêu hủy chất thải nguy hại (CTNH)', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  xu_ly_ctr: { name: 'Xử lý chất thải rắn sinh hoạt / CN thông thường', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  bai_rac: { name: 'Bãi chôn lấp chất thải, khu liên hợp XLCT', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  chan_nuoi: { name: 'Chăn nuôi gia súc, gia cầm tập trung', groupLabel: 'Y tế, Du lịch & Nông — Lâm — Thủy sản' },
+  thuy_dien: { name: 'Thủy điện', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  dien_mat_troi: { name: 'Nhà máy điện mặt trời', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  dien_gio: { name: 'Nhà máy điện gió', groupLabel: 'Khai thác Khoáng sản & Năng lượng' },
+  nao_vet: { name: 'Nạo vét luồng hàng hải, kênh rạch', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+  ho_chua: { name: 'Hồ chứa nước, công trình thủy lợi', groupLabel: 'Hạ tầng Kỹ thuật, Giao thông & Môi trường' },
+};
 
 // Bảng dữ liệu ngành nghề (IND_DB)
 // Lưu ý kiểm toán pháp lý: Mọi ngưỡng chưa có bản phụ lục gốc xác minh trực tiếp trong kho dữ liệu
@@ -770,34 +860,152 @@ function matchesThreshold(value, min, operator = '>=') {
   return value >= min;
 }
 
+function resolveIndustryCode(projectType) {
+  if (!projectType || typeof projectType !== 'string') {
+    return { resolvedCode: '', aliasedFrom: null };
+  }
+  const normalized = projectType.trim();
+  if (INDUSTRY_ALIASES[normalized]) {
+    return { resolvedCode: INDUSTRY_ALIASES[normalized], aliasedFrom: normalized };
+  }
+  return { resolvedCode: normalized, aliasedFrom: null };
+}
+
+function getAvailableProcessStages(industryKey, industryObj) {
+  const keys = industryObj?.processRules ? Object.keys(industryObj.processRules) : [];
+  const metaStages = industryObj?.processStagesMeta || INDUSTRY_META[industryKey]?.processStages || [];
+  const metaMap = new Map(metaStages.map(item => [item.key, item.label]));
+  return keys.map(key => ({ key, label: metaMap.get(key) || key }));
+}
+
 /**
  * Tìm tier công suất theo ngành, công suất và công đoạn sản xuất (T01, T02, T03, T04)
+ * Trả về null nếu ngành không tồn tại hoặc không có tier khớp (không fallback im lặng).
  */
-function findIndustryTier(projectType, capacity, processStage = null) {
-  const industry = IND_DB[projectType];
+function findIndustryTier(projectType, capacity, processStage = null, catalog = IND_DB) {
+  const { resolvedCode } = resolveIndustryCode(projectType);
+  const industry = catalog?.[resolvedCode];
   if (!industry) return null;
 
-  const tiers = (processStage && industry.processRules && industry.processRules[processStage])
+  const hasProcessRules = Boolean(industry.processRules && Object.keys(industry.processRules).length > 0);
+  if (hasProcessRules) {
+    if (!processStage || !Array.isArray(industry.processRules[processStage])) {
+      return null;
+    }
+  }
+
+  const tiers = hasProcessRules
     ? industry.processRules[processStage]
-    : industry.t;
+    : (Array.isArray(industry.t) ? industry.t : []);
+
+  if (!tiers || tiers.length === 0) return null;
 
   for (const tier of tiers) {
     if (matchesThreshold(capacity, tier.min, tier.operator || '>=')) {
       return tier;
     }
   }
-  return tiers[tiers.length - 1];
+  return null;
+}
+
+/**
+ * Kiểm tra tính đầy đủ và hợp lệ của đầu vào trước khi chạy 3 bước đánh giá (fail-closed)
+ */
+function validateClassificationInput(formData = {}, catalog = IND_DB) {
+  const { resolvedCode, aliasedFrom } = resolveIndustryCode(formData.nganh);
+  const industry = resolvedCode ? catalog?.[resolvedCode] : null;
+
+  if (!resolvedCode || !industry) {
+    return {
+      valid: false,
+      errorCode: 'UNKNOWN_INDUSTRY',
+      resolvedCode,
+      aliasedFrom,
+      message: `Mã ngành nghề "${formData.nganh || '(trống)'}" không tồn tại trong danh mục quy tắc hợp lệ. Hệ thống không gán Nhóm IV/ĐKMT mặc định.`,
+    };
+  }
+
+  const hasProcessRules = Boolean(industry.processRules && Object.keys(industry.processRules).length > 0);
+  if (hasProcessRules) {
+    const availableProcessStages = getAvailableProcessStages(resolvedCode, industry);
+    if (!formData.processStage) {
+      return {
+        valid: false,
+        errorCode: 'MISSING_PROCESS_STAGE',
+        resolvedCode,
+        aliasedFrom,
+        availableProcessStages,
+        message: `Ngành "${INDUSTRY_META[resolvedCode]?.name || resolvedCode}" bắt buộc phải chọn công đoạn / loại nhiên liệu (processStage) trước khi phân loại.`,
+      };
+    }
+    if (!Array.isArray(industry.processRules[formData.processStage]) || industry.processRules[formData.processStage].length === 0) {
+      return {
+        valid: false,
+        errorCode: 'INVALID_PROCESS_STAGE',
+        resolvedCode,
+        aliasedFrom,
+        availableProcessStages,
+        message: `Công đoạn "${formData.processStage}" không hợp lệ hoặc chưa có quy tắc hoạt động cho ngành "${resolvedCode}".`,
+      };
+    }
+  } else {
+    const activeTiers = Array.isArray(industry.t) ? industry.t : [];
+    if (activeTiers.length === 0) {
+      return {
+        valid: false,
+        errorCode: 'NO_ACTIVE_RULES',
+        resolvedCode,
+        aliasedFrom,
+        message: `Ngành "${resolvedCode}" hiện chưa có ngưỡng quy tắc đã ban hành/hiệu lực trong cơ sở dữ liệu (chỉ có bản nháp hoặc chưa cấu hình).`,
+      };
+    }
+  }
+
+  const rawCap = (formData.capacity !== undefined && formData.capacity !== null && formData.capacity !== '')
+    ? formData.capacity
+    : formData.cap;
+  const numericCap = (rawCap === undefined || rawCap === null || rawCap === '') ? NaN : Number(rawCap);
+  if (Number.isNaN(numericCap) || !Number.isFinite(numericCap) || numericCap < 0) {
+    return {
+      valid: false,
+      errorCode: 'INVALID_CAPACITY',
+      resolvedCode,
+      aliasedFrom,
+      message: 'Quy mô / công suất thiết kế không hợp lệ (bắt buộc là số >= 0). Hệ thống không tự động chọn bậc công suất thay thế.',
+    };
+  }
+
+  const tier = findIndustryTier(resolvedCode, numericCap, formData.processStage || null, catalog);
+  if (!tier) {
+    return {
+      valid: false,
+      errorCode: 'NO_MATCHING_TIER',
+      resolvedCode,
+      aliasedFrom,
+      message: `Không tìm thấy bậc ngưỡng phù hợp cho công suất ${numericCap} trong CSDL.`,
+    };
+  }
+
+  return {
+    valid: true,
+    resolvedCode,
+    aliasedFrom,
+    numericCap,
+    tier,
+    industry,
+  };
 }
 
 /**
  * BƯỚC 1 ĐỘC LẬP (A01): Xác định Nhóm dự án (projectGroup: Nhóm I, II, III, IV)
  * Không suy ngược từ loại hồ sơ và cấp cơ quan.
  */
-function determineProjectGroup(formData = {}) {
+function determineProjectGroup(formData = {}, options = {}) {
+  const catalog = options.catalog || IND_DB;
   const {
     nganh,
-    capacity = 0,
-    cap = 0,
+    capacity,
+    cap,
     processStage = null,
     rung = false, lua = false, bg = false,
     bao_ton = false, di_san = false,
@@ -806,28 +1014,30 @@ function determineProjectGroup(formData = {}) {
     sensitiveDetails = null,
   } = formData;
 
-  const actualCap = parseFloat(capacity !== undefined && capacity !== 0 ? capacity : (cap || 0));
+  const { resolvedCode } = resolveIndustryCode(nganh);
+  const rawCap = (capacity !== undefined && capacity !== null && capacity !== '') ? capacity : (cap ?? 0);
+  const actualCap = parseFloat(rawCap);
   const flags = { rung, lua, bg, bao_ton, di_san, ven_bien, nguon_nc, dat_ngap };
 
-  const tier = findIndustryTier(nganh, actualCap, processStage) || {
-    min: 0,
-    operator: '>=',
-    projectGroup: 'Nhóm IV',
-    capacityScale: 'SMALL',
-    hs: 'DKMT',
-    tq: 'cap_xa',
-    historicalTq: 'cap_huyen',
-    phu_luc: '—',
-    ref: 'Điều 28, Luật BVMT 2020',
-    effectiveFrom: TWO_TIER_GOV_EFFECTIVE_DATE,
-    effectiveTo: null,
-    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
-  };
+  const tier = findIndustryTier(resolvedCode, actualCap, processStage, catalog);
+  if (!tier) {
+    return {
+      invalid: true,
+      projectGroup: null,
+      capacityScale: null,
+      tier: null,
+      phuluc: null,
+      ref: null,
+      verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+      nangNhom: [],
+      cauNhom: [],
+    };
+  }
 
   let projectGroup = tier.projectGroup || (tier.hs === 'DTM' && tier.tq === 'cap_bo' ? 'Nhóm I' : tier.hs === 'DTM' ? 'Nhóm II' : tier.hs === 'GPMT' ? 'Nhóm III' : 'Nhóm IV');
   let phuluc = tier.phu_luc || '—';
   let ref = tier.ref || 'Luật BVMT 2020';
-  let verificationStatus = tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION';
+  let verificationStatus = tier.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION';
   const nangNhom = [];
   const cauNhom = [];
 
@@ -882,11 +1092,12 @@ function determineProjectGroup(formData = {}) {
   }
 
   // Ghi chú kiểm toán ngành nghề (Mục 4.1 & 4.2)
-  if (IND_DB[nganh]?.auditNote) {
+  const indEntry = catalog?.[resolvedCode];
+  if (indEntry?.auditNote && verificationStatus !== 'VERIFIED') {
     cauNhom.push({
       icon: '🔍',
       type: 'warn',
-      text: `[NEEDS_LEGAL_VERIFICATION] ${IND_DB[nganh].auditNote}`,
+      text: `[NEEDS_LEGAL_VERIFICATION] ${indEntry.auditNote}`,
       ref: 'VBHN 49/VBHN-BNNMT',
     });
   }
@@ -1173,6 +1384,8 @@ function determineCompetentAuthority(formData = {}, groupResult, obligationsResu
     coQuanLabel = competentAgency;
   }
 
+  const isUpstreamVerified = groupResult?.verificationStatus === 'VERIFIED';
+
   return {
     tq: tierTq,
     coQuan: coQuanLabel,
@@ -1184,7 +1397,9 @@ function determineCompetentAuthority(formData = {}, groupResult, obligationsResu
       legalBasis,
       effectiveFrom: isHistoricalBeforeTwoTier ? '2022-01-01' : TWO_TIER_GOV_EFFECTIVE_DATE,
       effectiveTo: isHistoricalBeforeTwoTier ? '2025-06-30' : null,
-      verificationStatus: dtcong || delegatedToKcnBoard || hs === 'GPMT' ? 'NEEDS_LEGAL_VERIFICATION' : 'verified',
+      verificationStatus: (isUpstreamVerified && !dtcong && !delegatedToKcnBoard && hs !== 'GPMT')
+        ? 'VERIFIED'
+        : 'NEEDS_LEGAL_VERIFICATION',
     },
   };
 }
@@ -1196,11 +1411,14 @@ function getLawChangeWarnings(projectType) {
 }
 
 /**
- * Hàm tổng hợp đánh giá phân loại dự án và xác định thẩm quyền
+ * Hàm tổng hợp đánh giá phân loại dự án và xác định thẩm quyền (độc lập nguồn dữ liệu, fail-closed)
  */
-function evaluateClassification(formData = {}) {
+function evaluateClassification(formData = {}, options = {}) {
+  const catalog = options.catalog || IND_DB;
+  const ruleSource = options.ruleSource || 'FALLBACK_UNVERIFIED';
+  const fallbackReason = options.fallbackReason || null;
+
   const {
-    nganh,
     nt = 0,
     kt = 0,
     phanky = false,
@@ -1211,17 +1429,75 @@ function evaluateClassification(formData = {}) {
     evaluationDate = new Date().toISOString().slice(0, 10),
   } = formData;
 
+  const validation = validateClassificationInput(formData, catalog);
+  if (!validation.valid) {
+    return {
+      projectGroup: null,
+      nhom: null,
+      hs: null,
+      tq: null,
+      coQuan: null,
+      phuluc: null,
+      ref: null,
+      ref_law_id: null,
+      thoiHan: null,
+      conclusionStatus: 'NEEDS_REVIEW',
+      verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+      isOfficialConclusion: false,
+      canExportOfficialReport: false,
+      isPreliminary: false,
+      officialConclusion: null,
+      preliminary: null,
+      errorCode: validation.errorCode,
+      errorMessage: validation.message,
+      availableProcessStages: validation.availableProcessStages || null,
+      unverifiedReasons: [validation.message],
+      environmentalObligations: [],
+      obligationDetails: [],
+      competentAuthority: {
+        competentPerson: null,
+        competentAgency: null,
+        receivingAgency: null,
+        processingUnit: null,
+        legalBasis: [],
+        effectiveFrom: null,
+        effectiveTo: null,
+        verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+      },
+      ruleSource,
+      fallbackReason,
+      ruleVersion: RULE_SCHEMA_VERSION,
+      evaluationDate,
+      hi: null,
+      cl: { bat_buoc: [], bo_sung: [] },
+      lr: [],
+      nangNhom: [],
+      cauNhom: [{ icon: '⚠️', type: 'warn', text: validation.message, ref: '' }],
+      infoExtra: [],
+      luyTien: [],
+      industryNote: catalog?.[validation.resolvedCode]?.note || null,
+    };
+  }
+
+  const resolvedNganh = validation.resolvedCode;
+  const normalizedFormData = {
+    ...formData,
+    nganh: resolvedNganh,
+    capacity: validation.numericCap,
+    evaluationDate,
+  };
+
   const actualNt = parseFloat(nt || 0);
   const actualKt = parseFloat(kt || 0);
 
   // 1. Bước 1: Xác định Nhóm dự án (projectGroup)
-  const groupResult = determineProjectGroup(formData);
+  const groupResult = determineProjectGroup(normalizedFormData, { catalog });
 
   // 2. Bước 2: Xác định Nghĩa vụ / Thủ tục môi trường (environmentalObligations)
-  const obligationsResult = determineEnvironmentalObligations(formData, groupResult);
+  const obligationsResult = determineEnvironmentalObligations(normalizedFormData, groupResult);
 
   // 3. Bước 3: Xác định Thẩm quyền và Cơ quan chuyên môn (competentAuthority)
-  const authorityResult = determineCompetentAuthority(formData, groupResult, obligationsResult);
+  const authorityResult = determineCompetentAuthority(normalizedFormData, groupResult, obligationsResult);
 
   const hs = obligationsResult.primaryProcedure;
   const tq = authorityResult.tq;
@@ -1235,6 +1511,15 @@ function evaluateClassification(formData = {}) {
   const infoExtra = [];
   const luyTien = [];
 
+  if (validation.aliasedFrom) {
+    infoExtra.push({
+      icon: 'ℹ️',
+      type: 'info',
+      text: `Mã ngành cũ "${validation.aliasedFrom}" đã được ánh xạ sang "${resolvedNganh}".`,
+      ref: '',
+    });
+  }
+
   obligationsResult.obligationNotes.forEach(note => {
     if (note.type === 'warn') {
       cauNhom.push(note);
@@ -1247,7 +1532,7 @@ function evaluateClassification(formData = {}) {
     infoExtra.push({
       icon: '🏛️',
       type: 'info',
-      text: 'Dự án đầu tư công: cần kiểm tra điều kiện phân cấp/분quyền thẩm định ĐTM cho UBND cấp tỉnh theo NĐ 48/2026 và Nghị quyết phân quyền hiện hành (NEEDS_LEGAL_VERIFICATION).',
+      text: 'Dự án đầu tư công: cần kiểm tra điều kiện phân cấp/phân quyền thẩm định ĐTM cho UBND cấp tỉnh theo NĐ 48/2026 và Nghị quyết phân quyền hiện hành (NEEDS_LEGAL_VERIFICATION).',
       ref: 'NĐ 48/2026, Điều 7',
     });
   }
@@ -1299,12 +1584,13 @@ function evaluateClassification(formData = {}) {
     });
   }
 
-  const lawWarnings = getLawChangeWarnings(nganh);
+  const lawWarnings = getLawChangeWarnings(resolvedNganh);
   lawWarnings.forEach(w => {
     luyTien.push({ icon: w.icon, text: w.text, ref: w.ref, law_id: w.law_id });
   });
 
-  const industryNote = (IND_DB[nganh] && IND_DB[nganh].note) || null;
+  const industryObj = catalog?.[resolvedNganh] || {};
+  const industryNote = industryObj.note || null;
   const thoiHan = THOI_HAN[`${hs}_${tq}`] || 'Theo quy định pháp luật hiện hành';
 
   let refLawId = 'luat_bvmt_2020';
@@ -1322,28 +1608,88 @@ function evaluateClassification(formData = {}) {
     ? analyzeSpatialContext(formData.latitude, formData.longitude)
     : null;
 
-  return {
-    // Các trường cấu trúc mới sau kiểm toán pháp lý (A01, A02, A03, A04)
+  // Tổng hợp gate pháp lý & nguồn dữ liệu (A-01, A-04, CL-07)
+  const isFromDb = ruleSource === 'DATABASE';
+  const unverifiedReasons = [];
+  if (!isFromDb) {
+    unverifiedReasons.push(`Không tải được dữ liệu rule từ PostgreSQL (đang ở chế độ ${ruleSource}${fallbackReason ? ': ' + fallbackReason : ''}).`);
+  }
+  if (industryObj.verificationStatus !== 'VERIFIED') {
+    unverifiedReasons.push(industryObj.auditNote || `Ngành "${resolvedNganh}" đang gắn trạng thái NEEDS_LEGAL_VERIFICATION.`);
+  }
+  if (groupResult.verificationStatus !== 'VERIFIED') {
+    unverifiedReasons.push('Ngưỡng phân loại theo công suất / công đoạn / yếu tố nhạy cảm chưa hoàn tất xác minh pháp lý (NEEDS_LEGAL_VERIFICATION).');
+  }
+  if (authorityResult.competentAuthority.verificationStatus !== 'VERIFIED') {
+    unverifiedReasons.push('Thẩm quyền tiếp nhận/thẩm định cần chuyên viên pháp lý kiểm tra thêm các điều kiện phân cấp hoặc ngoại lệ.');
+  }
+
+  const overallVerificationStatus = (
+    isFromDb
+    && industryObj.verificationStatus === 'VERIFIED'
+    && groupResult.verificationStatus === 'VERIFIED'
+    && authorityResult.competentAuthority.verificationStatus === 'VERIFIED'
+  ) ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION';
+
+  const conclusionStatus = !isFromDb
+    ? 'NEEDS_REVIEW'
+    : (overallVerificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION');
+
+  const isOfficialConclusion = conclusionStatus === 'VERIFIED';
+  const canExportOfficialReport = isOfficialConclusion;
+  const isPreliminary = !isOfficialConclusion;
+
+  const preliminary = {
     projectGroup: nhom,
+    nhom,
+    hs,
+    tq,
+    coQuan,
+    phuluc,
+    ref,
+    processStage: formData.processStage || null,
     environmentalObligations: obligationsResult.environmentalObligations,
     obligationDetails: obligationsResult.obligationDetails,
     competentAuthority: authorityResult.competentAuthority,
-    verificationStatus: groupResult.verificationStatus,
-    evaluationDate,
-    ruleVersion: RULE_SCHEMA_VERSION,
+  };
 
-    // Các trường tương thích giao diện hiện tại (ClassifyTab.vue)
-    hs,
-    tq,
+  const officialConclusion = isOfficialConclusion
+    ? { ...preliminary }
+    : null;
+
+  return {
+    // Trạng thái & Cổng kiểm soát kết luận pháp lý
+    conclusionStatus,
+    verificationStatus: overallVerificationStatus,
+    isOfficialConclusion,
+    canExportOfficialReport,
+    isPreliminary,
+    officialConclusion,
+    preliminary,
+    unverifiedReasons,
+    ruleSource,
+    fallbackReason,
+    ruleVersion: industryObj.ruleVersion || groupResult.tier?.ruleVersion || RULE_SCHEMA_VERSION,
+    evaluationDate,
+
+    // Các trường cấu trúc sau kiểm toán pháp lý
+    projectGroup: isFromDb ? nhom : null,
+    environmentalObligations: obligationsResult.environmentalObligations,
+    obligationDetails: obligationsResult.obligationDetails,
+    competentAuthority: authorityResult.competentAuthority,
+
+    // Các trường hiển thị tương thích UI (được đánh dấu isPreliminary khi chưa xác minh; ẩn khi fallback offline)
+    hs: isFromDb ? hs : null,
+    tq: isFromDb ? tq : null,
     phuluc,
     ref,
     ref_law_id: refLawId,
-    nhom,
-    coQuan,
+    nhom: isFromDb ? nhom : null,
+    coQuan: isFromDb ? coQuan : null,
     thoiHan,
     impactRadiusMeters,
     spatialAnalysis,
-    hi: HS_INFO[hs] || { icon: '📋', label: 'Hồ sơ môi trường', class: 'chip-gpmt', bg: '#EEF8F3' },
+    hi: isFromDb ? (HS_INFO[hs] || { icon: '📋', label: 'Hồ sơ môi trường', class: 'chip-gpmt', bg: '#EEF8F3' }) : null,
     cl: CHECKLIST[hs] || { bat_buoc: [], bo_sung: [] },
     lr: LAW_REFS[hs] || [],
     nangNhom,
@@ -1354,17 +1700,76 @@ function evaluateClassification(formData = {}) {
   };
 }
 
+/**
+ * Thực thi phân loại sử dụng catalog runtime từ PostgreSQL (route API chính thức).
+ */
+async function evaluateClassificationWithDb(formData = {}, { db = defaultDb } = {}) {
+  const loaded = await loadClassificationCatalog({ db });
+  if (loaded.ok && loaded.catalog) {
+    return evaluateClassification(formData, {
+      catalog: loaded.catalog,
+      ruleSource: 'DATABASE',
+      fallbackReason: null,
+    });
+  }
+  return evaluateClassification(formData, {
+    catalog: IND_DB,
+    ruleSource: 'FALLBACK_UNVERIFIED',
+    fallbackReason: loaded.error || 'DB_UNAVAILABLE',
+  });
+}
+
+/**
+ * Trả về metadata danh mục ngành nghề, nhãn hiển thị, công đoạn và vùng nhạy cảm từ DB.
+ */
+async function getClassificationMetadata({ db = defaultDb } = {}) {
+  const loaded = await loadClassificationCatalog({ db });
+  const isFromDb = loaded.ok && loaded.catalog;
+  const catalog = isFromDb ? loaded.catalog : IND_DB;
+  const ruleSource = isFromDb ? 'DATABASE' : 'FALLBACK_UNVERIFIED';
+
+  const enrichedIndustries = {};
+  for (const [code, ind] of Object.entries(catalog)) {
+    const meta = INDUSTRY_META[code] || {};
+    const processStages = getAvailableProcessStages(code, ind);
+    enrichedIndustries[code] = {
+      ...ind,
+      code,
+      name: ind.name || meta.name || code,
+      groupLabel: meta.groupLabel || 'Ngành nghề khác',
+      processStages,
+      hasProcessRules: processStages.length > 0,
+      verificationStatus: ind.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+    };
+  }
+
+  return {
+    industries: enrichedIndustries,
+    industryAliases: INDUSTRY_ALIASES,
+    sensitiveAreas: SENSITIVE_AREAS,
+    ruleSource,
+    fallbackReason: isFromDb ? null : (loaded.error || 'DB_UNAVAILABLE'),
+    schemaVersion: RULE_SCHEMA_VERSION,
+  };
+}
+
 module.exports = {
   RULE_SCHEMA_VERSION,
   TWO_TIER_GOV_EFFECTIVE_DATE,
   IND_DB,
+  INDUSTRY_META,
+  INDUSTRY_ALIASES,
   CHECKLIST,
   LAW_REFS,
   SENSITIVE_AREAS,
   LAW_CHANGE_WARNINGS,
+  resolveIndustryCode,
+  getAvailableProcessStages,
   findIndustryTier,
   determineProjectGroup,
   determineEnvironmentalObligations,
   determineCompetentAuthority,
   evaluateClassification,
+  evaluateClassificationWithDb,
+  getClassificationMetadata,
 };
