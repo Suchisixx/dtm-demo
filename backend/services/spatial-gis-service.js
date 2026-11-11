@@ -291,7 +291,7 @@ function analyzeSpatialContext(lat, lng, options = {}) {
       key: 'bg',
       level: 'warn',
       title: `Khu vực gần biên giới đất liền (cách ~${borderCheck.distanceKm} km)`,
-      detail: 'Khoảng cách ước tính đến biên giới ≤ 50 km chỉ mang tính tham khảo không gian; không tự động nâng dự án lên Nhóm I nếu chưa xác minh ranh giới hành chính xã biên giới và điều kiện pháp lý cụ thể (NEEDS_LEGAL_VERIFICATION).',
+      detail: 'Khoảng cách ước tính đến biên giới ≤ 50 km chỉ mang tính tham khảo không gian; hệ thống không tự động nâng dự án lên Nhóm I nếu chưa xác minh ranh giới hành chính xã biên giới và điều kiện pháp lý cụ thể.',
       autoFlag: 'bg'
     });
   }

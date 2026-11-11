@@ -661,3 +661,45 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     db.query = originalQuery;
   }
 });
+
+test('UX Simplification & Vietnamese Localization Parity + DB Bootstrap Export', async () => {
+  const { pathToFileURL } = require('url');
+  const labels = await import(pathToFileURL(path.join(__dirname, '../../frontend/src/utils/legalLabels.js')).href);
+  const { evaluateClassification } = require('../services/classification-service');
+  const { ensureRuntimeDatabaseReady } = require('../services/db-bootstrap');
+  const serverJs = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const classifyVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/ClassifyTab.vue'), 'utf8');
+  const qcvnVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/QCVNTab.vue'), 'utf8');
+
+  // 1. Server startup invokes non-destructive DB schema readiness
+  assert.equal(typeof ensureRuntimeDatabaseReady, 'function');
+  assert.ok(serverJs.includes('ensureRuntimeDatabaseReady'), 'server.js phai goi ensureRuntimeDatabaseReady luc khoi dong');
+
+  // 2. Vietnamese label mappings & internal audit text sanitization
+  assert.equal(labels.getSensitiveStatusLabel('NOT_REQUIRED'), 'Không yêu cầu xác minh');
+  assert.equal(labels.getRuleSourceLabel('DATABASE'), 'Dữ liệu quy chuẩn hệ thống');
+  assert.equal(labels.getQcvnOverallStatusMeta('PASS_WITH_WARNING').tone, 'warn');
+  const sanitized = labels.formatReasonForEndUser('Mục 4.2 README: Gộp nhiều ngành (NEEDS_LEGAL_VERIFICATION)');
+  assert.ok(!sanitized.includes('README'));
+  assert.ok(!sanitized.includes('NEEDS_LEGAL_VERIFICATION'));
+  const sanitizedDbErr = labels.formatReasonForEndUser('column "display_name" does not exist');
+  assert.ok(!sanitizedDbErr.includes('display_name'));
+
+  // 3. UI templates avoid exposing raw enum badges & developer notes directly on primary labels
+  assert.ok(!classifyVue.includes('(NEEDS_REVIEW)'), 'ClassifyTab khong hien raw (NEEDS_REVIEW)');
+  assert.ok(!classifyVue.includes('Xác nhận hợp lệ (VERIFIED)'), 'ClassifyTab nut Admin phai thuan Viet');
+  assert.ok(classifyVue.includes('shouldShowAdminSensitivePanel'), 'ClassifyTab an khung Admin khi khong co yeu to nhay cam');
+  assert.ok(classifyVue.includes('isFallbackOrIncompleteResult'), 'ClassifyTab khong tu mau thuan CHUA XAC DINH vs GPMT');
+
+  assert.ok(!qcvnVue.includes('(QCVN_SELECTION_MISMATCH)'), 'QCVNTab khong hien raw (QCVN_SELECTION_MISMATCH)');
+  assert.ok(!qcvnVue.includes('(INCOMPLETE —'), 'QCVNTab khong hien raw (INCOMPLETE)');
+  assert.ok(!qcvnVue.includes('(PERIOD_MISMATCH —'), 'QCVNTab khong hien raw (PERIOD_MISMATCH)');
+  assert.ok(!qcvnVue.includes('Catalog: {{'), 'QCVNTab chip catalog phai thuan Viet');
+
+  // 4. Engine output keeps auditNote on definition but strips README prefix from user-facing warnings
+  const res = evaluateClassification({ nganh: 'thuc_pham', capacity: 13000, tinh: 'Cần Thơ' }, { ruleSource: 'FALLBACK_UNVERIFIED' });
+  assert.equal(res.isOfficialConclusion, false);
+  assert.equal(res.hs, null);
+  assert.ok(res.unverifiedReasons.every(r => !r.includes('README')));
+  assert.ok(res.cauNhom.every(c => !String(c.text || '').includes('README')));
+});

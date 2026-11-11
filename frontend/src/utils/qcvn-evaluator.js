@@ -556,13 +556,13 @@ export function evaluateQcvnSample({
   const qcvnVerified = qcvn.verificationStatus === 'VERIFIED';
   const unverifiedReasons = [];
   if (isFallbackSource) {
-    unverifiedReasons.push('Đang sử dụng dữ liệu QCVN fallback cục bộ (không phải dữ liệu runtime từ PostgreSQL).');
+    unverifiedReasons.push('Hiện chưa tải được danh mục QCVN từ cơ sở dữ liệu; kết quả đang dùng dữ liệu dự phòng ở mức tham khảo.');
   }
   if (!qcvnVerified) {
-    unverifiedReasons.push(`Bộ quy chuẩn "${qcvn.ten || qcvnId}" đang ở trạng thái NEEDS_LEGAL_VERIFICATION (cần đối chiếu văn bản QCVN chính thức).`);
+    unverifiedReasons.push(`Bộ quy chuẩn "${qcvn.ten || qcvnId}" đang chờ đối chiếu xác minh chính thức từ văn bản gốc.`);
   }
   if (hasUnverifiedParam) {
-    unverifiedReasons.push('Mẫu có chứa thông số gắn cờ NEEDS_LEGAL_VERIFICATION.');
+    unverifiedReasons.push('Trong bảng có chỉ tiêu chưa hoàn tất xác minh ngưỡng từ văn bản quy chuẩn gốc.');
   }
 
   const verificationStatus = (!isFallbackSource && qcvnVerified && !hasUnverifiedParam)

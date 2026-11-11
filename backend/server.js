@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const logger = require('./utils/logger');
 const scheduler = require('./utils/scheduler');
+const { ensureRuntimeDatabaseReady } = require('./services/db-bootstrap');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,15 +29,25 @@ app.use('/api/qcvns', require('./routes/qcvns'));
 app.use('/api/crawler', require('./routes/crawler'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
-// Khởi chạy scheduler kiểm tra luật tự động hàng tháng
-scheduler.init();
-
 // Tuyến fallback: Trả về trang chủ cho bất kỳ request nào không khớp
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Chạy server
-app.listen(PORT, () => {
-  logger.info(`ETC server đang hoạt động tại: http://localhost:${PORT}`);
-});
+// Đồng bộ schema cộng thêm an toàn trước khi mở cổng phục vụ
+async function startServer() {
+  try {
+    await ensureRuntimeDatabaseReady();
+  } catch (err) {
+    logger.error('Lỗi khởi tạo schema runtime:', err.message);
+  }
+
+  // Khởi chạy scheduler kiểm tra luật tự động hàng tháng
+  scheduler.init();
+
+  app.listen(PORT, () => {
+    logger.info(`ETC server đang hoạt động tại: http://localhost:${PORT}`);
+  });
+}
+
+startServer();

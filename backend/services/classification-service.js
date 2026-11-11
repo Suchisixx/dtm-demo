@@ -808,7 +808,7 @@ const LAW_CHANGE_WARNINGS = [
   {
     applies_to: 'do_thi',
     icon: '🏙️',
-    text: 'A09: Các mốc diện tích khu đô thị (300 ha, 50 ha) dùng để phân loại quy mô dự án; nghĩa vụ GPMT hay ĐKMT phải căn cứ vào việc có phát sinh chất thải thuộc diện phải xử lý hay không.',
+    text: 'Các mốc diện tích khu đô thị (300 ha, 50 ha) dùng để phân loại quy mô dự án; nghĩa vụ GPMT hay ĐKMT phải căn cứ vào việc có phát sinh chất thải thuộc diện phải xử lý hay không.',
     ref: 'NĐ 48/2026 & Điều 39, 49 Luật BVMT 2020',
     law_id: 'nd_48_2026',
   },
@@ -948,6 +948,15 @@ function findIndustryTier(projectType, capacity, processStage = null, catalog = 
   return findIndustryTierDetailed(projectType, capacity, processStage, catalog, evaluationDate).tier;
 }
 
+function formatAuditTextForUser(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/^\[NEEDS_LEGAL_VERIFICATION\]\s*/i, '')
+    .replace(/^Mục\s*4\.[0-9]+\s*README\s*:\s*/i, '')
+    .replace(/\s*\(NEEDS_LEGAL_VERIFICATION\)/gi, '')
+    .trim();
+}
+
 /**
  * Kiểm tra tính đầy đủ và hợp lệ của đầu vào trước khi chạy 3 bước đánh giá (fail-closed)
  */
@@ -990,7 +999,7 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
         aliasedFrom,
         evaluationDate: evalDate,
         availableProcessStages,
-        message: `Ngành "${INDUSTRY_META[resolvedCode]?.name || resolvedCode}" bắt buộc phải chọn công đoạn / loại nhiên liệu (processStage) trước khi phân loại.`,
+        message: `Ngành "${INDUSTRY_META[resolvedCode]?.name || resolvedCode}" bắt buộc phải chọn công đoạn / loại nhiên liệu trước khi phân loại.`,
       };
     }
     if (!Array.isArray(industry.processRules[formData.processStage]) || industry.processRules[formData.processStage].length === 0) {
@@ -1183,7 +1192,7 @@ function determineProjectGroup(formData = {}, options = {}) {
           cauNhom.push({
             icon: area.key === 'bg' ? 'ℹ️' : '⚠️',
             type: area.key === 'bg' ? 'info' : 'warn',
-            text: `${area.label}: ${area.requiresLegalCriteria} Chưa có xác minh VERIFIED phía server — không tự động nâng lên Nhóm I (${sensitiveVerificationStatus}).`,
+            text: `${area.label}: ${area.requiresLegalCriteria} Chưa có xác minh hợp lệ từ quản trị viên — hệ thống chưa tự động nâng lên Nhóm I.`,
             ref: area.ref,
           });
         });
@@ -1192,20 +1201,20 @@ function determineProjectGroup(formData = {}, options = {}) {
         cauNhom.push({
           icon: '🔒',
           type: 'warn',
-          text: 'Cờ sensitiveCriteriaVerified / diện tích chuyển đổi từ client chỉ mang tính khai báo (PENDING_SERVER_VERIFICATION), chưa có hiệu lực nâng nhóm chính thức cho đến khi Admin duyệt trên server.',
+          text: 'Thông tin vùng nhạy cảm / diện tích chuyển đổi do người dùng khai báo hiện mới ở mức ghi nhận ban đầu, chưa có hiệu lực nâng nhóm chính thức cho đến khi quản trị viên xác minh hợp lệ.',
           ref: 'Điều 25 NĐ 08/2022/NĐ-CP',
         });
       }
     }
   }
 
-  // Ghi chú kiểm toán ngành nghề (Mục 4.1 & 4.2)
+  // Ghi chú kiểm toán ngành nghề (lọc bỏ tiền tố tài liệu kỹ thuật trước khi trả về UI)
   const indEntry = catalog?.[resolvedCode];
   if (indEntry?.auditNote && verificationStatus !== 'VERIFIED') {
     cauNhom.push({
       icon: '🔍',
       type: 'warn',
-      text: `[NEEDS_LEGAL_VERIFICATION] ${indEntry.auditNote}`,
+      text: formatAuditTextForUser(indEntry.auditNote),
       ref: 'VBHN 49/VBHN-BNNMT',
     });
   }
@@ -1326,42 +1335,39 @@ function determineEnvironmentalObligations(formData = {}, groupResult) {
     }
   }
 
-  // A05: Lưu lượng nước thải >= 1.000 m³/ngày không tự động chuyển loại hồ sơ sang ĐTM
   if (actualNt >= 1000) {
     obligationNotes.push({
       icon: '💧',
       type: 'info',
-      text: `Lưu lượng nước thải ${actualNt.toLocaleString('vi-VN')} m³/ngày: Hệ thống không tự động nâng lên ĐTM chỉ từ lưu lượng nước thải. Cần đối chiếu xem dự án có thuộc loại hình HTXLNT tập trung hoặc ngưỡng công suất riêng tại Phụ lục III, IV VBHN 49/2026 và kiểm tra nghĩa vụ quan trắc nước thải tự động, liên tục (NEEDS_LEGAL_VERIFICATION).`,
+      text: `Lưu lượng nước thải ${actualNt.toLocaleString('vi-VN')} m³/ngày: Hệ thống không tự động nâng lên ĐTM chỉ từ lưu lượng nước thải. Cần đối chiếu xem dự án có thuộc loại hình HTXLNT tập trung hoặc ngưỡng công suất riêng tại Phụ lục III, IV VBHN 49/2026 và kiểm tra nghĩa vụ quan trắc nước thải tự động, liên tục.`,
       ref: 'Điều 97 NĐ 08/2022 (VBHN 49/2026)',
     });
   }
 
-  // A06: Lưu lượng khí thải >= 20.000 / 200.000 m³/giờ không tự động nâng GPMT/ĐTM đại trà
   if (actualKt >= 20000) {
     obligationNotes.push({
       icon: '🌫️',
       type: 'info',
-      text: `Lưu lượng khí thải ${actualKt.toLocaleString('vi-VN')} m³/giờ: Hệ thống không tự động nâng nhóm/thủ tục ĐTM chỉ theo lưu lượng khí thải chung. Cần đối chiếu quy chuẩn khí thải công nghiệp QCVN 19:2024/BTNMT và danh mục nguồn khí thải lưu lượng lớn phải quan trắc tự động/định kỳ (NEEDS_LEGAL_VERIFICATION).`,
+      text: `Lưu lượng khí thải ${actualKt.toLocaleString('vi-VN')} m³/giờ: Hệ thống không tự động nâng nhóm/thủ tục ĐTM chỉ theo lưu lượng khí thải chung. Cần đối chiếu quy chuẩn khí thải công nghiệp QCVN 19:2024/BTNMT và danh mục nguồn khí thải lưu lượng lớn phải quan trắc tự động/định kỳ.`,
       ref: 'Điều 98 NĐ 08/2022 (VBHN 49/2026) & QCVN 19:2024/BTNMT',
     });
   }
 
-  // A07 & T05: Dự án nằm trong KCN không tự động chuyển từ ĐTM sang GPMT
   if (kcn) {
     obligationNotes.push({
       icon: '🏭',
       type: 'warn',
-      text: 'Dự án nằm trong KCN: Hệ thống không tự động miễn ĐTM hoặc hạ nhóm dự án chỉ dựa vào cờ KCN. Cần kiểm tra Quyết định phê duyệt ĐTM của hạ tầng KCN, sự phù hợp phân khu ngành nghề, công suất tiếp nhận của HTXLNT tập trung và văn bản thỏa thuận đấu nối nước thải (NEEDS_LEGAL_VERIFICATION).',
+      text: 'Dự án nằm trong KCN: Hệ thống không tự động miễn ĐTM hoặc hạ nhóm dự án chỉ dựa vào cờ KCN. Cần kiểm tra Quyết định phê duyệt ĐTM của hạ tầng KCN, sự phù hợp phân khu ngành nghề, công suất tiếp nhận của HTXLNT tập trung và văn bản thỏa thuận đấu nối nước thải.',
       ref: 'Điều 30 & Điều 39, Luật BVMT 2020',
     });
   }
 
-  // A09: Khu đô thị
+  // Khu đô thị
   if (nganh === 'do_thi') {
     obligationNotes.push({
       icon: '🏙️',
       type: 'info',
-      text: 'Đối với dự án Khu đô thị, khu dân cư: Diện tích đất xác định quy mô nhóm dự án; nghĩa vụ cấp GPMT hay ĐKMT phải căn cứ vào việc dự án có phát sinh nước thải, khí thải phải xử lý theo Điều 39 Luật BVMT 2020 hay không (NEEDS_LEGAL_VERIFICATION).',
+      text: 'Đối với dự án Khu đô thị, khu dân cư: Diện tích đất xác định quy mô nhóm dự án; nghĩa vụ cấp GPMT hay ĐKMT phải căn cứ vào việc dự án có phát sinh nước thải, khí thải phải xử lý theo Điều 39 Luật BVMT 2020 hay không.',
       ref: 'Điều 39 & Điều 49, Luật BVMT 2020',
     });
   }
@@ -1652,7 +1658,7 @@ function evaluateClassification(formData = {}, options = {}) {
     infoExtra.push({
       icon: '🏛️',
       type: 'info',
-      text: 'Dự án đầu tư công: cần kiểm tra điều kiện phân cấp/phân quyền thẩm định ĐTM cho UBND cấp tỉnh theo NĐ 48/2026 và Nghị quyết phân quyền hiện hành (NEEDS_LEGAL_VERIFICATION).',
+      text: 'Dự án đầu tư công: cần kiểm tra điều kiện phân cấp/phân quyền thẩm định ĐTM cho UBND cấp tỉnh theo NĐ 48/2026 và Nghị quyết phân quyền hiện hành.',
       ref: 'NĐ 48/2026, Điều 7',
     });
   }
@@ -1671,7 +1677,7 @@ function evaluateClassification(formData = {}, options = {}) {
       cauNhom.push({
         icon: '⚠️',
         type: 'warn',
-        text: `Dự án mở rộng/cải tạo hoặc thay đổi công nghệ xử lý chất thải (NT: ${actualNt} m³/ngày, KT: ${actualKt} m³/h): cần đối chiếu quy định về thay đổi quy mô, công suất, công nghệ làm tăng tác động xấu đến môi trường để xác định nghĩa vụ lập lại ĐTM hoặc cấp đổi/điều chỉnh GPMT (NEEDS_LEGAL_VERIFICATION).`,
+        text: `Dự án mở rộng/cải tạo hoặc thay đổi công nghệ xử lý chất thải (nước thải ${actualNt} m³/ngày, khí thải ${actualKt} m³/giờ): cần đối chiếu quy định về thay đổi quy mô, công suất, công nghệ làm tăng tác động xấu đến môi trường để xác định nghĩa vụ lập lại ĐTM hoặc cấp đổi/điều chỉnh GPMT.`,
         ref: 'Điều 37 & Điều 44 Luật BVMT 2020; NĐ 48/2026',
       });
     } else {
@@ -1733,25 +1739,26 @@ function evaluateClassification(formData = {}, options = {}) {
     } : {});
   }
 
-  // Tổng hợp gate pháp lý & nguồn dữ liệu (A-01, A-04, CL-07)
+  // Tổng hợp gate pháp lý & nguồn dữ liệu
   const isFromDb = ruleSource === 'DATABASE';
   const unverifiedReasons = [];
   if (!isFromDb) {
-    unverifiedReasons.push(`Không tải được dữ liệu rule từ PostgreSQL (đang ở chế độ ${ruleSource}${fallbackReason ? ': ' + fallbackReason : ''}).`);
+    unverifiedReasons.push('Chưa tải được danh mục quy định từ cơ sở dữ liệu; hệ thống đang dùng dữ liệu dự phòng và chỉ hiển thị kết quả ở mức tham khảo.');
   }
   if (industryObj.verificationStatus !== 'VERIFIED') {
-    unverifiedReasons.push(industryObj.auditNote || `Ngành "${resolvedNganh}" đang gắn trạng thái NEEDS_LEGAL_VERIFICATION.`);
+    const cleanIndNote = formatAuditTextForUser(industryObj.auditNote);
+    unverifiedReasons.push(cleanIndNote || `Ngành nghề này đang chờ chuyên viên pháp lý đối chiếu và xác minh chi tiết.`);
   }
   if (groupResult.verificationStatus !== 'VERIFIED') {
-    unverifiedReasons.push('Ngưỡng phân loại theo công suất / công đoạn / yếu tố nhạy cảm chưa hoàn tất xác minh pháp lý (NEEDS_LEGAL_VERIFICATION).');
+    unverifiedReasons.push('Ngưỡng phân loại theo công suất / công đoạn / yếu tố nhạy cảm hiện chưa hoàn tất bước xác minh pháp lý.');
   }
   if (groupResult.sensitiveVerificationStatus && ['PENDING_SERVER_VERIFICATION', 'UNVERIFIED'].includes(groupResult.sensitiveVerificationStatus)) {
-    unverifiedReasons.push('Khai báo vùng nhạy cảm / tiêu chí nâng nhóm chưa có quyết định xác minh VERIFIED phía server.');
+    unverifiedReasons.push('Khai báo vùng nhạy cảm / tiêu chí nâng nhóm chưa có quyết định xác minh hợp lệ từ quản trị viên.');
   }
   if (authorityResult.competentAuthority.verificationStatus !== 'VERIFIED') {
     unverifiedReasons.push(
       authorityResult.missingHistoricalAuthority
-        ? `Chưa có cấu hình thẩm quyền lịch sử (historicalTq) đã xác minh cho thời kỳ trước ${TWO_TIER_GOV_EFFECTIVE_DATE}.`
+        ? `Chưa có cấu hình thẩm quyền lịch sử đã được xác minh cho giai đoạn trước ngày ${TWO_TIER_GOV_EFFECTIVE_DATE}.`
         : 'Thẩm quyền tiếp nhận/thẩm định cần chuyên viên pháp lý kiểm tra thêm các điều kiện phân cấp hoặc ngoại lệ.'
     );
   }

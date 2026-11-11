@@ -4,6 +4,12 @@ import { SUB_TYPES, QCVN_DATA, selectApplicableQcvn, evaluateQcvnSample } from '
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { removeAccents } from '../utils/string-helpers.js'
+import {
+  getQcvnOverallStatusMeta,
+  getQcvnCatalogChipText,
+  formatReasonForEndUser,
+  QCVN_REASON_LABELS
+} from '../utils/legalLabels.js'
 
 const props = defineProps({
   loadSampleId: { type: Number, default: null }
@@ -289,14 +295,17 @@ const buildQcvnSelectionPayload = (projectOverride = null) => {
   }
 }
 
+const showQcvnDebugCodes = ref(false)
+
 const formatSelectionNotice = (sel) => {
   if (!sel) return ''
   if (sel.status === 'OK' && sel.qcvnId) {
     const stdName = sel.applicableStandard || sel.qcvnId
-    const verInfo = sel.ruleVersion ? ` | v${sel.ruleVersion}` : ''
-    return `Server chọn QCVN: ${stdName} (${sel.ruleSource || 'DATABASE'}${verInfo})`
+    const verInfo = sel.ruleVersion ? ` (Phiên bản ${sel.ruleVersion})` : ''
+    return `Đã xác định quy chuẩn áp dụng: ${stdName}${verInfo}`
   }
-  return `⚠ Cần rà soát (${sel.reason || sel.status || 'NEEDS_REVIEW'}): ${sel.message || 'Chưa đủ điều kiện chọn QCVN tự động.'}`
+  const friendlyMsg = sel.message || QCVN_REASON_LABELS[sel.reason] || 'Chưa đủ điều kiện chọn quy chuẩn tự động.'
+  return `⚠ Cần rà soát: ${formatReasonForEndUser(friendlyMsg)}`
 }
 
 const requestServerQcvnSelection = async ({ projectOverride = null, clearSourceType = false } = {}) => {
@@ -390,7 +399,7 @@ const requestServerQcvnEvaluation = async () => {
         serverSelection.value = data.serverSelection
       }
       if (data.evaluation?.reason === 'QCVN_SELECTION_MISMATCH') {
-        selectionMismatchWarning.value = data.evaluation.unverifiedReasons?.[0] || 'QCVN đã chọn lệch với kết quả server select.'
+        selectionMismatchWarning.value = formatReasonForEndUser(data.evaluation.unverifiedReasons?.[0]) || QCVN_REASON_LABELS.QCVN_SELECTION_MISMATCH
       } else {
         selectionMismatchWarning.value = ''
       }
@@ -699,12 +708,12 @@ const saveSample = async () => {
       if (srvEval) serverEvaluation.value = srvEval
       if (data.serverSelection) serverSelection.value = data.serverSelection
       if (srvEval?.reason === 'QCVN_SELECTION_MISMATCH') {
-        selectionMismatchWarning.value = srvEval.unverifiedReasons?.[0] || 'Cảnh báo lệch QCVN so với thông số chọn phía server (QCVN_SELECTION_MISMATCH).'
+        selectionMismatchWarning.value = formatReasonForEndUser(srvEval.unverifiedReasons?.[0]) || QCVN_REASON_LABELS.QCVN_SELECTION_MISMATCH
       } else {
         selectionMismatchWarning.value = ''
       }
       const statusSuffix = srvEval && !srvEval.isOfficialConclusion
-        ? ` (Trạng thái Server: ${srvEval.overallStatus} — ${srvEval.trang_thai_tong_quat})`
+        ? ` (Trạng thái hồ sơ: ${getQcvnOverallStatusMeta(srvEval.overallStatus).label})`
         : ''
       alert((data.message || 'Lưu mẫu kết quả quan trắc thành công!') + statusSuffix)
       unsavedChanges.value = false
@@ -740,7 +749,7 @@ const selectSample = async (sample) => {
   serverSelection.value = details.serverSelection || null
   serverEvaluation.value = details.overallStatus ? { ...details, qcvnId: sample.sub_type, trang_thai_tong_quat: sample.trang_thai_tong_quat } : null
   selectionMismatchWarning.value = details.reason === 'QCVN_SELECTION_MISMATCH'
-    ? (details.unverifiedReasons?.[0] || 'Mẫu từng lưu có cảnh báo lệch QCVN so với server select.')
+    ? (formatReasonForEndUser(details.unverifiedReasons?.[0]) || QCVN_REASON_LABELS.QCVN_SELECTION_MISMATCH)
     : ''
   samplingPeriods.value = details.samplingPeriods && details.samplingPeriods._default
     ? { _default: details.samplingPeriods._default }
@@ -1118,9 +1127,9 @@ const showQuickPaste = ref(false)
         </div>
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <button type="button" class="btn-secondary" @click="requestServerQcvnEvaluation" :disabled="isEvaluatingServer" title="Gửi số liệu lên API /api/qcvns/evaluate để đối chiếu theo DB">
+          <button type="button" class="btn-secondary" @click="requestServerQcvnEvaluation" :disabled="isEvaluatingServer" title="Đối chiếu số liệu theo danh mục quy chuẩn trong hệ thống">
             <i class="ti ti-server"></i>
-            <span>{{ isEvaluatingServer ? 'Đang đối chiếu...' : 'Đối chiếu Server' }}</span>
+            <span>{{ isEvaluatingServer ? 'Đang đối chiếu...' : 'Đối chiếu quy chuẩn' }}</span>
           </button>
           <button type="button" class="btn-primary" @click="saveSample">
             <i class="ti ti-device-floppy"></i>
@@ -1194,42 +1203,45 @@ const showQuickPaste = ref(false)
           </select>
         </div>
 
-        <button type="button" class="btn-secondary btn-sm" :disabled="isSelectingQcvn" @click="requestServerQcvnSelection({ clearSourceType: false })" title="Gọi POST /api/qcvns/select xác định QCVN từ Server">
+        <button type="button" class="btn-secondary btn-sm" :disabled="isSelectingQcvn" @click="requestServerQcvnSelection({ clearSourceType: false })" title="Tự động gợi ý quy chuẩn phù hợp từ thông số đầu vào">
           <i class="ti ti-sparkles"></i>
-          <span>{{ isSelectingQcvn ? 'Đang chọn...' : 'Chọn QCVN từ Server' }}</span>
+          <span>{{ isSelectingQcvn ? 'Đang kiểm tra...' : 'Gợi ý quy chuẩn phù hợp' }}</span>
         </button>
 
         <span class="chip" :class="qcvnRuleSource === 'DATABASE' ? 'chip-info' : 'chip-gray'" style="margin-left:auto;font-size:11px">
-          Catalog: {{ qcvnRuleSource }}
-          <template v-if="currentQcvn?.status"> · {{ currentQcvn.status }}</template>
-          <template v-if="serverSelection?.ruleVersion"> · v{{ serverSelection.ruleVersion }}</template>
+          {{ getQcvnCatalogChipText({
+            ruleSource: qcvnRuleSource,
+            lifecycleStatus: currentQcvn?.status,
+            verificationStatus: currentQcvn?.verificationStatus,
+            ruleVersion: serverSelection?.ruleVersion
+          }) }}
         </span>
       </div>
     </div>
 
-    <!-- QCVN_SELECTION_MISMATCH / SERVER SELECTION ALERT -->
+    <!-- Cảnh báo khi bảng chọn thủ công khác với quy chuẩn phù hợp theo thông số xả thải -->
     <div v-if="selectionMismatchWarning"
          class="no-print"
          style="margin-bottom:14px;padding:12px 16px;border-radius:var(--radius);border:1px solid var(--danger-border);background:var(--red-bg);color:var(--red);font-size:12.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div>
-        <strong><i class="ti ti-alert-octagon"></i> Lệch lựa chọn QCVN so với Server (QCVN_SELECTION_MISMATCH):</strong>
-        {{ selectionMismatchWarning }}
+        <strong><i class="ti ti-alert-octagon"></i> Quy chuẩn đang chọn chưa khớp với thông số máy chủ:</strong>
+        {{ formatReasonForEndUser(selectionMismatchWarning) }}
       </div>
       <button v-if="serverSelection?.qcvnId" type="button" class="btn-secondary btn-sm" @click="requestServerQcvnSelection({ clearSourceType: false })">
-        Đồng bộ theo Server ({{ serverSelection.qcvnId }})
+        Đồng bộ theo đề xuất ({{ serverSelection.applicableStandard || serverSelection.qcvnId }})
       </button>
     </div>
 
-    <!-- FALLBACK / VERIFICATION / INCOMPLETE BANNER (Q-02, Q-05, Q-10, Q-11) -->
+    <!-- Thông báo tình trạng kết luận & kiểm tra độ đầy đủ chỉ tiêu -->
     <div v-if="qcvnRuleSource === 'FALLBACK_UNVERIFIED' || !sampleEvaluation.isOfficialConclusion"
          class="no-print"
          style="margin-bottom:16px;padding:12px 16px;border-radius:var(--radius);border:1px solid #F59E0B;background:#FFFBEB;color:#92400E;font-size:12.5px">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:700">
         <span>
           <i class="ti ti-alert-triangle"></i>
-          Trạng thái đánh giá: {{ sampleEvaluation.overallStatus }} (Lưu DB: {{ sampleEvaluation.trang_thai_tong_quat }})
+          Tình trạng đánh giá: {{ getQcvnOverallStatusMeta(sampleEvaluation.overallStatus).label }}
           <template v-if="sampleEvaluation.preliminaryStatus && sampleEvaluation.preliminaryStatus !== sampleEvaluation.overallStatus">
-            · Đánh giá kỹ thuật sơ bộ: {{ sampleEvaluation.preliminaryStatus }}
+            · Đánh giá kỹ thuật sơ bộ: {{ getQcvnOverallStatusMeta(sampleEvaluation.preliminaryStatus).label }}
           </template>
         </span>
         <span style="font-size:11.5px;font-weight:600">
@@ -1237,17 +1249,30 @@ const showQuickPaste = ref(false)
         </span>
       </div>
       <div v-if="qcvnCatalogError" style="margin-top:4px;font-weight:600">
-        Cảnh báo kết nối API QCVN ({{ qcvnCatalogError }}): Đang ở chế độ fallback cục bộ — mọi kết quả mang tính rà soát.
+        Chưa tải được danh mục quy chuẩn từ cơ sở dữ liệu — kết quả hiện tại chỉ mang tính tham khảo và cần rà soát.
       </div>
       <ul v-if="sampleEvaluation.unverifiedReasons && sampleEvaluation.unverifiedReasons.length"
           style="margin:6px 0 0 18px;padding:0;line-height:1.5">
-        <li v-for="(reason, idx) in sampleEvaluation.unverifiedReasons" :key="'qr-' + idx">{{ reason }}</li>
+        <li v-for="(reason, idx) in sampleEvaluation.unverifiedReasons" :key="'qr-' + idx">{{ formatReasonForEndUser(reason) }}</li>
       </ul>
       <div v-if="summary.missingRequired > 0" style="margin-top:4px">
-        • Còn thiếu <strong>{{ summary.missingRequired }}</strong> chỉ tiêu bắt buộc chưa nhập số liệu (INCOMPLETE — không thể kết luận Đạt).
+        • Còn thiếu <strong>{{ summary.missingRequired }}</strong> chỉ tiêu bắt buộc chưa nhập số liệu (chưa thể kết luận Đạt).
       </div>
       <div v-if="summary.periodMismatch > 0" style="margin-top:4px">
-        • Phát hiện <strong>{{ summary.periodMismatch }}</strong> chỉ tiêu lệch chu kỳ trung bình lấy mẫu (PERIOD_MISMATCH — cần rà soát).
+        • Phát hiện <strong>{{ summary.periodMismatch }}</strong> chỉ tiêu lệch chu kỳ trung bình lấy mẫu (cần kiểm tra và rà soát lại).
+      </div>
+      <div style="margin-top:6px;display:flex;justify-content:flex-end">
+        <button type="button"
+                class="btn-ghost btn-sm"
+                style="padding:2px 6px;font-size:11px;color:#92400E"
+                @click="showQcvnDebugCodes = !showQcvnDebugCodes">
+          {{ showQcvnDebugCodes ? 'Ẩn mã kỹ thuật ▴' : 'Xem mã kỹ thuật ▾' }}
+        </button>
+      </div>
+      <div v-if="showQcvnDebugCodes" style="margin-top:4px;padding:6px 8px;border-radius:6px;background:#FEF3C7;font-family:monospace;font-size:11px;color:#78350F">
+        overall={{ sampleEvaluation.overallStatus }} · dbStatus={{ sampleEvaluation.trang_thai_tong_quat }} · ruleSource={{ qcvnRuleSource }}
+        <template v-if="sampleEvaluation.reason"> · reason={{ sampleEvaluation.reason }}</template>
+        <template v-if="qcvnCatalogError"> · error={{ qcvnCatalogError }}</template>
       </div>
     </div>
 

@@ -23,6 +23,14 @@ import {
 } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
+import {
+  getRuleSourceLabel,
+  getGisSourceLabel,
+  getConclusionStatusMeta,
+  getSensitiveStatusLabel,
+  getProcedureLabel,
+  formatReasonForEndUser
+} from '../utils/legalLabels.js'
 
 const props = defineProps({
   loadProjectId: { type: Number, default: null },
@@ -153,6 +161,42 @@ const adminSensitiveNote = ref('')
 const adminSensitiveEvidence = ref('')
 const isUpdatingSensitiveVerification = ref(false)
 const sensitiveVerificationMessage = ref('')
+
+// Thu gọn chi tiết kỹ thuật / nâng cao để giao diện đơn giản, dễ hiểu
+const showAdvancedEvalDate = ref(false)
+const showSensitiveDetails = ref(false)
+const showTechnicalMeta = ref(false)
+const showDebugCodes = ref(false)
+const showOfflinePreliminary = ref(false)
+
+const hasAnySensitiveDeclaration = computed(() => Boolean(
+  rung.value || lua.value || bg.value || bao_ton.value || di_san.value || ven_bien.value || nguon_nc.value || dat_ngap.value
+  || insideCoreProtectedZone.value
+  || Number(paddyConversionAreaHa.value) > 0
+  || Number(forestConversionAreaHa.value) > 0
+  || Boolean(sensitiveEvidenceRef.value && sensitiveEvidenceRef.value.trim())
+  || (autoDetectedFlags.value && autoDetectedFlags.value.length > 0)
+))
+
+const effectiveSensitiveStatus = computed(() =>
+  serverSensitiveVerification.value?.verification_status
+  || result.value?.sensitiveVerificationStatus
+  || 'NOT_REQUIRED'
+)
+
+const shouldShowAdminSensitivePanel = computed(() => Boolean(
+  props.currentUser?.role === 'admin'
+  && projectId.value
+  && (effectiveSensitiveStatus.value !== 'NOT_REQUIRED' || hasAnySensitiveDeclaration.value)
+))
+
+const isFallbackOrIncompleteResult = computed(() => Boolean(
+  result.value && (result.value.ruleSource !== 'DATABASE' || result.value.errorCode || !result.value.hs)
+))
+
+const formattedUnverifiedReasons = computed(() =>
+  (result.value?.unverifiedReasons || []).map(r => formatReasonForEndUser(r)).filter(Boolean)
+)
 
 const flagRefsMap = {
   rung,
@@ -1101,7 +1145,7 @@ const submitAdminSensitiveVerification = async (verificationStatus) => {
       result.value = data.classification
       classificationSnapshot.value = data.classification
     }
-    sensitiveVerificationMessage.value = data.message || `Đã cập nhật trạng thái: ${verificationStatus}`
+    sensitiveVerificationMessage.value = data.message || `Đã cập nhật trạng thái: ${getSensitiveStatusLabel(verificationStatus)}`
     fetchProjects(currentPage.value)
   } catch (err) {
     sensitiveVerificationMessage.value = err.message || 'Lỗi kết nối máy chủ.'
@@ -1776,8 +1820,8 @@ onUnmounted(() => {
               </option>
             </optgroup>
           </select>
-          <div v-if="metadataRuleSource === 'FALLBACK_UNVERIFIED'" style="font-size:11.5px;color:var(--warn);margin-top:4px">
-            <i class="ti ti-alert-triangle"></i> Không tải được danh mục từ PostgreSQL ({{ metadataFallbackReason || 'FALLBACK' }}). Kết luận sẽ chuyển trạng thái Cần rà soát.
+          <div v-if="metadataRuleSource === 'FALLBACK_UNVERIFIED'" style="font-size:11.5px;color:var(--warn);margin-top:4px" :title="metadataFallbackReason || ''">
+            <i class="ti ti-alert-triangle"></i> Đang dùng danh mục dự phòng do chưa kết nối được cơ sở dữ liệu quy chuẩn. Kết luận sẽ ở trạng thái Cần rà soát.
           </div>
         </div>
 
@@ -1800,10 +1844,24 @@ onUnmounted(() => {
         </div>
 
         <div class="form-group">
-          <label class="form-label">Thời điểm đánh giá / áp dụng quy định (evaluationDate)</label>
-          <input type="date" v-model="evaluationDate" />
-          <div style="font-size:11.5px;color:var(--text3);margin-top:4px">
-            Rule phân loại và thẩm quyền (Cấp Huyện lịch sử trước 01/07/2025 vs Cấp Xã từ 01/07/2025) được lọc theo ngày này.
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--text2)">
+              <i class="ti ti-calendar-event" style="color:var(--accent)"></i>
+              Áp dụng quy định ngày: <strong>{{ evaluationDate }}</strong>
+            </span>
+            <button type="button"
+                    class="btn-ghost btn-sm"
+                    style="padding:3px 8px;font-size:11.5px;color:var(--accent)"
+                    @click="showAdvancedEvalDate = !showAdvancedEvalDate">
+              <span>{{ showAdvancedEvalDate ? 'Thu gọn ▴' : 'Đổi ngày áp dụng ▾' }}</span>
+            </button>
+          </div>
+          <div v-show="showAdvancedEvalDate" style="margin-top:6px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+            <label class="form-label" style="font-size:12px">Thời điểm đánh giá / nộp hồ sơ (tùy chọn hồ sơ lịch sử)</label>
+            <input type="date" v-model="evaluationDate" />
+            <div style="font-size:11.5px;color:var(--text3);margin-top:4px">
+              Hệ thống tự đối chiếu thẩm quyền theo ngày bạn chọn (trước ngày 01/07/2025 hay hiện hành). Mặc định dùng ngày hôm nay.
+            </div>
           </div>
         </div>
 
@@ -2100,40 +2158,48 @@ onUnmounted(() => {
             </label>
           </div>
 
-          <!-- Khai báo định lượng & Xác minh vùng nhạy cảm phía Server (Item 6) -->
-          <div style="margin-top:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-              <strong style="font-size:12px;color:var(--text)">Khai báo định lượng &amp; Hồ sơ chứng minh vùng nhạy cảm</strong>
-              <span v-if="serverSensitiveVerification || result?.sensitiveVerificationStatus"
+          <!-- Khai báo định lượng & Hồ sơ chứng minh vùng nhạy cảm (thu gọn khi chưa có yếu tố nhạy cảm) -->
+          <div style="margin-top:10px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:0;font-size:12px;font-weight:600;color:var(--text);text-align:left"
+                      @click="showSensitiveDetails = !showSensitiveDetails">
+                <i class="ti" :class="(showSensitiveDetails || hasAnySensitiveDeclaration) ? 'ti-chevron-down' : 'ti-chevron-right'"></i>
+                <span>Khai báo diện tích &amp; văn bản chứng minh vùng nhạy cảm (nếu có)</span>
+              </button>
+              <span v-if="effectiveSensitiveStatus !== 'NOT_REQUIRED'"
                     class="chip"
                     :style="{
                       fontSize: '11px',
-                      background: (serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus) === 'VERIFIED' ? '#EAF5EF' : '#FFFBEB',
-                      color: (serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus) === 'VERIFIED' ? '#25845B' : '#92400E',
+                      background: effectiveSensitiveStatus === 'VERIFIED' ? '#EAF5EF' : '#FFFBEB',
+                      color: effectiveSensitiveStatus === 'VERIFIED' ? '#25845B' : '#92400E',
                       border: '1px solid var(--border)'
                     }">
-                Server: {{ serverSensitiveVerification?.verification_status || result?.sensitiveVerificationStatus || 'NOT_REQUIRED' }}
+                {{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}
               </span>
             </div>
-            <label class="check-item" style="margin-bottom:8px">
-              <input type="checkbox" v-model="insideCoreProtectedZone"> Nằm trong phân khu bảo vệ nghiêm ngặt / vùng lõi khu bảo tồn
-            </label>
-            <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
-              <div>
-                <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất lúa 2 vụ (ha)</label>
-                <input type="number" v-model.number="paddyConversionAreaHa" min="0" step="0.01" placeholder="0" />
+            <div v-show="showSensitiveDetails || hasAnySensitiveDeclaration" style="margin-top:10px">
+              <label class="check-item" style="margin-bottom:8px">
+                <input type="checkbox" v-model="insideCoreProtectedZone"> Nằm trong phân khu bảo vệ nghiêm ngặt / vùng lõi khu bảo tồn
+              </label>
+              <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
+                <div>
+                  <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất lúa 2 vụ (ha)</label>
+                  <input type="number" v-model.number="paddyConversionAreaHa" min="0" step="0.01" placeholder="0" />
+                </div>
+                <div>
+                  <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất rừng (ha)</label>
+                  <input type="number" v-model.number="forestConversionAreaHa" min="0" step="0.01" placeholder="0" />
+                </div>
               </div>
               <div>
-                <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Diện tích chuyển đổi đất rừng (ha)</label>
-                <input type="number" v-model.number="forestConversionAreaHa" min="0" step="0.01" placeholder="0" />
+                <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Tài liệu / Số văn bản trích lục tọa độ (nếu có)</label>
+                <input type="text" v-model="sensitiveEvidenceRef" placeholder="VD: VB xác nhận ranh giới BQL Rừng số .../QĐ..." />
               </div>
-            </div>
-            <div>
-              <label class="form-label" style="font-size:11.5px;margin-bottom:4px">Tài liệu / Số văn bản trích lục tọa độ (nếu có)</label>
-              <input type="text" v-model="sensitiveEvidenceRef" placeholder="VD: VB xác nhận ranh giới BQL Rừng số .../QĐ..." />
-            </div>
-            <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.4">
-              Theo nguyên tắc fail-closed: Thông số tự kê khai chỉ nâng nhóm chính thức sau khi Admin xác minh bản ghi <code>VERIFIED</code> trong CSDL.
+              <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.4">
+                Lưu ý: Các thông số tự kê khai chỉ được dùng để nâng nhóm chính thức sau khi quản trị viên kiểm tra và xác nhận hợp lệ trong hệ thống.
+              </div>
             </div>
           </div>
         </div>
@@ -2181,25 +2247,36 @@ onUnmounted(() => {
         </div>
 
         <div v-else class="fade-up">
-          <!-- Legal Verification & Completeness Gate Banner (A-04, A-05) -->
+          <!-- Legal Verification & Completeness Gate Banner -->
           <div v-if="!result.isOfficialConclusion"
                style="margin-bottom:14px;padding:14px 16px;border-radius:var(--radius);border:1px solid #F59E0B;background:#FFFBEB;color:#92400E">
             <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:700;font-size:13.5px">
               <span>
                 <i class="ti ti-shield-exclamation"></i>
-                {{ result.conclusionStatus === 'NEEDS_REVIEW'
-                  ? 'Cần rà soát — Không thể kết luận tự động (NEEDS_REVIEW)'
-                  : 'Kết quả gợi ý sơ bộ — Cần chuyên viên xác minh pháp lý (NEEDS_LEGAL_VERIFICATION)' }}
+                {{ getConclusionStatusMeta(result.conclusionStatus).title }}
               </span>
               <span class="chip" style="background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font-size:11px">
-                Nguồn rule: {{ result.ruleSource || 'UNKNOWN' }} | v{{ result.ruleVersion || '—' }}
+                {{ getRuleSourceLabel(result.ruleSource) }}
               </span>
             </div>
-            <ul v-if="result.unverifiedReasons && result.unverifiedReasons.length" style="margin:8px 0 0 18px;padding:0;font-size:12px;line-height:1.5">
-              <li v-for="(reason, idx) in result.unverifiedReasons" :key="'uv-' + idx">{{ reason }}</li>
+            <ul v-if="formattedUnverifiedReasons.length" style="margin:8px 0 0 18px;padding:0;font-size:12px;line-height:1.5">
+              <li v-for="(reason, idx) in formattedUnverifiedReasons" :key="'uv-' + idx">{{ reason }}</li>
             </ul>
-            <div style="margin-top:8px;font-size:11.5px;font-style:italic">
-              * Chức năng xuất báo cáo kết luận chính thức đang bị khóa ở trạng thái này cho tới khi đủ dữ liệu và quy tắc được xác minh pháp lý.
+            <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:11.5px">
+              <span style="font-style:italic">
+                * Chức năng xuất báo cáo kết luận chính thức đang tạm khóa cho tới khi đủ dữ liệu và hoàn tất xác minh quy định.
+              </span>
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:2px 6px;font-size:11px;color:#92400E"
+                      @click="showDebugCodes = !showDebugCodes">
+                {{ showDebugCodes ? 'Ẩn mã kỹ thuật ▴' : 'Xem mã kỹ thuật ▾' }}
+              </button>
+            </div>
+            <div v-if="showDebugCodes" style="margin-top:6px;padding:6px 8px;border-radius:6px;background:#FEF3C7;font-family:monospace;font-size:11px;color:#78350F">
+              status={{ result.conclusionStatus }} · ruleSource={{ result.ruleSource }} · version={{ result.ruleVersion || '—' }}
+              <template v-if="result.errorCode"> · errorCode={{ result.errorCode }}</template>
+              <template v-if="result.fallbackReason"> · fallback={{ result.fallbackReason }}</template>
             </div>
           </div>
 
@@ -2212,18 +2289,35 @@ onUnmounted(() => {
                 </div>
                 <div style="flex:1;min-width:0">
                   <div class="result-label">
-                    {{ result.hi?.label || result.errorMessage || 'Chưa đủ điều kiện kết luận chính thức' }}
+                    <template v-if="result.isOfficialConclusion">
+                      {{ result.hi?.label || 'Kết luận hồ sơ môi trường' }}
+                    </template>
+                    <template v-else-if="isFallbackOrIncompleteResult">
+                      {{ result.errorMessage || 'Chưa đủ điều kiện kết luận chính thức' }}
+                    </template>
+                    <template v-else>
+                      Tham khảo sơ bộ: {{ result.hi?.label || 'Hồ sơ môi trường' }}
+                    </template>
                   </div>
                   <div class="result-sub">
-                    {{ result.nhom || result.preliminary?.nhom || 'Chưa xác định nhóm' }}
-                    {{ result.isPreliminary ? ' (Sơ bộ — chưa xác minh pháp lý)' : ' — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026 & VBHN 49)' }}
+                    <template v-if="result.isOfficialConclusion">
+                      {{ result.nhom }} — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026 &amp; VBHN 49)
+                    </template>
+                    <template v-else-if="isFallbackOrIncompleteResult">
+                      {{ result.ruleSource !== 'DATABASE'
+                        ? 'Chưa kết nối được danh mục quy chuẩn từ cơ sở dữ liệu — tạm khóa kết luận tự động'
+                        : 'Vui lòng bổ sung hoặc rà soát lại thông số đầu vào trước khi kết luận' }}
+                    </template>
+                    <template v-else>
+                      {{ result.nhom }} (Dự kiến sơ bộ — đang chờ hoàn tất xác minh quy định ngành)
+                    </template>
                   </div>
                 </div>
               </div>
               <button type="button"
                       class="btn-secondary btn-sm"
                       :disabled="!result.canExportOfficialReport"
-                      :title="result.canExportOfficialReport ? 'Xuất / In kết luận chính thức' : 'Bị khóa: rule chưa xác minh pháp lý hoặc dữ liệu chưa hợp lệ'"
+                      :title="result.canExportOfficialReport ? 'Xuất / In kết luận chính thức' : 'Đã khóa: chỉ xuất được khi đủ căn cứ và đã xác minh quy định'"
                       :style="!result.canExportOfficialReport ? 'opacity:0.5;cursor:not-allowed' : ''"
                       @click="exportOfficialReport">
                 <i class="ti ti-printer"></i>
@@ -2232,25 +2326,31 @@ onUnmounted(() => {
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-              <span class="chip" :class="result.hi?.class || 'chip-gray'">
-                {{ result.hs ? (result.isPreliminary ? `${result.hs} (Sơ bộ)` : result.hs) : 'CHƯA XÁC ĐỊNH' }}
+              <template v-if="!isFallbackOrIncompleteResult">
+                <span class="chip" :class="result.hi?.class || 'chip-gray'">
+                  {{ result.isPreliminary ? `${result.hs} (Sơ bộ)` : result.hs }}
+                </span>
+                <span v-if="result.coQuan" class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
+                  <i class="ti ti-building-bank"></i> {{ result.coQuan }}
+                </span>
+                <span v-if="result.thoiHan" class="chip chip-gray">
+                  <i class="ti ti-clock"></i> {{ result.thoiHan }}
+                </span>
+                <span v-if="result.phuluc && result.phuluc !== '—'" class="chip chip-info">{{ result.phuluc }}</span>
+                <span v-for="ob in (result.environmentalObligations || [])" :key="'ob-' + ob" class="chip chip-info">
+                  Thủ tục: {{ getProcedureLabel(ob) }}
+                </span>
+              </template>
+              <span v-else class="chip chip-gray">
+                <i class="ti ti-lock"></i> Chưa đủ căn cứ chốt hồ sơ
               </span>
-              <span v-if="result.coQuan" class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
-                <i class="ti ti-building-bank"></i> {{ result.coQuan }}
-              </span>
-              <span v-if="result.thoiHan" class="chip chip-gray">
-                <i class="ti ti-clock"></i> {{ result.thoiHan }}
-              </span>
-              <span v-if="result.phuluc && result.phuluc !== '—'" class="chip chip-info">{{ result.phuluc }}</span>
-              <span v-for="ob in (result.environmentalObligations || [])" :key="'ob-' + ob" class="chip chip-info">
-                Nghĩa vụ: {{ ob }}
-              </span>
-              <span v-if="result.impactRadiusMeters" class="chip chip-gray" title="Bán kính ảnh hưởng môi trường dự kiến trên GIS">
+              <span v-if="result.impactRadiusMeters" class="chip chip-gray" title="Bán kính ảnh hưởng môi trường dự kiến trên bản đồ">
                 <i class="ti ti-radar-2" style="color:var(--accent)"></i> Bán kính tác động: {{ (estimatedImpactRadius / 1000).toFixed(1) }} km
               </span>
             </div>
 
-            <div style="font-size:12.5px;color:var(--text2);padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+            <div v-if="!isFallbackOrIncompleteResult"
+                 style="font-size:12.5px;color:var(--text2);padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
               <div>
                 <strong style="color:var(--text)">Căn cứ pháp lý trực tiếp:</strong> {{ result.ref || 'Chưa xác định' }}
               </div>
@@ -2262,68 +2362,96 @@ onUnmounted(() => {
 
             <div class="info-grid">
               <div class="info-box">
-                <div class="info-box-label">Loại hồ sơ {{ result.isPreliminary ? '(Sơ bộ)' : '' }}</div>
-                <div class="info-box-val">{{ result.hs || 'CHƯA XÁC ĐỊNH' }}</div>
+                <div class="info-box-label">Loại hồ sơ {{ (!isFallbackOrIncompleteResult && result.isPreliminary) ? '(Sơ bộ)' : '' }}</div>
+                <div class="info-box-val">{{ (!isFallbackOrIncompleteResult && result.hs) ? result.hs : 'Chưa xác định' }}</div>
               </div>
               <div class="info-box">
-                <div class="info-box-label">Nhóm dự án {{ result.isPreliminary ? '(Sơ bộ)' : '' }}</div>
-                <div class="info-box-val">{{ result.nhom || 'CHƯA XÁC ĐỊNH' }}</div>
+                <div class="info-box-label">Nhóm dự án {{ (!isFallbackOrIncompleteResult && result.isPreliminary) ? '(Sơ bộ)' : '' }}</div>
+                <div class="info-box-val">{{ (!isFallbackOrIncompleteResult && result.nhom) ? result.nhom : 'Chưa xác định' }}</div>
               </div>
               <div class="info-box">
-                <div class="info-box-label">Thẩm quyền</div>
-                <div class="info-box-val" :class="{ 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
-                  {{ !result.tq ? 'Chưa xác định' : result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'UBND Tỉnh (Sở NN&MT)' : result.tq === 'cap_xa' ? 'UBND Cấp Xã' : 'UBND Cấp Huyện (Cũ)' }}
+                <div class="info-box-label">Thẩm quyền {{ (!isFallbackOrIncompleteResult && result.isPreliminary) ? '(Sơ bộ)' : '' }}</div>
+                <div class="info-box-val" :class="!isFallbackOrIncompleteResult ? { 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' || result.tq === 'cap_xa' } : {}">
+                  {{ (isFallbackOrIncompleteResult || !result.tq) ? 'Chưa xác định' : result.tq === 'cap_bo' ? 'Bộ NN&amp;MT' : result.tq === 'cap_so' ? 'UBND Tỉnh (Sở NN&amp;MT)' : result.tq === 'cap_xa' ? 'UBND Cấp Xã' : 'UBND Cấp Huyện (Cũ)' }}
                 </div>
               </div>
               <div class="info-box">
-                <div class="info-box-label">Trạng thái xác minh</div>
+                <div class="info-box-label">Tình trạng kết luận</div>
                 <div class="info-box-val" :class="result.isOfficialConclusion ? 'green' : 'warn'">
-                  {{ result.conclusionStatus || result.verificationStatus }}
+                  {{ getConclusionStatusMeta(result.conclusionStatus || result.verificationStatus).short }}
                 </div>
               </div>
             </div>
 
-            <!-- Metadata Phiên bản Rule, Ngày hiệu lực, Server Sensitive Verification & GIS -->
-            <div style="margin-top:10px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:6px 14px">
-              <div><strong>Phiên bản rule:</strong> {{ result.appliedRuleVersion || result.ruleVersion || '—' }}</div>
-              <div>
-                <strong>Hiệu lực rule:</strong>
-                {{ result.appliedEffectiveFrom || '—' }} → {{ result.appliedEffectiveTo || 'Hiện hành' }}
+            <!-- Tham khảo ngoại tuyến tách riêng khi mất kết nối DB để tránh mâu thuẫn với ô Chưa xác định -->
+            <div v-if="result.ruleSource !== 'DATABASE' && !result.errorCode && result.preliminary"
+                 style="margin-top:10px;padding:10px 14px;background:#F8FAFC;border:1px dashed var(--border);border-radius:var(--radius)">
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:0;font-size:12px;font-weight:600;color:var(--text2)"
+                      @click="showOfflinePreliminary = !showOfflinePreliminary">
+                <i class="ti" :class="showOfflinePreliminary ? 'ti-chevron-down' : 'ti-chevron-right'"></i>
+                <span>Xem ước tính tham khảo ngoại tuyến (không có giá trị pháp lý)</span>
+              </button>
+              <div v-if="showOfflinePreliminary" style="margin-top:8px;font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:6px 14px">
+                <div><strong>Nhóm dự kiến:</strong> {{ result.preliminary.nhom || '—' }}</div>
+                <div><strong>Hồ sơ dự kiến:</strong> {{ result.preliminary.hs || '—' }}</div>
+                <div><strong>Cơ quan dự kiến:</strong> {{ result.preliminary.coQuan || '—' }}</div>
+                <div><strong>Căn cứ tham khảo:</strong> {{ result.preliminary.ref || result.ref || '—' }}</div>
               </div>
-              <div>
-                <strong>Ngày đánh giá:</strong>
-                {{ result.evaluationDate || evaluationDate }}
-                <span v-if="result.isHistoricalEvaluation" style="color:var(--warn);font-weight:600">(Lịch sử)</span>
-              </div>
-              <div><strong>Xác minh nhạy cảm:</strong> {{ serverSensitiveVerification?.verification_status || result.sensitiveVerificationStatus || 'NOT_REQUIRED' }}</div>
-              <div><strong>Nguồn GIS:</strong> {{ result.gisSource || spatialData?.gisSource || 'DATABASE' }}</div>
             </div>
 
-            <!-- Admin Panel Xác minh vùng nhạy cảm phía Server (PUT /api/projects/:id/sensitive-verification) -->
-            <div v-if="currentUser?.role === 'admin' && projectId"
+            <!-- Thông số kỹ thuật được thu gọn để chuyên viên tập trung vào thủ tục -->
+            <div style="margin-top:10px">
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:4px 0;font-size:12px;color:var(--text3)"
+                      @click="showTechnicalMeta = !showTechnicalMeta">
+                <i class="ti" :class="showTechnicalMeta ? 'ti-chevron-down' : 'ti-chevron-right'"></i>
+                <span>Chi tiết kỹ thuật &amp; Nguồn dữ liệu quy chuẩn</span>
+              </button>
+              <div v-if="showTechnicalMeta"
+                   style="margin-top:6px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:6px 14px">
+                <div><strong>Phiên bản quy tắc:</strong> {{ result.appliedRuleVersion || result.ruleVersion || '—' }}</div>
+                <div>
+                  <strong>Hiệu lực quy định:</strong>
+                  {{ result.appliedEffectiveFrom || '—' }} → {{ result.appliedEffectiveTo || 'Hiện hành' }}
+                </div>
+                <div>
+                  <strong>Ngày áp dụng đánh giá:</strong>
+                  {{ result.evaluationDate || evaluationDate }}
+                  <span v-if="result.isHistoricalEvaluation" style="color:var(--warn);font-weight:600">(Mốc lịch sử)</span>
+                </div>
+                <div><strong>Xác minh nhạy cảm:</strong> {{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</div>
+                <div><strong>Nguồn dữ liệu bản đồ:</strong> {{ getGisSourceLabel(result.gisSource || spatialData?.gisSource) }}</div>
+              </div>
+            </div>
+
+            <!-- Admin Panel Xác minh vùng nhạy cảm (chỉ hiển thị khi dự án có yếu tố nhạy cảm cần duyệt) -->
+            <div v-if="shouldShowAdminSensitivePanel"
                  class="no-print"
                  style="margin-top:12px;padding:12px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
               <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
                 <strong style="font-size:12.5px;color:var(--text)">
                   <i class="ti ti-shield-check" style="color:var(--accent)"></i>
-                  Kiểm duyệt vùng nhạy cảm phía Server (Admin)
+                  Kiểm duyệt vùng nhạy cảm (Quản trị viên)
                 </strong>
                 <span style="font-size:11.5px;color:var(--text2)">
-                  Trạng thái hiện tại: <strong>{{ serverSensitiveVerification?.verification_status || result.sensitiveVerificationStatus || 'NONE' }}</strong>
+                  Trạng thái hiện tại: <strong>{{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</strong>
                 </span>
               </div>
               <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
                 <input type="text" v-model="adminSensitiveEvidence" placeholder="Số văn bản / Chứng cứ ranh giới..." />
-                <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của Admin..." />
+                <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của quản trị viên..." />
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <button type="button" class="btn-primary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('VERIFIED')">
                   <i class="ti ti-check"></i>
-                  <span>Xác nhận hợp lệ (VERIFIED)</span>
+                  <span>Xác nhận hợp lệ</span>
                 </button>
                 <button type="button" class="btn-secondary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('REJECTED')">
                   <i class="ti ti-x"></i>
-                  <span>Từ chối (REJECTED)</span>
+                  <span>Từ chối xác nhận</span>
                 </button>
                 <span v-if="sensitiveVerificationMessage" style="font-size:12px;color:var(--accent);font-weight:500">
                   {{ sensitiveVerificationMessage }}
@@ -2332,7 +2460,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Chi tiết Cơ quan & Đơn vị chuyên môn (Bước 3) -->
-            <div v-if="result.competentAuthority && result.competentAuthority.competentAgency"
+            <div v-if="!isFallbackOrIncompleteResult && result.competentAuthority && result.competentAuthority.competentAgency"
                  style="margin-top:12px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text2);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:6px 14px">
               <div><strong>Người có thẩm quyền:</strong> {{ result.competentAuthority.competentPerson }}</div>
               <div><strong>Cơ quan có thẩm quyền:</strong> {{ result.competentAuthority.competentAgency }}</div>
