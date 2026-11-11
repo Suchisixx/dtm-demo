@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { QCVN_DATA } from '../data/qcvn-db.js'
+import { SUB_TYPES, QCVN_DATA, selectApplicableQcvn, evaluateQcvnSample } from '../data/qcvn-db.js'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { removeAccents } from '../utils/string-helpers.js'
@@ -9,39 +9,6 @@ const props = defineProps({
   loadSampleId: { type: Number, default: null }
 })
 const emit = defineEmits(['sample-loaded'])
-
-// Sub-types for each environmental category
-const SUB_TYPES = {
-  nuoc_mat: [
-    { value: 'qcvn08_a1', text: 'Cột A1 - Cấp nước sinh hoạt' },
-    { value: 'qcvn08_a2', text: 'Cột A2 - Sinh hoạt (có xử lý), Thủy sản' },
-    { value: 'qcvn08_b1', text: 'Cột B1 - Tưới tiêu, giao thông thủy' },
-    { value: 'qcvn08_b2', text: 'Cột B2 - Các mục đích khác' }
-  ],
-  nuoc_thai_cn: [
-    { value: 'qcvn40_a_low', text: 'Cột A - Lưu lượng xả ≤ 2000 m³/ngày' },
-    { value: 'qcvn40_a_high', text: 'Cột A - Lưu lượng xả > 2000 m³/ngày' },
-    { value: 'qcvn40_b_low', text: 'Cột B - Lưu lượng xả ≤ 2000 m³/ngày' },
-    { value: 'qcvn40_b_high', text: 'Cột B - Lưu lượng xả > 2000 m³/ngày' }
-  ],
-  nuoc_thai_sh: [
-    { value: 'qcvn14_a', text: 'Cột A - Khu vực nhạy cảm' },
-    { value: 'qcvn14_b', text: 'Cột B - Các khu vực còn lại' }
-  ],
-  nuoc_duoi_dat: [
-    { value: 'qcvn09', text: 'Quy chuẩn chung' }
-  ],
-  khong_khi: [
-    { value: 'qcvn05_1h', text: 'Trung bình 1 giờ' },
-    { value: 'qcvn05_24h', text: 'Trung bình 24 giờ' },
-    { value: 'qcvn05_nam', text: 'Trung bình năm' }
-  ],
-  dat: [
-    { value: 'qcvn03_type1', text: 'Loại 1 - Đất nông nghiệp, đất ở, công cộng' },
-    { value: 'qcvn03_type2', text: 'Loại 2 - Đất rừng, phi nông nghiệp khác' },
-    { value: 'qcvn03_type3', text: 'Loại 3 - Đất công nghiệp, khoáng sản, bãi thải' }
-  ]
-}
 
 // Keywords mapping for parsing pasted text
 const MAP_KEYWORDS = {
@@ -135,7 +102,8 @@ const MAP_KEYWORDS = {
 
 // State
 const selectedType = ref('nuoc_mat')
-const selectedSubType = ref('qcvn08_a1')
+const selectedSubType = ref('qcvn08_a')
+const runtimeQcvnData = ref({ ...QCVN_DATA })
 const sampleName = ref('')
 const pasteArea = ref('')
 const sampleId = ref(null)
@@ -238,8 +206,22 @@ watch([selectedType, selectedSubType, paramPageSize], () => {
   paramCurrentPage.value = 1
 })
 
+const fetchQcvnCatalog = async () => {
+  try {
+    const res = await fetch(API.QCVNS || '/api/qcvns')
+    if (res.ok) {
+      const dbData = await res.json()
+      if (dbData && typeof dbData === 'object' && Object.keys(dbData).length > 0) {
+        runtimeQcvnData.value = { ...QCVN_DATA, ...dbData }
+      }
+    }
+  } catch (err) {
+    logger.error('Lỗi đồng bộ danh mục QCVN từ API:', err)
+  }
+}
+
 const currentQcvn = computed(() => {
-  return QCVN_DATA[selectedSubType.value] || null
+  return runtimeQcvnData.value[selectedSubType.value] || QCVN_DATA[selectedSubType.value] || null
 })
 
 const getEvaluation = (p, val) => {
@@ -257,7 +239,7 @@ const getEvaluation = (p, val) => {
       const range = p.max - p.min
       const distMin = range > 0 ? (val - p.min) / range : 0.5
       const distMax = range > 0 ? (p.max - val) / range : 0.5
-      const status = (distMin < 0.1 || distMax < 0.1) ? 'near' : 'pass'
+      const status = (val > p.min && val < p.max && (distMin < 0.05 || distMax < 0.05)) ? 'near' : 'pass'
       return {
         status,
         label: status === 'near' ? '⚠ Gần giới hạn' : '✓ Đạt',
@@ -269,7 +251,7 @@ const getEvaluation = (p, val) => {
     if (val < p.gioi_han) {
       return { status: 'fail', label: '✗ Thấp hơn ngưỡng', ratio }
     } else {
-      const status = ratio < 1.1 ? 'near' : 'pass'
+      const status = (val > p.gioi_han && ratio < 1.1) ? 'near' : 'pass'
       return {
         status,
         label: status === 'near' ? '⚠ Gần giới hạn' : '✓ Đạt',
@@ -286,9 +268,10 @@ const getEvaluation = (p, val) => {
       }
     } else {
       const ratio = (p.gioi_han && p.gioi_han > 0) ? (val / p.gioi_han) : (val > 0 ? Infinity : 0)
-      if (ratio > 1) {
+      // T13: Kết quả đo đúng bằng giới hạn (val === p.gioi_han) là ĐẠT ('pass')
+      if (val > p.gioi_han) {
         return { status: 'fail', label: `✗ Vượt ${Number.isFinite(ratio) ? ratio.toFixed(2) + 'x' : 'ngưỡng'}`, ratio }
-      } else if (ratio >= 0.8) {
+      } else if (ratio > 0.8 && val < p.gioi_han) {
         return { status: 'near', label: `⚠ ${Math.round(ratio * 100)}% ngưỡng`, ratio }
       } else {
         return { status: 'pass', label: `✓ Đạt (${Math.round(ratio * 100)}%)`, ratio }
@@ -299,11 +282,24 @@ const getEvaluation = (p, val) => {
 
 const evaluatedParams = computed(() => {
   if (!currentQcvn.value || !Array.isArray(currentQcvn.value.tham_so)) return []
+  const permitLimits = linkedProject.value?.form_data?.permitLimits || null
   return currentQcvn.value.tham_so.map(p => {
     if (p.nhom) return p
-    const rawVal = measuredValues.value ? measuredValues.value[p.key] : undefined
+    const rawVal = measuredValues.value
+      ? (measuredValues.value[p.key] !== undefined ? measuredValues.value[p.key] : (p.key === 'Cr_tong' ? measuredValues.value.Cr3 : undefined))
+      : undefined
     const val = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? parseFloat(rawVal) : NaN
     const evalResult = getEvaluation(p, val)
+
+    // Q12 & T18: Đối chiếu riêng với giới hạn trong GPMT (nếu có)
+    const permitLimit = permitLimits && permitLimits[p.key] !== undefined ? parseFloat(permitLimits[p.key]) : null
+    if (!isNaN(val) && permitLimit !== null && !isNaN(permitLimit)) {
+      const permitFail = p.loai === 'min' ? val < permitLimit : val > permitLimit
+      if (permitFail) {
+        evalResult.status = 'fail'
+        evalResult.label = `✗ Vượt GPMT (${permitLimit})`
+      }
+    }
     
     // Calculate fill width & color for progress bar representation
     let fillWidth = 0
@@ -324,6 +320,7 @@ const evaluatedParams = computed(() => {
     return {
       ...p,
       value: isNaN(val) ? undefined : val,
+      permitLimit,
       ...evalResult,
       fillWidth,
       fillColor
@@ -332,15 +329,19 @@ const evaluatedParams = computed(() => {
 })
 
 const summary = computed(() => {
-  let total = 0, pass = 0, near = 0, fail = 0
+  let total = 0, pass = 0, near = 0, fail = 0, missingRequired = 0
   evaluatedParams.value.forEach(p => {
-    if (p.nhom || p.value === undefined || p.value === null || isNaN(p.value)) return
+    if (p.nhom) return
+    if (p.value === undefined || p.value === null || isNaN(p.value)) {
+      if (p.required !== false) missingRequired++
+      return
+    }
     total++
     if (p.status === 'pass') pass++
     else if (p.status === 'near') near++
     else if (p.status === 'fail') fail++
   })
-  return { total, pass, near, fail }
+  return { total, pass, near, fail, missingRequired }
 })
 
 const handleQuickPaste = () => {
@@ -435,22 +436,31 @@ const autoMatchQcvnFromProject = async (project) => {
 
   if (industrialNganh.includes(nganh)) {
     matchedType = 'nuoc_thai_cn'
-    if (nt > 2000) {
-      matchedSubType = isSensitive ? 'qcvn40_a_high' : 'qcvn40_a_high'
-    } else {
-      matchedSubType = 'qcvn40_a_low'
-    }
+    const receivingCol = isSensitive ? 'A' : (project.form_data?.receivingWaterClass || 'B')
+    const decision = selectApplicableQcvn({
+      sourceType: 'nuoc_thai_cn',
+      receivingWaterClass: receivingCol,
+      flowRate: nt > 0 ? nt : 100
+    })
+    matchedSubType = decision.qcvnId || (isSensitive ? 'qcvn40_a_low' : 'qcvn40_b_low')
   } else if (domesticNganh.includes(nganh)) {
     matchedType = 'nuoc_thai_sh'
-    matchedSubType = isSensitive ? 'qcvn14_a' : 'qcvn14_b'
+    const isUrban = nganh === 'do_thi'
+    const receivingCol = isSensitive ? 'A' : (project.form_data?.receivingWaterClass || 'B')
+    const decision = selectApplicableQcvn({
+      sourceType: 'nuoc_thai_sh',
+      receivingWaterClass: receivingCol,
+      isUrbanArea: isUrban
+    })
+    matchedSubType = decision.qcvnId || (isSensitive ? 'qcvn14_a' : 'qcvn14_b')
   } else if (surfaceWaterNganh.includes(nganh)) {
     matchedType = 'nuoc_mat'
     if (nganh === 'nuoi_thuy_san') {
-      matchedSubType = 'qcvn08_a2'
+      matchedSubType = 'qcvn08_b'
     } else if (nganh === 'nao_vet') {
-      matchedSubType = 'qcvn08_b1'
+      matchedSubType = 'qcvn08_c'
     } else {
-      matchedSubType = 'qcvn08_a1'
+      matchedSubType = 'qcvn08_a'
     }
   } else if (airNganh.includes(nganh)) {
     matchedType = 'khong_khi'
@@ -465,15 +475,16 @@ const autoMatchQcvnFromProject = async (project) => {
     isAutoMatching.value = false
 
     const typeLabels = {
-      nuoc_mat: 'Nước mặt (QCVN 08)',
+      nuoc_mat: 'Nước mặt (QCVN 08:2023)',
       nuoc_thai_cn: 'Nước thải công nghiệp (QCVN 40:2025)',
       nuoc_thai_sh: 'Nước thải sinh hoạt (QCVN 14:2025)',
-      khong_khi: 'Không khí (QCVN 05:2023)',
-      nuoc_duoi_dat: 'Nước dưới đất (QCVN 09)',
-      dat: 'Chất lượng đất (QCVN 03)'
+      khi_thai_cn: 'Khí thải công nghiệp (QCVN 19:2024)',
+      khong_khi: 'Không khí xung quanh (QCVN 05:2023)',
+      nuoc_duoi_dat: 'Nước dưới đất (QCVN 09:2023)',
+      dat: 'Chất lượng đất (QCVN 03:2023)'
     }
     const subObj = (SUB_TYPES[matchedType] || []).find(s => s.value === matchedSubType)
-    autoMatchMessage.value = `Tự động khớp quy chuẩn: ${typeLabels[matchedType] || matchedType} — ${subObj ? subObj.text : matchedSubType}`
+    autoMatchMessage.value = `Gợi ý quy chuẩn: ${typeLabels[matchedType] || matchedType} — ${subObj ? subObj.text : matchedSubType} (Cần xác nhận nguồn tiếp nhận & điều khoản chuyển tiếp)`
   } else {
     autoMatchMessage.value = ''
   }
@@ -497,6 +508,8 @@ const unlinkProject = () => {
 const computeOverallStatus = () => {
   const s = summary.value
   if (s.fail > 0) return 'vuot_nguong'
+  // Q10 & T12: Không kết luận 'dat' nếu chưa nhập dữ liệu hoặc còn thiếu chỉ tiêu bắt buộc
+  if (s.total === 0 || s.missingRequired > 0) return 'chua_du_thong_so'
   if (s.near > 0) return 'canh_bao'
   return 'dat'
 }
@@ -659,6 +672,7 @@ const handleClickOutside = (e) => {
 }
 
 onMounted(() => {
+  fetchQcvnCatalog()
   fetchSamples()
   document.addEventListener('click', handleClickOutside)
 })
@@ -867,10 +881,11 @@ const showQuickPaste = ref(false)
         <div class="form-group" style="min-width:230px">
           <label class="form-label">Loại hình quy chuẩn (QCVN)</label>
           <select v-model="selectedType">
-            <option value="nuoc_mat">Nước mặt (QCVN 08-MT:2015)</option>
+            <option value="nuoc_mat">Nước mặt (QCVN 08:2023)</option>
             <option value="nuoc_thai_cn">Nước thải công nghiệp (QCVN 40:2025)</option>
-            <option value="nuoc_thai_sh">Nước thải sinh hoạt (QCVN 14:2025)</option>
-            <option value="nuoc_duoi_dat">Nước dưới đất (QCVN 09-MT:2015)</option>
+            <option value="nuoc_thai_sh">Nước thải sinh hoạt &amp; đô thị (QCVN 14:2025)</option>
+            <option value="khi_thai_cn">Khí thải công nghiệp (QCVN 19:2024)</option>
+            <option value="nuoc_duoi_dat">Nước dưới đất (QCVN 09:2023)</option>
             <option value="khong_khi">Không khí xung quanh (QCVN 05:2023)</option>
             <option value="dat">Chất lượng đất (QCVN 03:2023)</option>
           </select>

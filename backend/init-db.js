@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -395,73 +395,83 @@ async function initDatabase() {
       return `https://www.luatmoitruong.vn/${cleanNum}`;
     }
 
-    // 4. Đồng bộ văn bản pháp lý từ laws.js vào database
+    // 4. Đồng bộ văn bản pháp lý từ file seed (nếu có) vào database
     try {
-      console.log('Đang đồng bộ văn bản pháp lý từ laws.js...');
-      const lawsCode = fs.readFileSync(path.join(__dirname, 'public/assets/js/data/laws.js'), 'utf8');
-      const sandbox = { window: {} };
-      vm.createContext(sandbox);
-      vm.runInContext(lawsCode, sandbox);
-      const lawsList = sandbox.window.AppData.LAWS || [];
+      const lawsPath = path.join(__dirname, '../frontend/src/data/laws.js');
+      if (fs.existsSync(lawsPath)) {
+        console.log('Đang đồng bộ văn bản pháp lý từ frontend/src/data/laws.js...');
+        const lawsCode = fs.readFileSync(lawsPath, 'utf8')
+          .replace(/export\s+const\s+/g, 'const ') + '\n;globalThis.__LAWS__ = LAWS;';
+        const sandbox = { globalThis: {} };
+        vm.createContext(sandbox);
+        vm.runInContext(lawsCode, sandbox);
+        const lawsList = sandbox.globalThis.__LAWS__ || [];
 
-      for (const law of lawsList) {
-        const checkLaw = await targetClient.query('SELECT 1 FROM laws WHERE id = $1', [law.id]);
-        const targetLink = getDirectLawLink(law);
-        
-        if (checkLaw.rowCount === 0) {
-          await targetClient.query(
-            `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, note, link) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [
-              law.id,
-              law.type,
-              law.year,
-              law.sortDate || null,
-              law.so,
-              law.ten,
-              law.hieuluc || null,
-              law.status || null,
-              law.mo_ta || null,
-              JSON.stringify(law.dieu_khoang || []),
-              law.note || null,
-              targetLink
-            ]
-          );
-        } else {
-          await targetClient.query(
-            `UPDATE laws 
-             SET type = $1, year = $2, sort_date = $3, so = $4, ten = $5, hieuluc = $6, status = $7, mo_ta = $8, dieu_khoang = $9, note = $10, link = $11 
-             WHERE id = $12`,
-            [
-              law.type,
-              law.year,
-              law.sortDate || null,
-              law.so,
-              law.ten,
-              law.hieuluc || null,
-              law.status || null,
-              law.mo_ta || null,
-              JSON.stringify(law.dieu_khoang || []),
-              law.note || null,
-              targetLink,
-              law.id
-            ]
-          );
+        for (const law of lawsList) {
+          const checkLaw = await targetClient.query('SELECT 1 FROM laws WHERE id = $1', [law.id]);
+          const targetLink = getDirectLawLink(law);
+          
+          if (checkLaw.rowCount === 0) {
+            await targetClient.query(
+              `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, note, link) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              [
+                law.id,
+                law.type,
+                law.year,
+                law.sortDate || null,
+                law.so,
+                law.ten,
+                law.hieuluc || null,
+                law.status || null,
+                law.mo_ta || null,
+                JSON.stringify(law.dieu_khoang || []),
+                law.note || null,
+                targetLink
+              ]
+            );
+          } else {
+            await targetClient.query(
+              `UPDATE laws 
+               SET type = $1, year = $2, sort_date = $3, so = $4, ten = $5, hieuluc = $6, status = $7, mo_ta = $8, dieu_khoang = $9, note = $10, link = $11 
+               WHERE id = $12`,
+              [
+                law.type,
+                law.year,
+                law.sortDate || null,
+                law.so,
+                law.ten,
+                law.hieuluc || null,
+                law.status || null,
+                law.mo_ta || null,
+                JSON.stringify(law.dieu_khoang || []),
+                law.note || null,
+                targetLink,
+                law.id
+              ]
+            );
+          }
         }
+        console.log(`✔ Đã đồng bộ ${lawsList.length} văn bản pháp lý vào cơ sở dữ liệu.`);
+      } else {
+        const lawCountRes = await targetClient.query('SELECT COUNT(*) AS count FROM laws');
+        console.log(`✔ Bảng "laws" hiện có ${lawCountRes.rows[0].count} văn bản pháp lý trong cơ sở dữ liệu.`);
       }
-      console.log(`✔ Đã đồng bộ ${lawsList.length} văn bản pháp lý vào cơ sở dữ liệu.`);
     } catch (e) {
-      console.error('⚠️ Không thể đồng bộ laws.js:', e.message);
+      console.error('⚠️ Không thể đồng bộ laws:', e.message);
     }
 
-    // 5. Đồng bộ QCVN từ qcvn-db.js vào database
+    // 5. Đồng bộ QCVN từ frontend/src/data/qcvn-db.js vào database (Q13)
     try {
-      console.log('Đang đồng bộ QCVN từ qcvn-db.js...');
-      const qcvnsCode = fs.readFileSync(path.join(__dirname, 'public/assets/js/data/qcvn-db.js'), 'utf8');
-      const sandbox = { window: {} };
+      console.log('Đang đồng bộ QCVN từ frontend/src/data/qcvn-db.js...');
+      const qcvnsPath = path.join(__dirname, '../frontend/src/data/qcvn-db.js');
+      const qcvnsCode = fs.readFileSync(qcvnsPath, 'utf8')
+        .replace(/export\s+const\s+/g, 'const ')
+        .replace(/export\s+function\s+/g, 'function ') + '\n;globalThis.__QCVN_DATA__ = QCVN_DATA;';
+      const sandbox = { globalThis: {} };
       vm.createContext(sandbox);
       vm.runInContext(qcvnsCode, sandbox);
-      const qcvnsData = sandbox.window.AppData.QCVN_DATA || {};
+      const qcvnsData = sandbox.globalThis.__QCVN_DATA__ || {};
 
       for (const id of Object.keys(qcvnsData)) {
         const qcvn = qcvnsData[id];
@@ -496,15 +506,10 @@ async function initDatabase() {
       console.error('⚠️ Không thể đồng bộ qcvn-db.js:', e.message);
     }
 
-    // 6. Đồng bộ Ngành nghề & Ngưỡng phân loại từ classification-db.js vào database
+    // 6. Đồng bộ Ngành nghề & Ngưỡng phân loại từ backend/services/classification-service.js vào database
     try {
-      console.log('Đang đồng bộ Ngành nghề & Ngưỡng phân loại từ classification-db.js...');
-      const classCode = fs.readFileSync(path.join(__dirname, 'public/assets/js/data/classification-db.js'), 'utf8');
-      const sandbox = { window: {} };
-      vm.createContext(sandbox);
-      vm.runInContext(classCode, sandbox);
-      
-      const indDb = sandbox.window.AppData.IND_DB || {};
+      console.log('Đang đồng bộ Ngành nghề & Ngưỡng phân loại từ classification-service.js...');
+      const { IND_DB: indDb } = require('./services/classification-service');
       
       // Xóa dữ liệu cũ trong các bảng phân loại để tránh xung đột khoá ngoại hoặc trùng lặp khi chạy lại
       await targetClient.query('TRUNCATE TABLE classification_thresholds CASCADE');
@@ -513,34 +518,22 @@ async function initDatabase() {
 
       for (const code of Object.keys(indDb)) {
         const industry = indDb[code];
-        
-        // Trích xuất tên sạch (bỏ phần đơn vị trong ngoặc đơn)
-        // Ví dụ: "Chế biến thực phẩm, đồ uống (tấn/năm)" -> "Chế biến thực phẩm, đồ uống"
         const cleanName = industry.lbl.replace(/\s*\(.*\)\s*$/, '').trim();
         
-        // Thêm vào bảng industries
         await targetClient.query(
           `INSERT INTO industries (code, name, risk_level) 
            VALUES ($1, $2, $3)`,
-          [code, cleanName, 'medium'] // mặc định risk_level trung bình
+          [code, cleanName, 'medium']
         );
         
-        // Duyệt các tier để thêm vào appendices và thresholds
         const tiers = industry.t || [];
         for (let i = 0; i < tiers.length; i++) {
           const tier = tiers[i];
-          
-          // Tạo một ID cho appendix (ví dụ: app_thuc_pham_0)
           const appendixId = `app_${code}_${i}`;
-          
-          // Trích xuất thông tin phụ lục
-          // ví dụ phu_luc: "Phụ lục III, Mục 11"
           const plParts = (tier.phu_luc || '').split(',');
           const appendixName = plParts[0] ? plParts[0].trim() : 'Phụ lục không tên';
           const itemNumber = plParts[1] ? plParts[1].trim() : '';
           
-          // Ánh xạ sang ID văn bản
-          // ví dụ ref: "NĐ 08/2022 (VBHN 49/2026)"
           let lawId = null;
           if (tier.ref) {
             if (tier.ref.includes('08/2022') || tier.ref.includes('49/2026')) {
@@ -550,39 +543,21 @@ async function initDatabase() {
             }
           }
           
-          // Lưu vào bảng legal_appendices
           await targetClient.query(
             `INSERT INTO legal_appendices (id, law_id, appendix_name, item_number, content_summary) 
              VALUES ($1, $2, $3, $4, $5)`,
-            [appendixId, lawId, appendixName, itemNumber, `Quy định quy mô công suất cho loại hình ${cleanName}`]
+            [appendixId, lawId, appendixName, itemNumber, `Quy định quy mô công suất cho loại hình ${cleanName} (${tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'})`]
           );
           
-          // Tính toán max_value (nếu là tier trước, max_value sẽ là min_value của tier trước đó)
-          // Ví dụ: tier 0: min 100000 -> max null
-          //        tier 1: min 20000 -> max 100000 (min của tier 0)
-          //        tier 2: min 1000 -> max 20000 (min của tier 1)
           let maxValue = null;
           if (i > 0) {
             maxValue = tiers[i - 1].min;
           }
           
-          // Trích xuất đơn vị từ lbl
-          // Ví dụ: "Chế biến thực phẩm, đồ uống (tấn/năm)" -> "tấn/năm"
           const unitMatch = industry.lbl.match(/\((.*)\)/);
           const unit = unitMatch ? unitMatch[1] : '';
+          const projectGroup = tier.projectGroup || (tier.hs === 'DTM' && tier.tq === 'cap_bo' ? 'Nhóm I' : tier.hs === 'DTM' ? 'Nhóm II' : tier.hs === 'GPMT' ? 'Nhóm III' : 'Nhóm IV');
           
-          const groupMap = {
-            'DTM': 'Nhóm II',
-            'GPMT': 'Nhóm III',
-            'DKMT': 'Nhóm IV'
-          };
-          // Nếu min_value >= 100.000 (hoặc tier đầu tiên và là DTM) và thẩm quyền cấp bộ, có thể là Nhóm I
-          let projectGroup = groupMap[tier.hs] || 'Nhóm III';
-          if (tier.hs === 'DTM' && tier.tq === 'cap_bo') {
-            projectGroup = 'Nhóm I';
-          }
-          
-          // Lưu vào bảng classification_thresholds
           await targetClient.query(
             `INSERT INTO classification_thresholds (industry_code, min_value, max_value, unit, project_group, legal_doc_required, appendix_id) 
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -592,40 +567,41 @@ async function initDatabase() {
       }
       console.log(`✔ Đã đồng bộ toàn bộ ngành nghề và ngưỡng phân loại vào cơ sở dữ liệu.`);
     } catch (e) {
-      console.error('⚠️ Không thể đồng bộ ngành nghề từ classification-db.js:', e.message);
+      console.error('⚠️ Không thể đồng bộ ngành nghề từ classification-service.js:', e.message);
     }
 
-    // 7. Đồng bộ Quy tắc mẫu của Rule Engine vào database
+    // 7. Đồng bộ Quy tắc mẫu của Rule Engine vào database (A01, A04, Q10)
     try {
       console.log('Đang đồng bộ Quy tắc mẫu của Rule Engine...');
       const sampleRules = [
         {
           id: 'rule_project_classification',
-          name: 'Quy tắc phân loại dự án môi trường',
+          name: 'Quy tắc phân loại dự án môi trường (Kiến trúc 3 bước sau kiểm toán)',
           type: 'classification',
           expression: JSON.stringify({
-            name: 'Project Classification Cây quyết định',
-            description: 'Phân loại dự án dựa trên công suất ngành, cờ nhạy cảm, nước thải và khí thải',
+            name: 'Project Classification 3-Step Pipeline',
+            version: '2026.2-audit',
+            description: 'Tách độc lập 3 bước: (1) Nhóm dự án -> (2) Nghĩa vụ thủ tục môi trường -> (3) Chủ thể và cơ quan có thẩm quyền',
             logic: {
-              step1: 'Kiểm tra cờ nhạy cảm (rung, lua, bg, bao_ton). Nếu true -> Nhóm I (DTM Bộ)',
-              step2: 'Tìm tier công suất trong bảng classification_thresholds dựa trên industry_code và capacity',
-              step3: 'Kiểm tra lưu lượng nước thải. Nếu >= 1000m3 -> nâng lên ĐTM cấp Sở (Nhóm II)',
-              step4: 'Kiểm tra lưu lượng khí thải. Nếu >= 20000m3/h -> nâng lên GPMT cấp Sở; >= 200000m3/h -> nâng lên ĐTM cấp Sở',
-              step5: 'Kiểm tra cờ kcn. Nếu true và DTM -> hạ xuống GPMT cấp Sở'
+              step1: 'determineProjectGroup: Xác định Nhóm I, II, III, IV theo công suất ngành, công đoạn và điều kiện pháp lý của yếu tố nhạy cảm (không tự nâng từ boolean đơn thuần)',
+              step2: 'determineEnvironmentalObligations: Xác định ĐTM, GPMT, ĐKMT, Miễn ĐKMT mà không làm sai lệch Nhóm dự án; không tự chuyển ĐTM sang GPMT chỉ vì nằm trong KCN',
+              step3: 'determineCompetentAuthority: Tách Người có thẩm quyền, Cơ quan có thẩm quyền, Cơ quan tiếp nhận, Đơn vị chuyên môn theo mốc hiệu lực 01/07/2025'
             }
           })
         },
         {
           id: 'rule_qcvn_monitoring_check',
-          name: 'Quy tắc đối chiếu thông số quan trắc QCVN',
+          name: 'Quy tắc đối chiếu thông số quan trắc QCVN & GPMT',
           type: 'monitoring',
           expression: JSON.stringify({
-            name: 'QCVN Monitoring Đối chiếu thông số',
-            description: 'Đối chiếu thông số đo đạc với giới hạn cho phép trong QCVN',
+            name: 'QCVN Monitoring & Permit Limit Engine',
+            version: '2026.2-audit',
+            description: 'Đối chiếu thông số đo đạc với giới hạn QCVN và giới hạn trong GPMT, kiểm tra chu kỳ trung bình và tính đầy đủ của thông số bắt buộc',
             logic: {
-              max: 'Đạt khi giá trị đo <= giới hạn',
+              max: 'Đạt khi giá trị đo <= giới hạn (bao gồm trường hợp bằng giới hạn)',
               min: 'Đạt khi giá trị đo >= giới hạn',
-              range: 'Đạt khi giới hạn dưới <= giá trị đo <= giới hạn trên'
+              range: 'Đạt khi giới hạn dưới <= giá trị đo <= giới hạn trên',
+              completeness: 'Trả INCOMPLETE (chua_du_thong_so) nếu thiếu chỉ tiêu bắt buộc; trả NEEDS_REVIEW (can_ra_soat) nếu thiếu nguồn tiếp nhận hoặc sai chu kỳ trung bình'
             }
           })
         }
@@ -636,17 +612,20 @@ async function initDatabase() {
         if (checkRule.rowCount === 0) {
           await targetClient.query(
             `INSERT INTO rules (id, rule_name, rule_type, expression, version) 
-             VALUES ($1, $2, $3, $4, 1)`,
+             VALUES ($1, $2, $3, $4, 2)`,
             [r.id, r.name, r.type, r.expression]
           );
-          
-          // Ghi phiên bản đầu tiên
           await targetClient.query(
             `INSERT INTO rule_versions (rule_id, version, expression, changed_by, change_reason) 
-             VALUES ($1, 1, $2, (SELECT id FROM users WHERE username = 'admin' LIMIT 1), 'Phiên bản khởi tạo hệ thống')`,
+             VALUES ($1, 2, $2, (SELECT id FROM users WHERE username = 'admin' LIMIT 1), 'Cập nhật kiến trúc sau kiểm toán pháp lý 2026.2')`,
             [r.id, r.expression]
           );
           console.log(`  + Đã tạo quy tắc: ${r.id}`);
+        } else {
+          await targetClient.query(
+            `UPDATE rules SET rule_name = $1, expression = $2, version = 2 WHERE id = $3`,
+            [r.name, r.expression, r.id]
+          );
         }
       }
       console.log('✔ Đã đồng bộ các quy tắc Rule Engine mẫu thành công.');

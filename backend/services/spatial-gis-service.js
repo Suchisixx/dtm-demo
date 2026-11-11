@@ -283,9 +283,9 @@ function analyzeSpatialContext(lat, lng) {
   if (isNearBorder) {
     spatialAlerts.push({
       key: 'bg',
-      level: 'danger',
-      title: `Vùng biên giới quốc gia (cách ~${borderCheck.distanceKm} km ≤ 50 km)`,
-      detail: 'Tọa độ dự án nằm trong phạm vi 50 km tính từ đường biên giới đất liền → Thuộc yếu tố nhạy cảm môi trường theo Điểm d, Khoản 1, Điều 25 Luật BVMT 2020.',
+      level: 'warn',
+      title: `Khu vực gần biên giới đất liền (cách ~${borderCheck.distanceKm} km)`,
+      detail: 'Khoảng cách ước tính đến biên giới ≤ 50 km chỉ mang tính tham khảo không gian; không tự động nâng dự án lên Nhóm I nếu chưa xác minh ranh giới hành chính xã biên giới và điều kiện pháp lý cụ thể (NEEDS_LEGAL_VERIFICATION).',
       autoFlag: 'bg'
     });
   }
@@ -295,7 +295,7 @@ function analyzeSpatialContext(lat, lng) {
       key: 'ven_bien',
       level: 'warn',
       title: `Khu vực ven biển (cách đường bờ biển ~${coastCheck.distanceKm} km)`,
-      detail: 'Tọa độ nằm gần hành lang bảo vệ bờ biển (≤ 5 km) → Lưu ý kiểm tra quy hoạch hành lang bảo vệ bờ biển theo Khoản 2, Điều 25 Luật BVMT 2020.',
+      detail: 'Tọa độ nằm gần bờ biển (≤ 5 km) → Cần đối chiếu ranh giới hành lang bảo vệ bờ biển do UBND cấp tỉnh công bố theo Điều 25 Luật BVMT 2020 và Điều 25 Nghị định 08/2022/NĐ-CP.',
       autoFlag: 'ven_bien'
     });
   }
@@ -305,7 +305,7 @@ function analyzeSpatialContext(lat, lng) {
       key: z.flagKey,
       level: z.inCore ? 'danger' : 'warn',
       title: `${z.name} (cách tâm ~${z.distanceKm} km)`,
-      detail: `${z.statusLabel} (bán kính vùng bảo vệ ${z.radiusKm} km) → Yếu tố nhạy cảm theo ${z.ref}.`,
+      detail: `${z.statusLabel} (bán kính ước tính ${z.radiusKm} km) → Cần xác minh ranh giới pháp lý trong quyết định thành lập/công nhận và diện tích giao cắt thực tế (${z.ref}).`,
       autoFlag: z.flagKey
     });
   }
@@ -314,8 +314,8 @@ function analyzeSpatialContext(lat, lng) {
     spatialAlerts.push({
       key: 'kcn',
       level: 'info',
-      title: `Nằm trong ${nearestKcn.name} (cách tâm ${nearestKcn.distanceKm} km)`,
-      detail: 'Dự án đặt trong KCN đã có ĐTM được phê duyệt → Được miễn lập ĐTM riêng nếu phù hợp ngành nghề KCN, chuyển sang cấp GPMT (Khoản 2, Điều 35 Luật BVMT 2020).',
+      title: `Nằm trong phạm vi ${nearestKcn.name} (cách tâm ${nearestKcn.distanceKm} km)`,
+      detail: 'Dự án nằm trong KCN không tự động được miễn ĐTM. Cần kiểm tra quyết định phê duyệt ĐTM hạ tầng KCN, phân khu ngành nghề, công suất hệ thống XLNT tập trung và điều kiện đấu nối (NEEDS_LEGAL_VERIFICATION).',
       autoFlag: 'kcn'
     });
   }

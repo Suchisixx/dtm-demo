@@ -1,424 +1,1031 @@
-// QCVN Standards Dataset - v2.0 (cập nhật 06/2026)
+// frontend/src/data/qcvn-db.js
+// Cơ sở dữ liệu Quy chuẩn Kỹ thuật Quốc gia về Môi trường (QCVN) & Bộ máy Đối chiếu sau Kiểm toán Pháp lý
+// Lưu ý kiểm toán pháp lý: Các giá trị giới hạn chưa đối chiếu trực tiếp từ bản PDF đóng dấu chính thức
+// được gắn cờ verificationStatus: 'NEEDS_LEGAL_VERIFICATION'.
 
-/* 
-   Cấu trúc mỗi tham số:
-   { key, ten, don_vi, loai: 'max'|'min'|'range', gioi_han, [min, max] }
-   loai:
-     'max'   → kết quả phải <= gioi_han
-     'min'   → kết quả phải >= gioi_han  (ví dụ: DO)
-     'range' → min <= kết quả <= max     (ví dụ: pH)
-*/
+export const QCVN_SCHEMA_VERSION = '2026.2-audit';
+
+export const SUB_TYPES = {
+  nuoc_mat: [
+    { value: 'qcvn08_a', text: 'QCVN 08:2023 — Mức A (Chất lượng nước tốt, cấp nước sinh hoạt)' },
+    { value: 'qcvn08_b', text: 'QCVN 08:2023 — Mức B (Chất lượng nước trung bình, sinh hoạt sau xử lý)' },
+    { value: 'qcvn08_c', text: 'QCVN 08:2023 — Mức C (Bảo tồn thủy sinh, tưới tiêu, giao thông thủy)' },
+    { value: 'qcvn08_d', text: 'QCVN 08:2023 — Mức D (Chất lượng nước xấu, cần quản lý khắc phục)' },
+    { value: 'qcvn08_a1', text: '[Lịch sử] QCVN 08-MT:2015 — Cột A1 (Hết hiệu lực)' },
+    { value: 'qcvn08_a2', text: '[Lịch sử] QCVN 08-MT:2015 — Cột A2 (Hết hiệu lực)' },
+    { value: 'qcvn08_b1', text: '[Lịch sử] QCVN 08-MT:2015 — Cột B1 (Hết hiệu lực)' },
+    { value: 'qcvn08_b2', text: '[Lịch sử] QCVN 08-MT:2015 — Cột B2 (Hết hiệu lực)' },
+  ],
+  nuoc_thai_cn: [
+    { value: 'qcvn40_a_f1', text: 'QCVN 40:2025 — Cột A | Lưu lượng F1 (F ≤ 50 m³/ngày)' },
+    { value: 'qcvn40_a_low', text: 'QCVN 40:2025 — Cột A | Lưu lượng F2 (50 < F < 2.000 m³/ngày)' },
+    { value: 'qcvn40_a_high', text: 'QCVN 40:2025 — Cột A | Lưu lượng F3 (F ≥ 2.000 m³/ngày)' },
+    { value: 'qcvn40_b_f1', text: 'QCVN 40:2025 — Cột B | Lưu lượng F1 (F ≤ 50 m³/ngày)' },
+    { value: 'qcvn40_b_low', text: 'QCVN 40:2025 — Cột B | Lưu lượng F2 (50 < F < 2.000 m³/ngày)' },
+    { value: 'qcvn40_b_high', text: 'QCVN 40:2025 — Cột B | Lưu lượng F3 (F ≥ 2.000 m³/ngày)' },
+    { value: 'qcvn40_c_f1', text: 'QCVN 40:2025 — Cột C | Lưu lượng F1 (F ≤ 50 m³/ngày)' },
+    { value: 'qcvn40_c_low', text: 'QCVN 40:2025 — Cột C | Lưu lượng F2 (50 < F < 2.000 m³/ngày)' },
+    { value: 'qcvn40_c_high', text: 'QCVN 40:2025 — Cột C | Lưu lượng F3 (F ≥ 2.000 m³/ngày)' },
+  ],
+  nuoc_thai_sh: [
+    { value: 'qcvn14_a', text: 'QCVN 14:2025 — Dự án/Cơ sở (Bảng 2) — Cột A' },
+    { value: 'qcvn14_b', text: 'QCVN 14:2025 — Dự án/Cơ sở (Bảng 2) — Cột B' },
+    { value: 'qcvn14_c', text: 'QCVN 14:2025 — Dự án/Cơ sở (Bảng 2) — Cột C' },
+    { value: 'qcvn14_urban_a', text: 'QCVN 14:2025 — Đô thị/Khu dân cư tập trung (Bảng 1) — Cột A' },
+    { value: 'qcvn14_urban_b', text: 'QCVN 14:2025 — Đô thị/Khu dân cư tập trung (Bảng 1) — Cột B' },
+    { value: 'qcvn14_urban_c', text: 'QCVN 14:2025 — Đô thị/Khu dân cư tập trung (Bảng 1) — Cột C' },
+  ],
+  khi_thai_cn: [
+    { value: 'qcvn19_2024_a', text: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột A (Vùng bảo vệ nghiêm ngặt)' },
+    { value: 'qcvn19_2024_b', text: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột B (Vùng hạn chế phát thải)' },
+    { value: 'qcvn19_2009_b', text: '[Chuyển tiếp] QCVN 19:2009/BTNMT — Cột B (Áp dụng theo điều khoản chuyển tiếp)' },
+  ],
+  nuoc_duoi_dat: [
+    { value: 'qcvn09', text: 'QCVN 09:2023/BTNMT — Chất lượng nước dưới đất' },
+    { value: 'qcvn09_2015', text: '[Lịch sử] QCVN 09-MT:2015/BTNMT (Hết hiệu lực)' },
+  ],
+  khong_khi: [
+    { value: 'qcvn05_24h', text: 'QCVN 05:2023/BTNMT — Trung bình 24 giờ' },
+    { value: 'qcvn05_1h', text: 'QCVN 05:2023/BTNMT — Trung bình 1 giờ' },
+    { value: 'qcvn05_8h', text: 'QCVN 05:2023/BTNMT — Trung bình 8 giờ (CO)' },
+    { value: 'qcvn05_nam', text: 'QCVN 05:2023/BTNMT — Trung bình năm' },
+  ],
+  dat: [
+    { value: 'qcvn03_type1', text: 'QCVN 03:2023/BTNMT — Nhóm 1: Đất nông nghiệp, rừng, khu bảo tồn' },
+    { value: 'qcvn03_type2', text: 'QCVN 03:2023/BTNMT — Nhóm 2: Đất ở, đô thị, công cộng, thương mại' },
+    { value: 'qcvn03_type3', text: 'QCVN 03:2023/BTNMT — Nhóm 3: Đất khu công nghiệp, sản xuất, kho tàng' },
+  ],
+};
+
+// Hàm tiện ích tạo bộ thông số QCVN 40:2025 theo Cột (A, B, C) và Lưu lượng (F1, F2, F3)
+function buildQcvn40Params(col, flowTier) {
+  const isColA = col === 'A';
+  const isColB = col === 'B';
+  // Lưu lượng F1 (<=50), F2 (50-2000), F3 (>=2000) ảnh hưởng đến BOD5, COD, TOC, TSS
+  const bodMap = {
+    A: { F1: 30, F2: 25, F3: 20 },
+    B: { F1: 50, F2: 40, F3: 30 },
+    C: { F1: 100, F2: 80, F3: 60 },
+  };
+  const codMap = {
+    A: { F1: 75, F2: 65, F3: 50 },
+    B: { F1: 150, F2: 125, F3: 100 },
+    C: { F1: 300, F2: 250, F3: 200 },
+  };
+  const tocMap = {
+    A: { F1: 35, F2: 30, F3: 25 },
+    B: { F1: 75, F2: 60, F3: 50 },
+    C: { F1: 150, F2: 120, F3: 100 },
+  };
+  const tssMap = {
+    A: { F1: 50, F2: 45, F3: 40 },
+    B: { F1: 100, F2: 90, F3: 80 },
+    C: { F1: 200, F2: 180, F3: 150 },
+  };
+
+  return [
+    { nhom: `Thông số chung — Cột ${col} (${flowTier}) [NEEDS_LEGAL_VERIFICATION]` },
+    { key: 'Temp', ten: 'Nhiệt độ', don_vi: '°C', gioi_han: 40, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'pH', ten: 'pH', don_vi: '—', min: isColA ? 6 : 5.5, max: 9, loai: 'range', note: isColA ? '6–9' : '5,5–9', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Color', ten: 'Độ màu (pH = 7)', don_vi: 'Pt-Co', gioi_han: isColA ? 50 : 150, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: bodMap[col][flowTier], loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: codMap[col][flowTier], loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TOC', ten: 'TOC (thay thế COD)', don_vi: 'mg/L', gioi_han: tocMap[col][flowTier], loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: tssMap[col][flowTier], loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: isColA ? 5 : 10, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: isColA ? 20 : isColB ? 40 : 60, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: isColA ? 4 : isColB ? 6 : 8, loai: 'max', required: true, averagingPeriod: 'composite', note: 'Phụ thuộc điều kiện nguồn tiếp nhận (cần đối chiếu bảng chính thức)', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', gioi_han: isColA ? 0.2 : 1.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Phenol', ten: 'Tổng Phenol', don_vi: 'mg/L', gioi_han: isColA ? 0.1 : 0.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Sulfide', ten: 'Sunfua (tính theo H₂S)', don_vi: 'mg/L', gioi_han: isColA ? 0.2 : 0.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', gioi_han: isColA ? 3 : 15, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Cl_du', ten: 'Clo dư', don_vi: 'mg/L', gioi_han: isColA ? 1 : 2, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Oil', ten: 'Tổng dầu mỡ khoáng', don_vi: 'mg/L', gioi_han: isColA ? 5 : 10, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: isColA ? 3000 : 5000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { nhom: 'Kim loại nặng & Hóa chất độc hại [NEEDS_LEGAL_VERIFICATION]' },
+    { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: isColA ? 0.05 : 0.25, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', gioi_han: isColA ? 0.005 : 0.01, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: isColA ? 0.1 : 0.5, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: isColA ? 0.02 : 0.1, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', gioi_han: isColA ? 0.1 : 0.5, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Cr_tong', ten: 'Tổng Crom (Cr)', don_vi: 'mg/L', gioi_han: isColA ? 0.5 : 2.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', gioi_han: isColA ? 1.0 : 3.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', gioi_han: isColA ? 1.0 : 5.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/L', gioi_han: isColA ? 0.1 : 3.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', gioi_han: isColA ? 2.0 : 10.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', gioi_han: isColA ? 2.0 : 10.0, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+  ];
+}
+
+// Hàm tiện ích tạo bộ thông số QCVN 14:2025 theo loại đối tượng (domestic vs urban) và Cột (A, B, C)
+function buildQcvn14Params(col, isUrban = false) {
+  const isColA = col === 'A';
+  const isColB = col === 'B';
+  return [
+    { nhom: `Nước thải ${isUrban ? 'đô thị, khu dân cư tập trung (Bảng 1)' : 'sinh hoạt dự án/cơ sở (Bảng 2)'} — Cột ${col} [NEEDS_LEGAL_VERIFICATION]` },
+    { key: 'pH', ten: 'pH', don_vi: '—', min: 5, max: 9, loai: 'range', note: '5–9', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: isColA ? 30 : isColB ? 35 : 40, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: isColA ? 80 : isColB ? 90 : 100, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TOC', ten: 'TOC (thay thế COD)', don_vi: 'mg/L', gioi_han: isColA ? 40 : isColB ? 45 : 50, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: isColA ? 50 : isColB ? 60 : 70, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: isColA ? 6 : isColB ? 8 : 10, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: isColA ? 25 : isColB ? 30 : 40, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: isColA ? 4 : isColB ? 6 : 8, loai: 'max', required: true, averagingPeriod: 'composite', note: 'Phụ thuộc điều kiện nguồn tiếp nhận (cần đối chiếu bảng chính thức)', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Sulfide', ten: 'Sunfua (tính theo H₂S)', don_vi: 'mg/L', gioi_han: isColA ? 0.2 : isColB ? 0.5 : 1.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Oil', ten: 'Dầu mỡ động thực vật', don_vi: 'mg/L', gioi_han: isColA ? 10 : isColB ? 15 : 20, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'AnionicSurfactants', ten: 'Chất hoạt động bề mặt anion', don_vi: 'mg/L', gioi_han: isColA ? 3 : isColB ? 5 : 10, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: isColA ? 3000 : 5000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+  ];
+}
+
+const QCVN40_TRANSITION_RULES = [
+  {
+    subject: 'Cơ sở đang hoạt động hoặc dự án đã phê duyệt ĐTM / tiếp nhận hồ sơ trước ngày QCVN 40:2025 có hiệu lực',
+    condition: 'Tiếp tục áp dụng QCVN 40:2011/BTNMT (hoặc quy chuẩn nước thải chuyên ngành tương ứng) cho đến hết ngày 31/12/2031, trừ trường hợp đầu tư mới/mở rộng nâng công suất thuộc đối tượng áp dụng ngay.',
+    oldStandard: 'QCVN 40:2011/BTNMT',
+    validUntil: '2031-12-31',
+  },
+];
+
+const QCVN14_TRANSITION_RULES = [
+  {
+    subject: 'Cơ sở đang hoạt động hoặc dự án đã có quyết định phê duyệt ĐTM / GPMT trước ngày QCVN 14:2025 có hiệu lực',
+    condition: 'Tiếp tục áp dụng QCVN 14:2008/BTNMT đến hết ngày 31/12/2031 theo lộ trình tại Thông tư ban hành quy chuẩn.',
+    oldStandard: 'QCVN 14:2008/BTNMT',
+    validUntil: '2031-12-31',
+  },
+];
 
 export const QCVN_DATA = {
-  /* ─── QCVN 08-MT:2015 — Nước mặt ─── */
+  // ── 1. QCVN 08:2023/BTNMT — CHẤT LƯỢNG NƯỚC MẶT (Q01) ──
+  qcvn08_a: {
+    ten: 'QCVN 08:2023/BTNMT — Mức A',
+    ap_dung: 'Nước mặt chất lượng tốt; sử dụng cho mục đích cấp nước sinh hoạt (sau khử trùng/xử lý thông thường) và bảo tồn động thực vật thủy sinh [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 08-MT:2015/BTNMT'],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức A) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6.5, max: 8.5, loai: 'range', note: '6,5–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 6, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 25, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 10, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 4, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: 0.6, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: 0.1, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', gioi_han: 1000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.02, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', gioi_han: 0.1, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', gioi_han: 0.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', gioi_han: 0.001, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', gioi_han: 0.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', gioi_han: 0.1, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn08_b: {
+    ten: 'QCVN 08:2023/BTNMT — Mức B',
+    ap_dung: 'Nước mặt chất lượng trung bình; sử dụng cho cấp nước sinh hoạt sau khi áp dụng công nghệ xử lý phù hợp, công nghiệp, nông nghiệp [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 08-MT:2015/BTNMT'],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức B) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 5, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 100, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 15, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 6, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: 1.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', gioi_han: 5000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.02, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', gioi_han: 0.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn08_c: {
+    ten: 'QCVN 08:2023/BTNMT — Mức C',
+    ap_dung: 'Nước mặt phục vụ tưới tiêu nông nghiệp, bảo tồn thủy sinh, giao thông thủy và các mục đích có yêu cầu chất lượng nước thấp [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 08-MT:2015/BTNMT'],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức C) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 4, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 100, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 20, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 10, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', gioi_han: 7500, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn08_d: {
+    ten: 'QCVN 08:2023/BTNMT — Mức D',
+    ap_dung: 'Nước mặt có chất lượng rất xấu; sử dụng cho giao thông thủy và các mục đích không tiếp xúc trực tiếp, cần giải pháp cải tạo phục hồi [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 08-MT:2015/BTNMT'],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức D) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 2, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 40, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 20, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+
+  // Giữ các bản ghi QCVN 08-MT:2015 ở trạng thái historical để tương thích ngược với mẫu lịch sử đã lưu
   qcvn08_a1: {
-    ten: 'QCVN 08-MT:2015 — Nước mặt, Cột A1',
-    ap_dung: 'Sử dụng cho mục đích cấp nước sinh hoạt',
+    ten: '[Lịch sử] QCVN 08-MT:2015/BTNMT — Cột A1',
+    ap_dung: 'Quy chuẩn lịch sử (đã được thay thế bởi QCVN 08:2023/BTNMT) — Chỉ dùng để tra cứu mẫu lịch sử',
+    status: 'historical',
+    replacedBy: 'QCVN 08:2023/BTNMT',
+    effectiveTo: '2023-09-12',
     tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 8.5 },
-      { key: 'DO', ten: 'DO (Oxy hòa tan)', don_vi: 'mg/L', loai: 'min', gioi_han: 6 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 4 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'TSS', ten: 'TSS (Chất rắn lơ lửng)', don_vi: 'mg/L', loai: 'max', gioi_han: 20 },
-      { key: 'NH4N', ten: 'NH₄⁺ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'NO2N', ten: 'NO₂⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'NO3N', ten: 'NO₃⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'TotalP', ten: 'Tổng Phospho (P)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.005 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.005 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.001 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 2500 },
-      { key: 'Ecoli', ten: 'E.Coli', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 20 },
-    ]
+      { nhom: 'Thông số cơ bản (QCVN 08-MT:2015 — Lịch sử)' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6, max: 8.5, loai: 'range', note: '6–8,5', required: true },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 6, loai: 'min', required: true },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 20, loai: 'max', required: true },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 10, loai: 'max', required: true },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 4, loai: 'max', required: true },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: true },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 2500, loai: 'max', required: true },
+    ],
   },
-
   qcvn08_a2: {
-    ten: 'QCVN 08-MT:2015 — Nước mặt, Cột A2',
-    ap_dung: 'Tưới tiêu, nuôi trồng thủy sản, cấp nước sinh hoạt (xử lý thích hợp)',
+    ten: '[Lịch sử] QCVN 08-MT:2015/BTNMT — Cột A2',
+    ap_dung: 'Quy chuẩn lịch sử (đã được thay thế bởi QCVN 08:2023/BTNMT) — Chỉ dùng để tra cứu mẫu lịch sử',
+    status: 'historical',
+    replacedBy: 'QCVN 08:2023/BTNMT',
+    effectiveTo: '2023-09-12',
     tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 8.5 },
-      { key: 'DO', ten: 'DO (Oxy hòa tan)', don_vi: 'mg/L', loai: 'min', gioi_han: 5 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 6 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 15 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'NH4N', ten: 'NH₄⁺ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'NO2N', ten: 'NO₂⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'NO3N', ten: 'NO₃⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'TotalP', ten: 'Tổng Phospho (P)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.005 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.001 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 5000 },
-      { key: 'Ecoli', ten: 'E.Coli', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 100 },
-    ]
+      { nhom: 'Thông số cơ bản (QCVN 08-MT:2015 — Lịch sử)' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 6, max: 8.5, loai: 'range', note: '6–8,5', required: true },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 5, loai: 'min', required: true },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 30, loai: 'max', required: true },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 15, loai: 'max', required: true },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 6, loai: 'max', required: true },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: true },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 5000, loai: 'max', required: true },
+    ],
   },
-
   qcvn08_b1: {
-    ten: 'QCVN 08-MT:2015 — Nước mặt, Cột B1',
-    ap_dung: 'Tưới tiêu, nuôi trồng thủy sản, giao thông thủy',
+    ten: '[Lịch sử] QCVN 08-MT:2015/BTNMT — Cột B1',
+    ap_dung: 'Quy chuẩn lịch sử (đã được thay thế bởi QCVN 08:2023/BTNMT) — Chỉ dùng để tra cứu mẫu lịch sử',
+    status: 'historical',
+    replacedBy: 'QCVN 08:2023/BTNMT',
+    effectiveTo: '2023-09-12',
     tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 5.5, max: 9 },
-      { key: 'DO', ten: 'DO (Oxy hòa tan)', don_vi: 'mg/L', loai: 'min', gioi_han: 4 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 15 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 50 },
-      { key: 'NH4N', ten: 'NH₄⁺ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'NO2N', ten: 'NO₂⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.04 },
-      { key: 'NO3N', ten: 'NO₃⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'TotalP', ten: 'Tổng Phospho (P)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.3 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.04 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.002 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 1.5 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 1.5 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 7500 },
-      { key: 'Ecoli', ten: 'E.Coli', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 200 },
-    ]
+      { nhom: 'Thông số cơ bản (QCVN 08-MT:2015 — Lịch sử)' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 5.5, max: 9, loai: 'range', note: '5,5–9', required: true },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 4, loai: 'min', required: true },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 50, loai: 'max', required: true },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 30, loai: 'max', required: true },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 15, loai: 'max', required: true },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.9, loai: 'max', required: true },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 7500, loai: 'max', required: true },
+    ],
   },
-
   qcvn08_b2: {
-    ten: 'QCVN 08-MT:2015 — Nước mặt, Cột B2',
-    ap_dung: 'Giao thông thủy và các mục đích khác không thuộc B1',
+    ten: '[Lịch sử] QCVN 08-MT:2015/BTNMT — Cột B2',
+    ap_dung: 'Quy chuẩn lịch sử (đã được thay thế bởi QCVN 08:2023/BTNMT) — Chỉ dùng để tra cứu mẫu lịch sử',
+    status: 'historical',
+    replacedBy: 'QCVN 08:2023/BTNMT',
+    effectiveTo: '2023-09-12',
     tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 5.5, max: 9 },
-      { key: 'DO', ten: 'DO (Oxy hòa tan)', don_vi: 'mg/L', loai: 'min', gioi_han: 2 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 25 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 50 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 100 },
-      { key: 'NH4N', ten: 'NH₄⁺ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'NO2N', ten: 'NO₂⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'NO3N', ten: 'NO₃⁻ (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 15 },
-      { key: 'TotalP', ten: 'Tổng Phospho (P)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.002 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 10000 },
-    ]
+      { nhom: 'Thông số cơ bản (QCVN 08-MT:2015 — Lịch sử)' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 5.5, max: 9, loai: 'range', note: '5,5–9', required: true },
+      { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 2, loai: 'min', required: true },
+      { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 100, loai: 'max', required: true },
+      { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 50, loai: 'max', required: true },
+      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: 25, loai: 'max', required: true },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 0.9, loai: 'max', required: true },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 10000, loai: 'max', required: true },
+    ],
   },
 
-  /* ─── QCVN 40:2025 — Nước thải công nghiệp (Hiệu lực từ 01/09/2025) ─── */
+  // ── 2. QCVN 40:2025/BTNMT — NƯỚC THẢI CÔNG NGHIỆP (Q03) ──
+  qcvn40_a_f1: {
+    ten: 'QCVN 40:2025/BTNMT — Cột A (F1: F ≤ 50 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    flowRange: { code: 'F1', min: 0, max: 50 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('A', 'F1'),
+  },
   qcvn40_a_low: {
-    ten: 'QCVN 40:2025/BTNMT — Cột A (F ≤ 2000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn cấp nước sinh hoạt, lưu lượng ≤ 2000 m³/ngày',
-    tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 40 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 65 },
-      { key: 'TSS', ten: 'TSS (Chất rắn lơ lửng)', don_vi: 'mg/L', loai: 'max', gioi_han: 40 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'TotalN', ten: 'Tổng Nitơ', don_vi: 'mg/L', loai: 'max', gioi_han: 20 },
-      { key: 'TotalP', ten: 'Tổng Phospho', don_vi: 'mg/L', loai: 'max', gioi_han: 4 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.07 },
-      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'Cl2', ten: 'Clo dư (Cl₂)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'S', ten: 'Sunfua (S²⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Oil', ten: 'Dầu mỡ khoáng', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.001 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr3', ten: 'Crom III (Cr³⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 3 },
-      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 3000 },
-    ]
+    ten: 'QCVN 40:2025/BTNMT — Cột A (F2: 50 < F < 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    flowRange: { code: 'F2', min: 50, max: 2000 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('A', 'F2'),
   },
   qcvn40_a_high: {
-    ten: 'QCVN 40:2025/BTNMT — Cột A (F > 2000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn cấp nước sinh hoạt, lưu lượng > 2000 m³/ngày',
-    tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 60 },
-      { key: 'TSS', ten: 'TSS (Chất rắn lơ lửng)', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'TotalN', ten: 'Tổng Nitơ', don_vi: 'mg/L', loai: 'max', gioi_han: 20 },
-      { key: 'TotalP', ten: 'Tổng Phospho', don_vi: 'mg/L', loai: 'max', gioi_han: 4 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.07 },
-      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'Cl2', ten: 'Clo dư (Cl₂)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'S', ten: 'Sunfua (S²⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Oil', ten: 'Dầu mỡ khoáng', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.001 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.02 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr3', ten: 'Crom III (Cr³⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 3 },
-      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.2 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 3000 },
-    ]
+    ten: 'QCVN 40:2025/BTNMT — Cột A (F3: F ≥ 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    flowRange: { code: 'F3', min: 2000, max: null },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('A', 'F3'),
+  },
+  qcvn40_b_f1: {
+    ten: 'QCVN 40:2025/BTNMT — Cột B (F1: F ≤ 50 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    flowRange: { code: 'F1', min: 0, max: 50 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('B', 'F1'),
   },
   qcvn40_b_low: {
-    ten: 'QCVN 40:2025/BTNMT — Cột B (F ≤ 2000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn không dùng cấp sinh hoạt, lưu lượng ≤ 2000 m³/ngày',
-    tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 60 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 90 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 80 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'TotalN', ten: 'Tổng Nitơ', don_vi: 'mg/L', loai: 'max', gioi_han: 40 },
-      { key: 'TotalP', ten: 'Tổng Phospho', don_vi: 'mg/L', loai: 'max', gioi_han: 6 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'Cl2', ten: 'Clo dư (Cl₂)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'S', ten: 'Sunfua (S²⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Oil', ten: 'Dầu mỡ khoáng', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.005 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Cr3', ten: 'Crom III (Cr³⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 3 },
-      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 5000 },
-    ]
+    ten: 'QCVN 40:2025/BTNMT — Cột B (F2: 50 < F < 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    flowRange: { code: 'F2', min: 50, max: 2000 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('B', 'F2'),
   },
   qcvn40_b_high: {
-    ten: 'QCVN 40:2025/BTNMT — Cột B (F > 2000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn không dùng cấp sinh hoạt, lưu lượng > 2000 m³/ngày',
-    tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 6, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 50 },
-      { key: 'COD', ten: 'COD', don_vi: 'mg/L', loai: 'max', gioi_han: 70 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 60 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'TotalN', ten: 'Tổng Nitơ', don_vi: 'mg/L', loai: 'max', gioi_han: 40 },
-      { key: 'TotalP', ten: 'Tổng Phospho', don_vi: 'mg/L', loai: 'max', gioi_han: 6 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'Cl2', ten: 'Clo dư (Cl₂)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'S', ten: 'Sunfua (S²⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Oil', ten: 'Dầu mỡ khoáng', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.005 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'Cr3', ten: 'Crom III (Cr³⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 2 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 3 },
-      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 5000 },
-    ]
+    ten: 'QCVN 40:2025/BTNMT — Cột B (F3: F ≥ 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    flowRange: { code: 'F3', min: 2000, max: null },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('B', 'F3'),
+  },
+  qcvn40_c_f1: {
+    ten: 'QCVN 40:2025/BTNMT — Cột C (F1: F ≤ 50 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'C',
+    flowRange: { code: 'F1', min: 0, max: 50 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('C', 'F1'),
+  },
+  qcvn40_c_low: {
+    ten: 'QCVN 40:2025/BTNMT — Cột C (F2: 50 < F < 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'C',
+    flowRange: { code: 'F2', min: 50, max: 2000 },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('C', 'F2'),
+  },
+  qcvn40_c_high: {
+    ten: 'QCVN 40:2025/BTNMT — Cột C (F3: F ≥ 2.000 m³/ngày)',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'C',
+    flowRange: { code: 'F3', min: 2000, max: null },
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN40_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn40Params('C', 'F3'),
   },
 
-  /* ─── QCVN 14:2025 — Nước thải sinh hoạt (Hiệu lực từ 01/09/2025) ─── */
+  // ── 3. QCVN 14:2025/BTNMT — NƯỚC THẢI SINH HOẠT & ĐÔ THỊ (Q04) ──
   qcvn14_a: {
-    ten: 'QCVN 14:2025/BTNMT — Nước thải sinh hoạt, Cột A',
-    ap_dung: 'Xả vào nguồn nước dùng cho cấp nước sinh hoạt',
-    tham_so: [
-      { nhom: 'Chỉ tiêu' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 5, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 50 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'NO3N', ten: 'Nitrat (NO₃⁻ tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 30 },
-      { key: 'PO4P', ten: 'Phosphat (PO₄³⁻ tính theo P)', don_vi: 'mg/L', loai: 'max', gioi_han: 6 },
-      { key: 'Oil', ten: 'Dầu mỡ động thực vật', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliforms', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 3000 },
-    ]
+    ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột A',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A) [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('A', false),
   },
-
   qcvn14_b: {
-    ten: 'QCVN 14:2025/BTNMT — Nước thải sinh hoạt, Cột B',
-    ap_dung: 'Xả vào nguồn nước không dùng cho cấp nước sinh hoạt',
-    tham_so: [
-      { nhom: 'Chỉ tiêu' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 5, max: 9 },
-      { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', loai: 'max', gioi_han: 35 },
-      { key: 'TSS', ten: 'TSS', don_vi: 'mg/L', loai: 'max', gioi_han: 60 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'NO3N', ten: 'Nitrat (NO₃⁻ tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 50 },
-      { key: 'PO4P', ten: 'Phosphat (PO₄³⁻ tính theo P)', don_vi: 'mg/L', loai: 'max', gioi_han: 10 },
-      { key: 'Oil', ten: 'Dầu mỡ động thực vật', don_vi: 'mg/L', loai: 'max', gioi_han: 15 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliforms', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 5000 },
-    ]
+    ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột B',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột B [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('B', false),
+  },
+  qcvn14_c: {
+    ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột C',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột C [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'C',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('C', false),
+  },
+  qcvn14_urban_a: {
+    ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột A',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột A [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('A', true),
+  },
+  qcvn14_urban_b: {
+    ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột B',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột B [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('B', true),
+  },
+  qcvn14_urban_c: {
+    ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột C',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột C [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'C',
+    effectiveFrom: '2025-09-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: QCVN14_TRANSITION_RULES,
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: buildQcvn14Params('C', true),
   },
 
-  /* ─── QCVN 09-MT:2015 — Nước dưới đất ─── */
+  // ── 4. QCVN 19:2024/BTNMT — KHÍ THẢI CÔNG NGHIỆP (Q07) ──
+  qcvn19_2024_a: {
+    ten: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột A',
+    ap_dung: 'Khí thải công nghiệp xả vào vùng bảo vệ nghiêm ngặt / khu vực nhạy cảm [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'A',
+    effectiveFrom: '2025-07-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: [
+      {
+        subject: 'Cơ sở đang vận hành hoặc dự án đã phê duyệt ĐTM trước ngày QCVN 19:2024 có hiệu lực',
+        condition: 'Tiếp tục áp dụng QCVN 19:2009/BTNMT, QCVN 20:2009/BTNMT hoặc quy chuẩn khí thải chuyên ngành tương ứng đến hết ngày 31/12/2031.',
+        oldStandard: 'qcvn19_2009_b',
+        validUntil: '2031-12-31',
+      },
+    ],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Khí thải công nghiệp chung — Cột A [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'Dust', ten: 'Bụi tổng', don_vi: 'mg/Nm³', gioi_han: 50, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'SO2', ten: 'Lưu huỳnh đioxit (SO₂)', don_vi: 'mg/Nm³', gioi_han: 150, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NOx', ten: 'Nitơ oxit (NOₓ tính theo NO₂)', don_vi: 'mg/Nm³', gioi_han: 250, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CO', ten: 'Cacbon monoxit (CO)', don_vi: 'mg/Nm³', gioi_han: 300, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'HCl', ten: 'Hiđro clorua (HCl)', don_vi: 'mg/Nm³', gioi_han: 20, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'HF', ten: 'Hiđro florua (HF)', don_vi: 'mg/Nm³', gioi_han: 5, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'H2S', ten: 'Hiđro sunfua (H₂S)', don_vi: 'mg/Nm³', gioi_han: 3, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH3', ten: 'Amoniac (NH₃)', don_vi: 'mg/Nm³', gioi_han: 20, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Hg', ten: 'Thủy ngân và hợp chất (tính theo Hg)', don_vi: 'mg/Nm³', gioi_han: 0.05, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Pb', ten: 'Chì và hợp chất (tính theo Pb)', don_vi: 'mg/Nm³', gioi_han: 0.5, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cd', ten: 'Cadimi và hợp chất (tính theo Cd)', don_vi: 'mg/Nm³', gioi_han: 0.05, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn19_2024_b: {
+    ten: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột B',
+    ap_dung: 'Khí thải công nghiệp xả vào vùng hạn chế phát thải / khu vực khác [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    column: 'B',
+    effectiveFrom: '2025-07-01',
+    mandatoryForAllFrom: '2032-01-01',
+    transitionRules: [
+      {
+        subject: 'Cơ sở đang vận hành hoặc dự án đã phê duyệt ĐTM trước ngày QCVN 19:2024 có hiệu lực',
+        condition: 'Tiếp tục áp dụng QCVN 19:2009/BTNMT, QCVN 20:2009/BTNMT đến hết ngày 31/12/2031.',
+        oldStandard: 'qcvn19_2009_b',
+        validUntil: '2031-12-31',
+      },
+    ],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Khí thải công nghiệp chung — Cột B [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'Dust', ten: 'Bụi tổng', don_vi: 'mg/Nm³', gioi_han: 100, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'SO2', ten: 'Lưu huỳnh đioxit (SO₂)', don_vi: 'mg/Nm³', gioi_han: 300, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NOx', ten: 'Nitơ oxit (NOₓ tính theo NO₂)', don_vi: 'mg/Nm³', gioi_han: 400, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CO', ten: 'Cacbon monoxit (CO)', don_vi: 'mg/Nm³', gioi_han: 500, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'HCl', ten: 'Hiđro clorua (HCl)', don_vi: 'mg/Nm³', gioi_han: 50, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'HF', ten: 'Hiđro florua (HF)', don_vi: 'mg/Nm³', gioi_han: 10, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'H2S', ten: 'Hiđro sunfua (H₂S)', don_vi: 'mg/Nm³', gioi_han: 5, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH3', ten: 'Amoniac (NH₃)', don_vi: 'mg/Nm³', gioi_han: 50, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn19_2009_b: {
+    ten: '[Chuyển tiếp] QCVN 19:2009/BTNMT — Khí thải công nghiệp — Cột B',
+    ap_dung: 'Áp dụng cho cơ sở thuộc diện chuyển tiếp trước ngày 01/01/2032 theo quy định tại QCVN 19:2024/BTNMT',
+    status: 'transitional',
+    column: 'B',
+    effectiveTo: '2031-12-31',
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
+    tham_so: [
+      { nhom: 'Khí thải công nghiệp (QCVN 19:2009 — Chuyển tiếp)' },
+      { key: 'Dust', ten: 'Bụi tổng', don_vi: 'mg/Nm³', gioi_han: 200, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'SO2', ten: 'Lưu huỳnh đioxit (SO₂)', don_vi: 'mg/Nm³', gioi_han: 500, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'NOx', ten: 'Nitơ oxit (NOₓ)', don_vi: 'mg/Nm³', gioi_han: 850, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'CO', ten: 'Cacbon monoxit (CO)', don_vi: 'mg/Nm³', gioi_han: 1000, loai: 'max', required: true, averagingPeriod: '1h' },
+    ],
+  },
+
+  // ── 5. QCVN 09:2023/BTNMT — NƯỚC DƯỚI ĐẤT (Q02) ──
   qcvn09: {
-    ten: 'QCVN 09-MT:2015/BTNMT — Nước dưới đất',
-    ap_dung: 'Đánh giá và kiểm soát chất lượng nguồn nước dưới đất',
+    ten: 'QCVN 09:2023/BTNMT — Chất lượng nước dưới đất',
+    ap_dung: 'Đánh giá và giám sát chất lượng nước dưới đất (thay thế QCVN 09-MT:2015/BTNMT từ 12/09/2023) [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 09-MT:2015/BTNMT'],
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Chỉ tiêu vật lý - hóa học' },
-      { key: 'pH', ten: 'pH', don_vi: '—', loai: 'range', min: 5.5, max: 8.5 },
-      { key: 'TDS', ten: 'Tổng chất rắn hòa tan', don_vi: 'mg/L', loai: 'max', gioi_han: 1500 },
-      { key: 'Hardness', ten: 'Độ cứng (CaCO₃)', don_vi: 'mg/L', loai: 'max', gioi_han: 500 },
-      { key: 'NH4N', ten: 'Amoni (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.1 },
-      { key: 'NO3N', ten: 'Nitrat (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 15 },
-      { key: 'NO2N', ten: 'Nitrit (tính theo N)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Cl', ten: 'Clorua (Cl⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 250 },
-      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'SO4', ten: 'Sunfat (SO₄²⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 400 },
-      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { nhom: 'Kim loại nặng' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.003 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.01 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.05 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', loai: 'max', gioi_han: 1 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', loai: 'max', gioi_han: 3 },
-      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', loai: 'max', gioi_han: 5 },
-      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.5 },
-      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', loai: 'max', gioi_han: 0.001 },
-      { nhom: 'Vi sinh' },
-      { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 3 },
-      { key: 'Ecoli', ten: 'E.Coli', don_vi: 'MPN/100mL', loai: 'max', gioi_han: 0, note: 'Không phát hiện' },
-    ]
+      { nhom: 'Thông số vật lý & hóa học cơ bản (QCVN 09:2023/BTNMT) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 5.5, max: 8.5, loai: 'range', note: '5,5–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TDS', ten: 'Tổng chất rắn hòa tan (TDS)', don_vi: 'mg/L', gioi_han: 1500, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Hardness', ten: 'Độ cứng tổng (tính theo CaCO₃)', don_vi: 'mg/L', gioi_han: 500, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Permanganate', ten: 'Chỉ số Pemanganat', don_vi: 'mg/L', gioi_han: 4, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 1.0, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NO3N', ten: 'Nitrat (NO₃⁻ tính theo N)', don_vi: 'mg/L', gioi_han: 15, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'NO2N', ten: 'Nitrit (NO₂⁻ tính theo N)', don_vi: 'mg/L', gioi_han: 1.0, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cl', ten: 'Clorua (Cl⁻)', don_vi: 'mg/L', gioi_han: 250, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', gioi_han: 1.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'SO4', ten: 'Sunfat (SO₄²⁻)', don_vi: 'mg/L', gioi_han: 400, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Kim loại nặng & Vi sinh (QCVN 09:2023/BTNMT) [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.05, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/L', gioi_han: 0.05, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/L', gioi_han: 1.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/L', gioi_han: 3.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Mn', ten: 'Mangan (Mn)', don_vi: 'mg/L', gioi_han: 0.5, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', gioi_han: 0.001, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Fe', ten: 'Sắt (Fe)', don_vi: 'mg/L', gioi_han: 5.0, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Se', ten: 'Selen (Se)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 3, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Ecoli', ten: 'E.Coli', don_vi: 'MPN/100mL', gioi_han: 0, loai: 'max', note: 'Không phát hiện', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn09_2015: {
+    ten: '[Lịch sử] QCVN 09-MT:2015/BTNMT — Nước dưới đất',
+    ap_dung: 'Quy chuẩn lịch sử (đã hết hiệu lực từ 12/09/2023)',
+    status: 'historical',
+    replacedBy: 'QCVN 09:2023/BTNMT',
+    effectiveTo: '2023-09-12',
+    tham_so: [
+      { nhom: 'Thông số cơ bản (QCVN 09-MT:2015 — Lịch sử)' },
+      { key: 'pH', ten: 'pH', don_vi: '—', min: 5.5, max: 8.5, loai: 'range', note: '5,5–8,5', required: true },
+      { key: 'TDS', ten: 'Tổng chất rắn hòa tan (TDS)', don_vi: 'mg/L', gioi_han: 1500, loai: 'max', required: true },
+      { key: 'NH4N', ten: 'Amoni (NH₄⁺ tính theo N)', don_vi: 'mg/L', gioi_han: 1, loai: 'max', required: true },
+      { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: 3, loai: 'max', required: true },
+    ],
   },
 
-  /* ─── QCVN 05:2023 — Không khí xung quanh (Hiệu lực từ 12/09/2023) ─── */
-  qcvn05_1h: {
-    ten: 'QCVN 05:2023/BTNMT — Không khí xung quanh, Trung bình 1 giờ',
-    ap_dung: 'Đánh giá chất lượng không khí xung quanh, trung bình 1 giờ',
-    tham_so: [
-      { nhom: 'Thông số (µg/m³)' },
-      { key: 'SO2', ten: 'SO₂ (Lưu huỳnh điôxit)', don_vi: 'µg/m³', loai: 'max', gioi_han: 350 },
-      { key: 'CO', ten: 'CO (Cacbon monoxit)', don_vi: 'µg/m³', loai: 'max', gioi_han: 30000 },
-      { key: 'NO2', ten: 'NO₂ (Nitơ điôxit)', don_vi: 'µg/m³', loai: 'max', gioi_han: 200 },
-      { key: 'O3', ten: 'O₃ (Ôzôn)', don_vi: 'µg/m³', loai: 'max', gioi_han: 200 },
-      { key: 'TSP', ten: 'Bụi tổng lơ lửng (TSP)', don_vi: 'µg/m³', loai: 'max', gioi_han: 300 },
-    ]
-  },
-
+  // ── 6. QCVN 05:2023/BTNMT — CHẤT LƯỢNG KHÔNG KHÍ XUNG QUANH (Q05, Q11) ──
+  // Đã sửa PM10 24 giờ từ 150 thành 100 µg/Nm³ và tách CO 8 giờ sang chu kỳ averagingPeriod: '8h'
   qcvn05_24h: {
-    ten: 'QCVN 05:2023/BTNMT — Không khí xung quanh, Trung bình 24 giờ',
-    ap_dung: 'Đánh giá chất lượng không khí xung quanh, trung bình 24 giờ',
+    ten: 'QCVN 05:2023/BTNMT — Trung bình 24 giờ',
+    ap_dung: 'Chất lượng không khí xung quanh — giá trị giới hạn trung bình 24 giờ (Bảng 1 QCVN 05:2023/BTNMT)',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    replaces: ['QCVN 05:2013/BTNMT', 'QCVN 06:2009/BTNMT'],
     tham_so: [
-      { nhom: 'Thông số (µg/m³)' },
-      { key: 'SO2', ten: 'SO₂', don_vi: 'µg/m³', loai: 'max', gioi_han: 125 },
-      { key: 'CO', ten: 'CO (Cacbon monoxit, 8 giờ)', don_vi: 'µg/m³', loai: 'max', gioi_han: 10000 },
-      { key: 'NO2', ten: 'NO₂', don_vi: 'µg/m³', loai: 'max', gioi_han: 100 },
-      { key: 'PM10', ten: 'Bụi PM10', don_vi: 'µg/m³', loai: 'max', gioi_han: 150 },
-      { key: 'PM25', ten: 'Bụi PM2.5', don_vi: 'µg/m³', loai: 'max', gioi_han: 50 },
-      { key: 'TSP', ten: 'Bụi tổng lơ lửng (TSP)', don_vi: 'µg/m³', loai: 'max', gioi_han: 200 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'µg/m³', loai: 'max', gioi_han: 1.5 },
-    ]
+      { nhom: 'Các thông số cơ bản trong không khí xung quanh (Chu kỳ trung bình 24 giờ)' },
+      { key: 'SO2', ten: 'SO₂ (Lưu huỳnh đioxit)', don_vi: 'µg/Nm³', gioi_han: 125, loai: 'max', required: true, averagingPeriod: '24h' },
+      { key: 'NO2', ten: 'NO₂ (Nitơ đioxit)', don_vi: 'µg/Nm³', gioi_han: 100, loai: 'max', required: true, averagingPeriod: '24h' },
+      { key: 'TSP', ten: 'Bụi tổng (TSP)', don_vi: 'µg/Nm³', gioi_han: 200, loai: 'max', required: true, averagingPeriod: '24h' },
+      { key: 'PM10', ten: 'Bụi PM₁₀', don_vi: 'µg/Nm³', gioi_han: 100, loai: 'max', required: true, averagingPeriod: '24h' },
+      { key: 'PM25', ten: 'Bụi mịn PM₂.₅', don_vi: 'µg/Nm³', gioi_han: 50, loai: 'max', required: true, averagingPeriod: '24h' },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'µg/Nm³', gioi_han: 1.5, loai: 'max', required: false, averagingPeriod: '24h' },
+      { key: 'Benzene', ten: 'Benzen', don_vi: 'µg/Nm³', gioi_han: 10, loai: 'max', required: false, averagingPeriod: '24h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Toluene', ten: 'Toluen', don_vi: 'µg/Nm³', gioi_han: 300, loai: 'max', required: false, averagingPeriod: '24h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'H2S', ten: 'Hiđro sunfua (H₂S)', don_vi: 'µg/Nm³', gioi_han: 15, loai: 'max', required: false, averagingPeriod: '24h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
   },
-
+  qcvn05_1h: {
+    ten: 'QCVN 05:2023/BTNMT — Trung bình 1 giờ',
+    ap_dung: 'Chất lượng không khí xung quanh — giá trị giới hạn trung bình 1 giờ (Bảng 1 QCVN 05:2023/BTNMT)',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    tham_so: [
+      { nhom: 'Các thông số cơ bản trong không khí xung quanh (Chu kỳ trung bình 1 giờ)' },
+      { key: 'SO2', ten: 'SO₂ (Lưu huỳnh đioxit)', don_vi: 'µg/Nm³', gioi_han: 350, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'NO2', ten: 'NO₂ (Nitơ đioxit)', don_vi: 'µg/Nm³', gioi_han: 200, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'CO', ten: 'CO (Cacbon monoxit)', don_vi: 'µg/Nm³', gioi_han: 30000, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'O3', ten: 'O₃ (Ozon)', don_vi: 'µg/Nm³', gioi_han: 200, loai: 'max', required: false, averagingPeriod: '1h' },
+      { key: 'TSP', ten: 'Bụi tổng (TSP)', don_vi: 'µg/Nm³', gioi_han: 300, loai: 'max', required: true, averagingPeriod: '1h' },
+      { key: 'NH3', ten: 'Amoniac (NH₃)', don_vi: 'µg/Nm³', gioi_han: 200, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'H2S', ten: 'Hiđro sunfua (H₂S)', don_vi: 'µg/Nm³', gioi_han: 42, loai: 'max', required: false, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
+  },
+  qcvn05_8h: {
+    ten: 'QCVN 05:2023/BTNMT — Trung bình 8 giờ',
+    ap_dung: 'Chất lượng không khí xung quanh — giá trị giới hạn trung bình 8 giờ đối với CO và O₃ (Bảng 1 QCVN 05:2023/BTNMT)',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    tham_so: [
+      { nhom: 'Thông số chu kỳ trung bình 8 giờ (Không so sánh với kết quả đo trung bình 24 giờ)' },
+      { key: 'CO', ten: 'CO (Cacbon monoxit — TB 8 giờ)', don_vi: 'µg/Nm³', gioi_han: 10000, loai: 'max', required: true, averagingPeriod: '8h' },
+      { key: 'O3', ten: 'O₃ (Ozon — TB 8 giờ)', don_vi: 'µg/Nm³', gioi_han: 120, loai: 'max', required: false, averagingPeriod: '8h' },
+    ],
+  },
   qcvn05_nam: {
-    ten: 'QCVN 05:2023/BTNMT — Không khí xung quanh, Trung bình năm',
-    ap_dung: 'Đánh giá chất lượng không khí xung quanh, trung bình năm',
+    ten: 'QCVN 05:2023/BTNMT — Trung bình năm',
+    ap_dung: 'Chất lượng không khí xung quanh — giá trị giới hạn trung bình năm (Bảng 1 QCVN 05:2023/BTNMT)',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
     tham_so: [
-      { nhom: 'Thông số (µg/m³)' },
-      { key: 'SO2', ten: 'SO₂', don_vi: 'µg/m³', loai: 'max', gioi_han: 50 },
-      { key: 'NO2', ten: 'NO₂', don_vi: 'µg/m³', loai: 'max', gioi_han: 40 },
-      { key: 'PM10', ten: 'Bụi PM10', don_vi: 'µg/m³', loai: 'max', gioi_han: 50 },
-      { key: 'PM25', ten: 'Bụi PM2.5', don_vi: 'µg/m³', loai: 'max', gioi_han: 25 },
-      { key: 'TSP', ten: 'Bụi TSP', don_vi: 'µg/m³', loai: 'max', gioi_han: 100 },
-    ]
+      { nhom: 'Thông số chu kỳ trung bình năm' },
+      { key: 'SO2', ten: 'SO₂ (Lưu huỳnh đioxit)', don_vi: 'µg/Nm³', gioi_han: 20, loai: 'max', required: true, averagingPeriod: '1y' },
+      { key: 'NO2', ten: 'NO₂ (Nitơ đioxit)', don_vi: 'µg/Nm³', gioi_han: 40, loai: 'max', required: true, averagingPeriod: '1y' },
+      { key: 'TSP', ten: 'Bụi tổng (TSP)', don_vi: 'µg/Nm³', gioi_han: 100, loai: 'max', required: true, averagingPeriod: '1y' },
+      { key: 'PM10', ten: 'Bụi PM₁₀', don_vi: 'µg/Nm³', gioi_han: 50, loai: 'max', required: true, averagingPeriod: '1y' },
+      { key: 'PM25', ten: 'Bụi mịn PM₂.₅', don_vi: 'µg/Nm³', gioi_han: 25, loai: 'max', required: true, averagingPeriod: '1y' },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'µg/Nm³', gioi_han: 0.5, loai: 'max', required: false, averagingPeriod: '1y' },
+    ],
   },
 
-  /* ─── QCVN 03:2023 — Chất lượng đất (Mới) ─── */
+  // ── 7. QCVN 03:2023/BTNMT — CHẤT LƯỢNG ĐẤT (Q06) ──
   qcvn03_type1: {
-    ten: 'QCVN 03:2023/BTNMT — Chất lượng đất, Loại 1',
-    ap_dung: 'Áp dụng cho đất nông nghiệp, đất ở và đất công cộng',
+    ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 1',
+    ap_dung: 'Đất nông nghiệp, đất rừng, đất khu bảo tồn thiên nhiên, đất di sản [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Kim loại nặng (mg/kg đất khô)' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg', loai: 'max', gioi_han: 25 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg', loai: 'max', gioi_han: 4 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg', loai: 'max', gioi_han: 200 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg', loai: 'max', gioi_han: 150 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg', loai: 'max', gioi_han: 300 },
-      { key: 'Cr', ten: 'Crom tổng số (Cr)', don_vi: 'mg/kg', loai: 'max', gioi_han: 150 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg', loai: 'max', gioi_han: 5 },
-    ]
+      { nhom: 'Kim loại nặng & Chỉ tiêu vô cơ trong đất (Nhóm 1)' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg đất khô', gioi_han: 15, loai: 'max', required: true },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: true },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg đất khô', gioi_han: 70, loai: 'max', required: true },
+      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg đất khô', gioi_han: 100, loai: 'max', required: true },
+      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg đất khô', gioi_han: 200, loai: 'max', required: true },
+      { key: 'Cr', ten: 'Tổng Crom (Cr)', don_vi: 'mg/kg đất khô', gioi_han: 150, loai: 'max', required: true },
+      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: true },
+      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 0.5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 70, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 1.0, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 1.0, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 0.5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 500, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'PCBs', ten: 'Tổng PCBs', don_vi: 'mg/kg đất khô', gioi_han: 0.5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'DDT', ten: 'Tổng DDT (Hóa chất BVTV hữu cơ)', don_vi: 'mg/kg đất khô', gioi_han: 1.0, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
   },
-
   qcvn03_type2: {
-    ten: 'QCVN 03:2023/BTNMT — Chất lượng đất, Loại 2',
-    ap_dung: 'Áp dụng cho đất rừng và các loại đất phi nông nghiệp khác',
+    ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 2',
+    ap_dung: 'Đất ở, đất đô thị, đất khu vui chơi giải trí, công cộng, thương mại dịch vụ [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Kim loại nặng (mg/kg đất khô)' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg', loai: 'max', gioi_han: 50 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg', loai: 'max', gioi_han: 10 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg', loai: 'max', gioi_han: 400 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg', loai: 'max', gioi_han: 500 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg', loai: 'max', gioi_han: 600 },
-      { key: 'Cr', ten: 'Crom tổng số (Cr)', don_vi: 'mg/kg', loai: 'max', gioi_han: 200 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg', loai: 'max', gioi_han: 15 },
-    ]
+      { nhom: 'Kim loại nặng & Chỉ tiêu vô cơ trong đất (Nhóm 2)' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg đất khô', gioi_han: 25, loai: 'max', required: true },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: true },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg đất khô', gioi_han: 120, loai: 'max', required: true },
+      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg đất khô', gioi_han: 200, loai: 'max', required: true },
+      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg đất khô', gioi_han: 300, loai: 'max', required: true },
+      { key: 'Cr', ten: 'Tổng Crom (Cr)', don_vi: 'mg/kg đất khô', gioi_han: 200, loai: 'max', required: true },
+      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: true },
+      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 150, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 1000, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'PCBs', ten: 'Tổng PCBs', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
   },
-
   qcvn03_type3: {
-    ten: 'QCVN 03:2023/BTNMT — Chất lượng đất, Loại 3',
-    ap_dung: 'Áp dụng cho đất công nghiệp, khoáng sản và bãi thải chất thải',
+    ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 3',
+    ap_dung: 'Đất khu công nghiệp, cụm công nghiệp, cơ sở sản xuất kinh doanh, kho tàng, bến bãi [NEEDS_LEGAL_VERIFICATION]',
+    status: 'current',
+    effectiveFrom: '2023-09-12',
+    verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Kim loại nặng (mg/kg đất khô)' },
-      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg', loai: 'max', gioi_han: 200 },
-      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg', loai: 'max', gioi_han: 60 },
-      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg', loai: 'max', gioi_han: 700 },
-      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg', loai: 'max', gioi_han: 2000 },
-      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg', loai: 'max', gioi_han: 2000 },
-      { key: 'Cr', ten: 'Crom tổng số (Cr)', don_vi: 'mg/kg', loai: 'max', gioi_han: 250 },
-      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg', loai: 'max', gioi_han: 40 },
-    ]
+      { nhom: 'Kim loại nặng & Chỉ tiêu vô cơ trong đất (Nhóm 3)' },
+      { key: 'As', ten: 'Asen (As)', don_vi: 'mg/kg đất khô', gioi_han: 50, loai: 'max', required: true },
+      { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/kg đất khô', gioi_han: 10, loai: 'max', required: true },
+      { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/kg đất khô', gioi_han: 300, loai: 'max', required: true },
+      { key: 'Cu', ten: 'Đồng (Cu)', don_vi: 'mg/kg đất khô', gioi_han: 300, loai: 'max', required: true },
+      { key: 'Zn', ten: 'Kẽm (Zn)', don_vi: 'mg/kg đất khô', gioi_han: 500, loai: 'max', required: true },
+      { key: 'Cr', ten: 'Tổng Crom (Cr)', don_vi: 'mg/kg đất khô', gioi_han: 250, loai: 'max', required: true },
+      { key: 'Cr6', ten: 'Crom VI (Cr⁶⁺)', don_vi: 'mg/kg đất khô', gioi_han: 10, loai: 'max', required: true },
+      { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 10, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 300, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 20, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 20, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 2500, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+      { key: 'PCBs', ten: 'Tổng PCBs', don_vi: 'mg/kg đất khô', gioi_han: 10, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
+    ],
   },
 };
+
+/**
+ * Cây quyết định chọn bộ QCVN, Cột (A/B/C), khoảng lưu lượng (F1/F2/F3) và điều khoản chuyển tiếp (Q08, Q09, T09, T10, T11, T15)
+ */
+export function selectApplicableQcvn({
+  sourceType = 'nuoc_thai_cn',
+  receivingWaterClass = null, // 'A' | 'B' | 'C'
+  flowRate = null, // m3/ngay
+  isUrbanArea = false,
+  isExistingFacility = false,
+  evaluationDate = new Date().toISOString().slice(0, 10),
+} = {}) {
+  // T11: Nếu là nước thải nhưng thiếu thông tin nguồn tiếp nhận -> trả NEEDS_REVIEW, không tự chọn cột
+  if ((sourceType === 'nuoc_thai_cn' || sourceType === 'nuoc_thai_sh') && !receivingWaterClass) {
+    return {
+      status: 'NEEDS_REVIEW',
+      reason: 'MISSING_RECEIVING_WATER_CLASS',
+      message: 'Thiếu thông tin phân vùng/mục đích sử dụng nguồn nước tiếp nhận (Cột A, B hoặc C). Hệ thống không tự động chọn cột và không kết luận đạt/không đạt.',
+      qcvnId: null,
+    };
+  }
+
+  const col = (receivingWaterClass || 'B').toUpperCase();
+  if (!['A', 'B', 'C'].includes(col) && (sourceType === 'nuoc_thai_cn' || sourceType === 'nuoc_thai_sh')) {
+    return {
+      status: 'NEEDS_REVIEW',
+      reason: 'INVALID_RECEIVING_WATER_CLASS',
+      message: `Cột nguồn tiếp nhận "${receivingWaterClass}" không hợp lệ (chỉ chấp nhận A, B, C).`,
+      qcvnId: null,
+    };
+  }
+
+  if (sourceType === 'nuoc_thai_cn') {
+    if (flowRate === null || flowRate === undefined || isNaN(Number(flowRate)) || Number(flowRate) <= 0) {
+      return {
+        status: 'NEEDS_REVIEW',
+        reason: 'MISSING_FLOW_RATE',
+        message: 'Thiếu lưu lượng xả thải F (m³/ngày đêm) để xác định khoảng lưu lượng F1 (≤50), F2 (50–2.000) hay F3 (≥2.000).',
+        qcvnId: null,
+      };
+    }
+    const f = Number(flowRate);
+    let flowKey = 'low'; // F2
+    let flowCode = 'F2';
+    if (f <= 50) {
+      flowKey = 'f1';
+      flowCode = 'F1';
+    } else if (f >= 2000) {
+      flowKey = 'high';
+      flowCode = 'F3';
+    }
+
+    const qcvnId = `qcvn40_${col.toLowerCase()}_${flowKey}`;
+    const qcvnObj = QCVN_DATA[qcvnId];
+    const inTransition = Boolean(isExistingFacility && evaluationDate < (qcvnObj?.mandatoryForAllFrom || '2032-01-01'));
+
+    return {
+      status: 'OK',
+      qcvnId,
+      column: col,
+      flowCode,
+      inTransition,
+      applicableStandard: inTransition ? 'QCVN 40:2011/BTNMT (theo điều khoản chuyển tiếp đến 31/12/2031)' : 'QCVN 40:2025/BTNMT',
+      transitionRule: inTransition && qcvnObj?.transitionRules?.[0] ? qcvnObj.transitionRules[0] : null,
+    };
+  }
+
+  if (sourceType === 'nuoc_thai_sh') {
+    const prefix = isUrbanArea ? 'qcvn14_urban' : 'qcvn14';
+    const qcvnId = `${prefix}_${col.toLowerCase()}`;
+    const qcvnObj = QCVN_DATA[qcvnId];
+    const inTransition = Boolean(isExistingFacility && evaluationDate < (qcvnObj?.mandatoryForAllFrom || '2032-01-01'));
+
+    return {
+      status: 'OK',
+      qcvnId,
+      column: col,
+      inTransition,
+      applicableStandard: inTransition ? 'QCVN 14:2008/BTNMT (theo điều khoản chuyển tiếp đến 31/12/2031)' : 'QCVN 14:2025/BTNMT',
+      transitionRule: inTransition && qcvnObj?.transitionRules?.[0] ? qcvnObj.transitionRules[0] : null,
+    };
+  }
+
+  if (sourceType === 'khi_thai_cn') {
+    const inTransition = Boolean(isExistingFacility && evaluationDate < '2032-01-01');
+    const colKey = (receivingWaterClass || 'B').toLowerCase() === 'a' ? 'a' : 'b';
+    const qcvnId = inTransition ? 'qcvn19_2009_b' : `qcvn19_2024_${colKey}`;
+    return {
+      status: 'OK',
+      qcvnId,
+      column: colKey.toUpperCase(),
+      inTransition,
+      applicableStandard: inTransition ? 'QCVN 19:2009/BTNMT (Chuyển tiếp)' : 'QCVN 19:2024/BTNMT',
+    };
+  }
+
+  return {
+    status: 'OK',
+    qcvnId: SUB_TYPES[sourceType]?.[0]?.value || null,
+    inTransition: false,
+  };
+}
+
+/**
+ * Đánh giá mẫu quan trắc so với QCVN và giới hạn riêng trong GPMT (Q10, Q11, Q12, T11–T18)
+ */
+export function evaluateQcvnSample({
+  qcvnId,
+  measuredValues = {},
+  samplingPeriods = {},
+  permitLimits = null,
+  receivingWaterConfirmed = true,
+  qcvnDatabase = QCVN_DATA,
+} = {}) {
+  if (!receivingWaterConfirmed) {
+    return {
+      overallStatus: 'NEEDS_REVIEW',
+      trang_thai_tong_quat: 'can_ra_soat',
+      reason: 'MISSING_RECEIVING_SOURCE',
+      evaluatedParams: [],
+      summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0 },
+    };
+  }
+
+  const qcvn = qcvnDatabase[qcvnId];
+  if (!qcvn) {
+    return {
+      overallStatus: 'NEEDS_REVIEW',
+      trang_thai_tong_quat: 'can_ra_soat',
+      reason: 'UNKNOWN_QCVN',
+      evaluatedParams: [],
+      summary: { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0 },
+    };
+  }
+
+  let pass = 0;
+  let near = 0;
+  let fail = 0;
+  let missingRequired = 0;
+  let periodMismatch = 0;
+
+  const evaluatedParams = (qcvn.tham_so || []).map(p => {
+    if (p.nhom) return p;
+
+    // Tương thích ngược nếu mẫu cũ lưu Cr3 thay vì Cr_tong
+    const rawVal = measuredValues[p.key] !== undefined
+      ? measuredValues[p.key]
+      : (p.key === 'Cr_tong' ? measuredValues.Cr3 : undefined);
+    const val = (rawVal !== undefined && rawVal !== '' && rawVal !== null) ? parseFloat(rawVal) : undefined;
+    const isRequired = p.required !== false;
+
+    if (val === undefined || isNaN(val)) {
+      if (isRequired) missingRequired++;
+      return {
+        ...p,
+        value: undefined,
+        status: null,
+        qcvnCompliant: null,
+        permitCompliant: null,
+      };
+    }
+
+    // T17 (Q11): Kiểm tra chu kỳ trung bình (ví dụ CO 8 giờ không được so với mẫu đo trung bình 24 giờ)
+    const samplePeriod = samplingPeriods[p.key] || samplingPeriods._default;
+    if (samplePeriod && p.averagingPeriod && samplePeriod !== p.averagingPeriod) {
+      periodMismatch++;
+      return {
+        ...p,
+        value: val,
+        status: 'period_mismatch',
+        qcvnCompliant: null,
+        permitCompliant: null,
+        periodMismatchNote: `Sai chu kỳ trung bình: Thông số yêu cầu chu kỳ ${p.averagingPeriod} nhưng mẫu đo ở chu kỳ ${samplePeriod}.`,
+      };
+    }
+
+    // Đánh giá theo giới hạn QCVN (T13, T14)
+    let status = 'pass';
+    let qcvnCompliant = true;
+
+    if (p.loai === 'range') {
+      if (val < p.min || val > p.max) {
+        status = 'fail';
+        qcvnCompliant = false;
+      } else if (val > p.min && val < p.max && (val < p.min * 1.05 || val > p.max * 0.95)) {
+        status = 'near';
+      }
+    } else if (p.loai === 'min') {
+      if (val < p.gioi_han) {
+        status = 'fail';
+        qcvnCompliant = false;
+      } else if (val > p.gioi_han && val < p.gioi_han * 1.2) {
+        status = 'near';
+      }
+    } else {
+      // max: T13 — Kết quả đo đúng bằng giới hạn (val === p.gioi_han) là ĐẠT (qcvnCompliant = true)
+      if (val > p.gioi_han) {
+        status = 'fail';
+        qcvnCompliant = false;
+      } else if (val > p.gioi_han * 0.8 && val < p.gioi_han) {
+        status = 'near';
+      }
+    }
+
+    // T18 (Q12): Đánh giá riêng với giới hạn trong GPMT (nếu có)
+    let permitLimit = permitLimits && permitLimits[p.key] !== undefined ? parseFloat(permitLimits[p.key]) : null;
+    let permitCompliant = null;
+    if (permitLimit !== null && !isNaN(permitLimit)) {
+      if (p.loai === 'min') {
+        permitCompliant = val >= permitLimit;
+      } else {
+        permitCompliant = val <= permitLimit;
+      }
+      if (!permitCompliant) {
+        status = 'fail';
+      }
+    }
+
+    if (status === 'fail') fail++;
+    else if (status === 'near') near++;
+    else pass++;
+
+    return {
+      ...p,
+      value: val,
+      status,
+      qcvnCompliant,
+      permitLimit,
+      permitCompliant,
+    };
+  });
+
+  const total = pass + near + fail;
+  let overallStatus = 'PASS';
+  let trang_thai_tong_quat = 'dat';
+
+  if (fail > 0) {
+    overallStatus = 'FAIL';
+    trang_thai_tong_quat = 'vuot_nguong';
+  } else if (periodMismatch > 0) {
+    overallStatus = 'NEEDS_REVIEW';
+    trang_thai_tong_quat = 'can_ra_soat';
+  } else if (total === 0 || missingRequired > 0) {
+    // Q10 & T12: Thiếu thông số bắt buộc -> trả INCOMPLETE, tuyệt đối không kết luận PASS ('dat')
+    overallStatus = 'INCOMPLETE';
+    trang_thai_tong_quat = 'chua_du_thong_so';
+  } else if (near > 0) {
+    overallStatus = 'PASS_WITH_WARNING';
+    trang_thai_tong_quat = 'canh_bao';
+  }
+
+  return {
+    overallStatus,
+    trang_thai_tong_quat,
+    evaluatedParams,
+    summary: {
+      total,
+      pass,
+      near,
+      fail,
+      missingRequired,
+      periodMismatch,
+    },
+  };
+}

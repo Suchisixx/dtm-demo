@@ -1980,7 +1980,7 @@ onUnmounted(() => {
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
               <span class="chip" :class="result.hi.class">{{ result.hs }}</span>
-              <span class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' }">
+              <span class="chip" :class="{ 'chip-bo': result.tq === 'cap_bo', 'chip-so': result.tq === 'cap_so', 'chip-huyen': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
                 <i class="ti ti-building-bank"></i> {{ result.coQuan }}
               </span>
               <span class="chip chip-gray">
@@ -2013,8 +2013,8 @@ onUnmounted(() => {
               </div>
               <div class="info-box">
                 <div class="info-box-label">Thẩm quyền</div>
-                <div class="info-box-val" :class="{ 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' }">
-                  {{ result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'Sở NN&MT / Tỉnh' : 'UBND Cấp Xã/Huyện' }}
+                <div class="info-box-val" :class="{ 'warn': result.tq === 'cap_bo', 'green': result.tq === 'cap_so', 'info': result.tq === 'cap_huyen' || result.tq === 'cap_xa' }">
+                  {{ result.tq === 'cap_bo' ? 'Bộ NN&MT' : result.tq === 'cap_so' ? 'UBND Tỉnh (Sở NN&MT)' : result.tq === 'cap_xa' ? 'UBND Cấp Xã' : 'UBND Cấp Huyện (Cũ)' }}
                 </div>
               </div>
               <div class="info-box">
@@ -2160,8 +2160,8 @@ onUnmounted(() => {
                     Ngày lưu: {{ new Date(h.created_at).toLocaleDateString('vi-VN') }}
                   </div>
                 </div>
-                <span class="chip-status" :class="h.trang_thai_tong_quat === 'vuot_nguong' ? 'expired' : h.trang_thai_tong_quat === 'canh_bao' ? 'amended' : 'valid'">
-                  {{ h.trang_thai_tong_quat === 'vuot_nguong' ? 'Vượt ngưỡng' : h.trang_thai_tong_quat === 'canh_bao' ? 'Cảnh báo' : 'Đạt chuẩn' }}
+                <span class="chip-status" :class="h.trang_thai_tong_quat === 'vuot_nguong' ? 'expired' : (h.trang_thai_tong_quat === 'canh_bao' || h.trang_thai_tong_quat === 'chua_du_thong_so' || h.trang_thai_tong_quat === 'can_ra_soat') ? 'amended' : 'valid'">
+                  {{ h.trang_thai_tong_quat === 'vuot_nguong' ? 'Vượt ngưỡng' : h.trang_thai_tong_quat === 'canh_bao' ? 'Cảnh báo' : h.trang_thai_tong_quat === 'chua_du_thong_so' ? 'Chưa đủ thông số' : h.trang_thai_tong_quat === 'can_ra_soat' ? 'Cần rà soát' : 'Đạt chuẩn' }}
                 </span>
               </div>
               <div v-if="qcvnHistoryTotalPages > 1" class="pagination-container">
