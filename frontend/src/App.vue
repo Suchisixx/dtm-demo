@@ -16,7 +16,7 @@ const sidebarCollapsed = ref(false)
 const mobileMenuOpen = ref(false)
 
 const PAGE_META = {
-  dashboard: { title: 'Dashboard điều hành', group: 'Tổng quan' },
+  dashboard: { title: 'Bảng điều khiển & Thống kê', group: 'Tổng quan' },
   laws: { title: 'Thư viện văn bản pháp lý', group: 'Tra cứu' },
   classify: { title: 'Phân loại & Xác định hồ sơ', group: 'Nghiệp vụ' },
   qcvn: { title: 'Đối chiếu quy chuẩn QCVN', group: 'Nghiệp vụ' },
@@ -204,9 +204,9 @@ onMounted(() => {
         <div class="sidebar-group-label">Phân hệ nghiệp vụ</div>
 
         <a href="/dashboard" class="sidebar-link" :class="{ active: activePage === 'dashboard' }"
-           title="Dashboard thống kê" @click.prevent="handlePageChange('dashboard')">
+           title="Bảng điều khiển &amp; Thống kê" @click.prevent="handlePageChange('dashboard')">
           <i class="ti ti-layout-dashboard"></i>
-          <span class="sidebar-link-label">Dashboard</span>
+          <span class="sidebar-link-label">Bảng điều khiển</span>
           <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
 

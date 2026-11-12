@@ -293,8 +293,8 @@ async function initDatabase() {
     // Seed cấu hình tự động quét mặc định là true
     await targetClient.query(`
       INSERT INTO system_settings (key, value)
-      VALUES ('auto_crawl_enabled', 'true')
-      ON CONFLICT (key) DO NOTHING;
+      VALUES ('auto_crawl_enabled', 'false')
+      ON CONFLICT (key) DO UPDATE SET value = 'false';
     `);
     console.log('✔ Cấu hình mặc định cho crawler đã được lưu.');
 

@@ -7,6 +7,7 @@ import { removeAccents } from '../utils/string-helpers.js'
 import {
   getQcvnOverallStatusMeta,
   getQcvnCatalogChipText,
+  getRuleSourceLabel,
   formatReasonForEndUser,
   QCVN_REASON_LABELS
 } from '../utils/legalLabels.js'
@@ -801,12 +802,12 @@ const exportTxt = () => {
   const now = new Date().toLocaleString('vi-VN')
   let lines = [
     '═══════════════════════════════════════════════════════',
-    `KẾT QUẢ SO SÁNH QCVN (${sampleEvaluation.value.overallStatus})`,
+    `KẾT QUẢ SO SÁNH QCVN (${getQcvnOverallStatusMeta(sampleEvaluation.value.overallStatus).label.toUpperCase()})`,
     `Ngày: ${now}`,
     `Tên mẫu / Vị trí: ${sampleName.value || 'Mẫu không rõ tên'}`,
     `QCVN áp dụng: ${currentQcvn.value.ten}`,
     `Mục đích: ${currentQcvn.value.ap_dung}`,
-    `Nguồn rule: ${sampleEvaluation.value.ruleSource} | Version: ${sampleEvaluation.value.ruleVersion || '—'}`,
+    `Nguồn quy chuẩn: ${getRuleSourceLabel(sampleEvaluation.value.ruleSource)} | Phiên bản: ${sampleEvaluation.value.ruleVersion || '—'}`,
     ...(linkedProject.value ? [
       `Dự án liên kết: ${linkedProject.value.ten_du_an}`,
       ...(linkedProject.value.loai_ho_so ? [`Loại hồ sơ: ${linkedProject.value.loai_ho_so} — ${linkedProject.value.nhom_du_an || ''}`] : []),
@@ -835,7 +836,7 @@ const exportTxt = () => {
 
 const exportPDF = () => {
   if (!sampleEvaluation.value.canExportOfficialReport) {
-    alert(`Đã khóa xuất PDF kết luận chính thức ở trạng thái ${sampleEvaluation.value.overallStatus}. Vui lòng bổ sung đầy đủ dữ liệu và sử dụng bộ QCVN đã xác minh pháp lý.`)
+    alert(`Đã khóa xuất PDF kết luận chính thức ở trạng thái: ${getQcvnOverallStatusMeta(sampleEvaluation.value.overallStatus).label}. Vui lòng bổ sung đầy đủ dữ liệu và sử dụng bộ QCVN đã xác minh pháp lý.`)
     return
   }
   window.print()

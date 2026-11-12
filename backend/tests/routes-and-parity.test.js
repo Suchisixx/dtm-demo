@@ -305,6 +305,14 @@ test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua
   assert.ok(adminVue.includes('ADMIN_RULES_IMPACTS'), 'AdminTab phai ho tro tab kiem duyet law_rule_impacts');
   assert.ok(adminVue.includes('ADMIN_RULES_CANDIDATES'), 'AdminTab phai ho tro duyet rule_candidates');
   assert.ok(adminVue.includes('ADMIN_RULES_QCVN_TRANSITIONAL'), 'AdminTab phai ho tro nhap QCVN chuyen tiep');
+
+  // Frontend localization & log cleanup assertions
+  assert.ok(!classifyVue.includes('(evaluationDate)'), 'ClassifyTab khong de lo bien (evaluationDate) tren template');
+  assert.ok(!adminVue.includes('(OPEN)'), 'AdminTab khong de lo chuoi (OPEN) tren template');
+  assert.ok(!adminVue.includes('(PENDING_REVIEW)'), 'AdminTab khong de lo chuoi (PENDING_REVIEW) tren template');
+  assert.ok(!adminVue.includes('>Ký VERIFIED<'), 'AdminTab khong dung button Ký VERIFIED tieng Anh');
+  assert.ok(!adminVue.includes('fail-closed'), 'AdminTab khong dung thuat ngu fail-closed tieng Anh');
+  assert.ok(adminVue.includes('Xem dữ liệu bóc tách chi tiết (JSON)'), 'AdminTab phai gap gon JSON candidate log');
 });
 
 test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /select+/evaluate+mismatch+IDOR, dashboard cap_xa & crawler PENDING_REVIEW', async () => {

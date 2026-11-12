@@ -2,6 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
+import {
+  getAdminSeverityMeta,
+  getAdminEventActionLabel,
+  getAdminStatusLabel,
+  getAdminTargetTypeLabel,
+} from '../utils/legalLabels.js'
 
 const props = defineProps({
   currentUser: Object
@@ -205,7 +211,7 @@ const resolveImpactAction = async (impactId, status) => {
 const approveCandidateAction = async (cand) => {
   const sourceDoc = (candidateSourceDocs.value[cand.id] || '').trim()
   if (!sourceDoc) {
-    rulesFeedbackError.value = 'Bắt buộc nhập số hiệu văn bản / chứng từ pháp lý (sourceDocument) trước khi duyệt candidate!'
+    rulesFeedbackError.value = 'Bắt buộc nhập số hiệu văn bản / căn cứ pháp lý trước khi phê duyệt đề xuất!'
     return
   }
   rulesFeedback.value = ''
@@ -221,10 +227,10 @@ const approveCandidateAction = async (cand) => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      rulesFeedbackError.value = data.error || 'Không thể duyệt rule candidate.'
+      rulesFeedbackError.value = data.error || 'Không thể duyệt đề xuất quy tắc.'
       return
     }
-    rulesFeedback.value = data.message || `Đã duyệt đề xuất #${cand.id}.`
+    rulesFeedback.value = data.message || `Đã phê duyệt và công bố đề xuất #${cand.id}.`
     await fetchRuleVerificationCenter()
   } catch (err) {
     rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
@@ -242,7 +248,7 @@ const rejectCandidateAction = async (cand) => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      rulesFeedbackError.value = data.error || 'Không thể từ chối rule candidate.'
+      rulesFeedbackError.value = data.error || 'Không thể từ chối đề xuất quy tắc.'
       return
     }
     rulesFeedback.value = data.message || `Đã từ chối đề xuất #${cand.id}.`
@@ -255,7 +261,7 @@ const rejectCandidateAction = async (cand) => {
 const verifyQcvnAction = async (qcvn) => {
   const sourceDoc = (qcvnSourceDocs.value[qcvn.id] || qcvn.source_document || '').trim()
   if (!sourceDoc) {
-    rulesFeedbackError.value = `Vui lòng nhập số hiệu công báo / QĐ ban hành cho ${qcvn.id} trước khi ký VERIFIED!`
+    rulesFeedbackError.value = `Vui lòng nhập số hiệu công báo / QĐ ban hành cho ${qcvn.id} trước khi xác nhận!`
     return
   }
   rulesFeedback.value = ''
@@ -271,7 +277,7 @@ const verifyQcvnAction = async (qcvn) => {
       rulesFeedbackError.value = data.error || `Không thể xác minh ${qcvn.id}.`
       return
     }
-    rulesFeedback.value = data.message || `Đã xác minh VERIFIED cho ${qcvn.id}.`
+    rulesFeedback.value = data.message || `Đã xác nhận pháp lý cho ${qcvn.id}.`
     await fetchRuleVerificationCenter()
   } catch (err) {
     rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
@@ -281,7 +287,7 @@ const verifyQcvnAction = async (qcvn) => {
 const verifyIndustryAction = async (ind) => {
   const sourceDoc = (industrySourceDocs.value[ind.code] || ind.source_document || '').trim()
   if (!sourceDoc) {
-    rulesFeedbackError.value = `Vui lòng nhập căn cứ văn bản (sourceDocument) cho ngành ${ind.code} trước khi ký VERIFIED!`
+    rulesFeedbackError.value = `Vui lòng nhập căn cứ văn bản cho ngành ${ind.code} trước khi xác nhận!`
     return
   }
   rulesFeedback.value = ''
@@ -297,7 +303,7 @@ const verifyIndustryAction = async (ind) => {
       rulesFeedbackError.value = data.error || `Không thể xác minh ngành ${ind.code}.`
       return
     }
-    rulesFeedback.value = data.message || `Đã xác minh VERIFIED cho ngành ${ind.code}.`
+    rulesFeedback.value = data.message || `Đã xác nhận pháp lý cho ngành ${ind.code}.`
     await fetchRuleVerificationCenter()
   } catch (err) {
     rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
@@ -318,7 +324,7 @@ const submitTransitionalQcvn = async () => {
     return
   }
   if (!transitionalForm.value.ten.trim() || !transitionalForm.value.sourceDocument.trim()) {
-    rulesFeedbackError.value = 'Vui lòng nhập đầy đủ Tên QCVN chuyển tiếp và Chứng từ pháp lý (sourceDocument).'
+    rulesFeedbackError.value = 'Vui lòng nhập đầy đủ Tên QCVN chuyển tiếp và Chứng từ pháp lý ban hành.'
     return
   }
   try {
@@ -1110,9 +1116,9 @@ onMounted(() => {
       <div v-if="currentSubpage === 'rules'" id="admin-rules" class="admin-subpage">
         <div class="admin-section-header">
           <div>
-            <div class="admin-section-title">Trung tâm Kiểm duyệt Rule, Tác động Luật &amp; QCVN Chuyển tiếp</div>
+            <div class="admin-section-title">Trung tâm Kiểm duyệt Quy tắc, Tác động Luật &amp; QCVN Chuyển tiếp</div>
             <div style="font-size:12.5px;color:var(--text3);margin-top:2px">
-              Mọi đề xuất crawler bóc tách đều ở trạng thái <code>PENDING_REVIEW</code> và mọi bảng quy tắc chưa có chữ ký chứng từ pháp lý đều fail-closed.
+              Mọi đề xuất bóc tách tự động đều ở trạng thái <code>Chờ kiểm duyệt</code> và các bảng quy chuẩn chưa có chữ ký chứng từ pháp lý đều được khóa để bảo đảm an toàn.
             </div>
           </div>
           <button type="button" class="btn-secondary btn-sm" :disabled="rulesLoading" @click="fetchRuleVerificationCenter">
@@ -1131,21 +1137,21 @@ onMounted(() => {
         <!-- KPI summary -->
         <div class="kpi-grid" style="margin-bottom:20px">
           <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Cảnh báo tác động văn bản (OPEN)</span></div>
+            <div class="kpi-card-top"><span class="kpi-label">Cảnh báo tác động văn bản (Chờ xử lý)</span></div>
             <div class="kpi-value" style="color:var(--warn)">{{ pendingImpactsCount }}</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Đề xuất Rule chờ duyệt</span></div>
+            <div class="kpi-card-top"><span class="kpi-label">Đề xuất quy tắc chờ duyệt</span></div>
             <div class="kpi-value" style="color:var(--info)">{{ pendingCandidatesCount }}</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Ngành nghề đã VERIFIED</span></div>
+            <div class="kpi-card-top"><span class="kpi-label">Ngành nghề đã xác minh</span></div>
             <div class="kpi-value" style="color:var(--success)">
               {{ rulesCatalog.summary?.industriesVerified || 0 }}/{{ rulesCatalog.summary?.industriesTotal || 0 }}
             </div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Bảng QCVN đã VERIFIED</span></div>
+            <div class="kpi-card-top"><span class="kpi-label">Quy chuẩn QCVN đã xác minh</span></div>
             <div class="kpi-value" style="color:var(--success)">
               {{ rulesCatalog.summary?.qcvnsVerified || 0 }}/{{ rulesCatalog.summary?.qcvnsTotal || 0 }}
             </div>
@@ -1155,9 +1161,9 @@ onMounted(() => {
         <!-- Section 1: Law Rule Impacts -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-alert-triangle"></i> 1. Cảnh báo Quy tắc chịu tác động khi văn bản thay đổi (<code>law_rule_impacts</code>)</div>
+            <div class="card-title"><i class="ti ti-alert-triangle"></i> 1. Cảnh báo Quy tắc chịu tác động khi văn bản thay đổi</div>
             <select v-model="impactStatusFilter" @change="fetchRuleVerificationCenter" style="width:185px;height:32px;font-size:12.5px">
-              <option value="OPEN">Đang chờ xử lý (OPEN)</option>
+              <option value="OPEN">Đang chờ xử lý</option>
               <option value="RESOLVED">Đã xử lý</option>
               <option value="IGNORED">Bỏ qua</option>
               <option value="ALL">Tất cả</option>
@@ -1170,10 +1176,16 @@ onMounted(() => {
             <div v-for="imp in lawImpacts" :key="imp.id" style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
               <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
                 <strong style="font-size:13px">{{ imp.law_id }} — {{ imp.law_title || imp.target_label }}</strong>
-                <span class="chip chip-gray" style="font-size:11px">{{ imp.severity }} · {{ imp.event_action }} · {{ imp.status }}</span>
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                  <span class="chip" :style="{ fontSize: '11px', background: getAdminSeverityMeta(imp.severity).bg, color: getAdminSeverityMeta(imp.severity).color, border: '1px solid var(--border)' }">
+                    {{ getAdminSeverityMeta(imp.severity).label }}
+                  </span>
+                  <span class="chip chip-gray" style="font-size:11px">{{ getAdminEventActionLabel(imp.event_action) }}</span>
+                  <span class="chip chip-gray" style="font-size:11px">{{ getAdminStatusLabel(imp.status) }}</span>
+                </div>
               </div>
               <div style="font-size:12.5px;color:var(--text2);margin-bottom:8px">
-                Ảnh hưởng: <code>{{ imp.target_type }}:{{ imp.target_id }}</code> — {{ imp.impact_reason }}
+                Ảnh hưởng: <code>{{ getAdminTargetTypeLabel(imp.target_type) }}: {{ imp.target_id }}</code> — {{ imp.impact_reason }}
               </div>
               <div v-if="imp.status === 'OPEN'" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <input type="text" v-model="impactNotes[imp.id]" placeholder="Ghi chú rà soát..." style="flex:1;min-width:220px" />
@@ -1187,26 +1199,33 @@ onMounted(() => {
         <!-- Section 2: Rule Candidates from Crawler -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-git-pull-request"></i> 2. Đề xuất Quy tắc từ Crawler (<code>rule_candidates</code>)</div>
+            <div class="card-title"><i class="ti ti-git-pull-request"></i> 2. Đề xuất Quy tắc từ bóc tách tự động</div>
             <select v-model="candidateStatusFilter" @change="fetchRuleVerificationCenter" style="width:170px;height:32px;font-size:12.5px">
-              <option value="PENDING_REVIEW">Chờ duyệt (PENDING_REVIEW)</option>
+              <option value="PENDING_REVIEW">Chờ duyệt</option>
               <option value="APPROVED">Đã duyệt</option>
               <option value="REJECTED">Đã từ chối</option>
               <option value="ALL">Tất cả</option>
             </select>
           </div>
           <div v-if="ruleCandidates.length === 0" style="font-size:13px;color:var(--text3);padding:12px 0">
-            Chưa có rule candidate nào ở trạng thái đã chọn.
+            Chưa có đề xuất quy tắc nào ở trạng thái đã chọn.
           </div>
           <div v-else style="display:flex;flex-direction:column;gap:10px">
             <div v-for="cand in ruleCandidates" :key="cand.id" style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
               <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
                 <strong style="font-size:13px">#{{ cand.id }} · {{ cand.title }}</strong>
-                <span class="chip chip-gray" style="font-size:11px">{{ cand.target_type }}:{{ cand.target_code }} · {{ cand.status }}</span>
+                <span class="chip chip-gray" style="font-size:11px">
+                  {{ getAdminTargetTypeLabel(cand.target_type) }}: {{ cand.target_code }} · {{ getAdminStatusLabel(cand.status) }}
+                </span>
               </div>
-              <pre style="margin:0 0 8px 0;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:4px;font-size:11.5px;overflow-x:auto">{{ JSON.stringify(cand.proposed_data, null, 2) }}</pre>
+              <details style="margin:0 0 8px 0;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px">
+                <summary style="cursor:pointer;font-weight:600;color:var(--text2)">
+                  Xem dữ liệu bóc tách chi tiết (JSON) ▾
+                </summary>
+                <pre style="margin-top:6px;padding:6px;background:var(--bg);border-radius:4px;font-size:11px;overflow-x:auto">{{ JSON.stringify(cand.proposed_data, null, 2) }}</pre>
+              </details>
               <div v-if="['PENDING_REVIEW', 'EXTRACTED'].includes(cand.status)" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <input type="text" v-model="candidateSourceDocs[cand.id]" placeholder="Số hiệu văn bản gốc / chứng từ pháp lý *..." style="flex:1;min-width:220px" />
+                <input type="text" v-model="candidateSourceDocs[cand.id]" placeholder="Số hiệu văn bản gốc / căn cứ pháp lý *..." style="flex:1;min-width:220px" />
                 <input type="text" v-model="candidateNotes[cand.id]" placeholder="Ghi chú duyệt..." style="flex:1;min-width:180px" />
                 <button type="button" class="btn-primary btn-sm" @click="approveCandidateAction(cand)">Phê duyệt &amp; Công bố</button>
                 <button type="button" class="btn-secondary btn-sm" @click="rejectCandidateAction(cand)">Từ chối</button>
@@ -1218,10 +1237,10 @@ onMounted(() => {
         <!-- Section 3: Industry & QCVN Verification Catalog -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-certificate"></i> 3. Ký xác minh VERIFIED cho QCVN &amp; Ngành nghề</div>
+            <div class="card-title"><i class="ti ti-certificate"></i> 3. Xác nhận pháp lý cho QCVN &amp; Ngành nghề</div>
           </div>
           <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
-            Chỉ sau khi Admin nhập số hiệu chứng từ công báo và ký <code>VERIFIED</code>, hệ thống mới trả kết luận chính thức (<code>OFFICIAL</code>).
+            Chỉ sau khi Quản trị viên nhập số hiệu chứng từ công báo và bấm xác nhận, hệ thống mới nâng kết luận thành chính thức.
           </div>
           <div style="overflow-x:auto;margin-bottom:16px">
             <table class="saas-table">
@@ -1231,7 +1250,7 @@ onMounted(() => {
                   <th>Tên quy chuẩn</th>
                   <th>Trạng thái</th>
                   <th>Hiệu lực</th>
-                  <th>Chứng từ công báo (sourceDocument) *</th>
+                  <th>Căn cứ công báo / QĐ ban hành *</th>
                   <th style="text-align:right">Thao tác</th>
                 </tr>
               </thead>
@@ -1239,11 +1258,11 @@ onMounted(() => {
                 <tr v-for="q in (rulesCatalog.qcvns || [])" :key="q.id">
                   <td><code>{{ q.id }}</code></td>
                   <td style="font-size:12.5px">{{ q.ten }}</td>
-                  <td><span class="chip chip-gray">{{ q.verification_status }} / {{ q.publication_status }}</span></td>
+                  <td><span class="chip chip-gray">{{ getAdminStatusLabel(q.verification_status) }} / {{ getAdminStatusLabel(q.publication_status) }}</span></td>
                   <td style="font-size:12px">{{ q.effective_from || '—' }} → {{ q.effective_to || 'Hiện hành' }}</td>
                   <td><input type="text" v-model="qcvnSourceDocs[q.id]" placeholder="VD: TT .../2025/TT-BTNMT" /></td>
                   <td style="text-align:right">
-                    <button type="button" class="btn-primary btn-sm" @click="verifyQcvnAction(q)">Ký VERIFIED</button>
+                    <button type="button" class="btn-primary btn-sm" @click="verifyQcvnAction(q)">Xác nhận pháp lý</button>
                   </td>
                 </tr>
               </tbody>
@@ -1257,7 +1276,7 @@ onMounted(() => {
                   <th>Mã ngành</th>
                   <th>Tên ngành</th>
                   <th>Trạng thái</th>
-                  <th>Căn cứ pháp lý (sourceDocument) *</th>
+                  <th>Căn cứ pháp lý ban hành *</th>
                   <th style="text-align:right">Thao tác</th>
                 </tr>
               </thead>
@@ -1265,10 +1284,10 @@ onMounted(() => {
                 <tr v-for="ind in (rulesCatalog.industries || []).slice(0, 50)" :key="ind.code">
                   <td><code>{{ ind.code }}</code></td>
                   <td style="font-size:12.5px">{{ ind.display_name || ind.name }}</td>
-                  <td><span class="chip chip-gray">{{ ind.verification_status }} / {{ ind.publication_status }}</span></td>
+                  <td><span class="chip chip-gray">{{ getAdminStatusLabel(ind.verification_status) }} / {{ getAdminStatusLabel(ind.publication_status) }}</span></td>
                   <td><input type="text" v-model="industrySourceDocs[ind.code]" placeholder="VD: Phụ lục III NĐ 08/2022 + NĐ 05/2025" /></td>
                   <td style="text-align:right">
-                    <button type="button" class="btn-primary btn-sm" @click="verifyIndustryAction(ind)">Ký VERIFIED</button>
+                    <button type="button" class="btn-primary btn-sm" @click="verifyIndustryAction(ind)">Xác nhận pháp lý</button>
                   </td>
                 </tr>
               </tbody>
@@ -1279,7 +1298,7 @@ onMounted(() => {
         <!-- Section 4: Upsert Transitional QCVN 40:2011 / 14:2008 from Official Text -->
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
-            <div class="card-title"><i class="ti ti-file-import"></i> 4. Nhập &amp; Ký duyệt Bảng QCVN Chuyển tiếp (40:2011 / 14:2008) từ tài liệu gốc</div>
+            <div class="card-title"><i class="ti ti-file-import"></i> 4. Nhập &amp; Xác nhận Bảng QCVN Chuyển tiếp (40:2011 / 14:2008) từ văn bản gốc</div>
           </div>
           <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
             <div class="form-group">
@@ -1319,7 +1338,7 @@ onMounted(() => {
           </div>
           <button type="button" class="btn-primary btn-sm" @click="submitTransitionalQcvn">
             <i class="ti ti-device-floppy"></i>
-            <span>Lưu &amp; Ký VERIFIED Bảng Chuyển tiếp</span>
+            <span>Lưu &amp; Xác nhận Bảng Chuyển tiếp</span>
           </button>
         </div>
       </div>

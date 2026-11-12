@@ -108,6 +108,9 @@ async function ensureBaseTables(db) {
       key VARCHAR(100) PRIMARY KEY,
       value TEXT NOT NULL
     );
+    INSERT INTO system_settings (key, value)
+    VALUES ('auto_crawl_enabled', 'false')
+    ON CONFLICT (key) DO UPDATE SET value = 'false';
   `);
 
   await db.query(`

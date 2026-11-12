@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { getCapacityLabel } from '../services/classification-rules.js'
-import divisions from '../data/vietnam-divisions.json'
+import { useAdministrativeDivisions, loadDivisions } from '../composables/useAdministrativeDivisions.js'
 import SearchableSelect from './SearchableSelect.vue'
 import {
   DEFAULT_LAT,
@@ -81,12 +81,13 @@ let spatialTimeout = null
 let overpassTimeout = null
 
 // Cascading dropdown state sau sáp nhập (Tỉnh/TP -> Phường/Xã trực tiếp)
+const { divisions, isLoaded: divisionsLoaded } = useAdministrativeDivisions()
 const selectedProvince = ref(null)
 const selectedWard = ref(null)
 
 const wardList = computed(() => {
-  if (!selectedProvince.value) return []
-  const prov = divisions.find(p => String(p.code) === String(selectedProvince.value))
+  if (!selectedProvince.value || !divisions.value.length) return []
+  const prov = divisions.value.find(p => String(p.code) === String(selectedProvince.value))
   if (!prov) return []
 
   // Đếm số lần xuất hiện của tên phường/xã trong Tỉnh/TP để phát hiện trùng lặp
@@ -805,7 +806,7 @@ const syncAdminSelectorsFromAddress = (address = {}) => {
       tinh.value = matchedProvValue
     }
     const cleanState = normalizeString(rawState).replace('tinh ', '').replace('thanh pho ', '').replace('tp. ', '')
-    const foundDiv = divisions.find(p => {
+    const foundDiv = (divisions.value || []).find(p => {
       const cleanDiv = normalizeString(p.name).replace('tinh ', '').replace('thanh pho ', '').replace('tp. ', '')
       return cleanDiv.includes(cleanState) || cleanState.includes(cleanDiv)
     })
@@ -1011,7 +1012,7 @@ const handleClassify = async (shouldSave = true) => {
     if (!name.value || !name.value.trim()) { alert('Vui lòng nhập tên dự án!'); return }
     if (!nganh.value) { alert('Vui lòng chọn loại hình dự án!'); return }
     if (availableProcessStages.value.length > 0 && !processStage.value) {
-      alert('Ngành nghề này bắt buộc phải chọn công đoạn / loại nhiên liệu (processStage)!')
+      alert('Ngành nghề này bắt buộc phải chọn công đoạn sản xuất hoặc loại nhiên liệu áp dụng!')
       return
     }
     const parsedCap = (capacity.value === '' || capacity.value === null || capacity.value === undefined)
@@ -1120,7 +1121,7 @@ const fetchProjectSensitiveVerification = async (projId) => {
 
 const submitAdminSensitiveVerification = async (verificationStatus) => {
   if (!projectId.value) {
-    alert('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm phía server.')
+    alert('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm.')
     return
   }
   isUpdatingSensitiveVerification.value = true
@@ -1207,12 +1208,21 @@ const selectProject = (project, extraSensitiveVerification = null) => {
   classificationSnapshot.value = project.classification_result || null
   locationConfirmed.value = !!(project.latitude || fd.latitude)
 
-  if (tinh.value) {
-    const prov = divisions.find(p => p.name.includes(tinh.value) || tinh.value.includes(p.name))
-    if (prov) {
-      selectedProvince.value = prov.code
+  const resolveProvince = () => {
+    if (tinh.value) {
+      const prov = (divisions.value || []).find(p => p.name.includes(tinh.value) || tinh.value.includes(p.name))
+      if (prov) {
+        selectedProvince.value = prov.code
+      }
     }
   }
+
+  if (!divisions.value.length) {
+    loadDivisions().then(resolveProvince)
+  } else {
+    resolveProvince()
+  }
+
   if (phuongXa.value) {
     selectedWard.value = phuongXa.value
   }
@@ -1323,7 +1333,7 @@ const toggleChecklistItem = (itemIndex) => {
 
 const exportOfficialReport = () => {
   if (!result.value || !result.value.canExportOfficialReport) {
-    alert('Không thể xuất báo cáo kết luận chính thức khi rule chưa hoàn tất xác minh pháp lý hoặc dữ liệu đầu vào chưa đầy đủ.')
+    alert('Không thể xuất báo cáo kết luận chính thức khi quy định chưa hoàn tất xác minh pháp lý hoặc dữ liệu đầu vào chưa đầy đủ.')
     return
   }
   window.print()
@@ -1378,7 +1388,7 @@ const searchAddress = () => {
     isSearchingAddress.value = true
     try {
       const rawKeyword = addressSearch.value.trim()
-      const provObj = divisions.find(p => String(p.code) === String(selectedProvince.value))
+      const provObj = (divisions.value || []).find(p => String(p.code) === String(selectedProvince.value))
       const provName = provObj ? provObj.name : tinh.value
       const wardName = phuongXa.value
 
@@ -1659,7 +1669,7 @@ const onProvinceSelect = () => {
 
   if (!selectedProvince.value) return
 
-  const prov = divisions.find(p => String(p.code) === String(selectedProvince.value) || p.name === selectedProvince.value)
+  const prov = (divisions.value || []).find(p => String(p.code) === String(selectedProvince.value) || p.name === selectedProvince.value)
   if (prov) {
     const matched = findMatchingProvince(prov.name)
     tinh.value = matched || prov.name
@@ -1687,7 +1697,7 @@ const onWardSelect = (selectedOpt) => {
     const rawWardName = ward.wardName || ward.name.replace(/\s*\([^)]*\)$/, '')
     phuongXa.value = rawWardName
     quanHuyen.value = ward.districtName || ''
-    const prov = divisions.find(p => String(p.code) === String(selectedProvince.value))
+    const prov = (divisions.value || []).find(p => String(p.code) === String(selectedProvince.value))
     const provName = prov ? prov.name : tinh.value
     const cleanProv = provName.replace(/^(Thành phố|Tỉnh)\s+/i, '')
     const cleanWard = rawWardName.replace(/^(Phường|Xã|Thị trấn)\s+/i, '')

@@ -134,12 +134,62 @@ export function getQcvnCatalogChipText({ ruleSource, lifecycleStatus, verificati
   return parts.join(' · ');
 }
 
+export const ADMIN_SEVERITY_LABELS = {
+  HIGH: { label: 'Mức độ cao', color: '#B91C1C', bg: '#FEE2E2' },
+  MEDIUM: { label: 'Mức độ trung bình', color: '#B45309', bg: '#FEF3C7' },
+  LOW: { label: 'Mức độ thấp', color: '#1D4ED8', bg: '#DBEAFE' },
+};
+
+export const ADMIN_EVENT_LABELS = {
+  AUTO_CRAWL_UPDATE: 'Cập nhật từ bóc tách tự động',
+  MANUAL_LEGAL_OVERRIDE: 'Điều chỉnh quy định thủ công',
+  THRESHOLD_CHANGE: 'Thay đổi ngưỡng quy định',
+  TRANSITIONAL_RULE_APPLIED: 'Áp dụng bảng chuyển tiếp',
+};
+
+export const ADMIN_STATUS_LABELS = {
+  OPEN: 'Đang chờ xử lý',
+  RESOLVED: 'Đã xử lý',
+  IGNORED: 'Bỏ qua',
+  PENDING_REVIEW: 'Chờ kiểm duyệt',
+  APPLIED: 'Đã áp dụng',
+  REJECTED: 'Đã từ chối',
+  VERIFIED: 'Đã xác minh',
+  NEEDS_LEGAL_VERIFICATION: 'Chờ đối chiếu văn bản',
+  DRAFT: 'Bản nháp',
+  PUBLISHED: 'Đã công bố',
+};
+
+export const ADMIN_TARGET_TYPE_LABELS = {
+  INDUSTRY: 'Ngành nghề',
+  THRESHOLD: 'Ngưỡng công suất',
+  QCVN: 'Quy chuẩn QCVN',
+  PARAMETER: 'Chỉ tiêu giới hạn',
+  RULE: 'Quy tắc phân loại',
+};
+
+export function getAdminSeverityMeta(severity) {
+  return ADMIN_SEVERITY_LABELS[severity] || { label: severity || 'Thông thường', color: '#475569', bg: '#F1F5F9' };
+}
+
+export function getAdminEventActionLabel(action) {
+  return ADMIN_EVENT_LABELS[action] || action;
+}
+
+export function getAdminStatusLabel(status) {
+  return ADMIN_STATUS_LABELS[status] || status;
+}
+
+export function getAdminTargetTypeLabel(type) {
+  return ADMIN_TARGET_TYPE_LABELS[type] || type;
+}
+
 export function formatReasonForEndUser(rawReason) {
   if (!rawReason) return '';
   let text = String(rawReason).trim();
 
-  if (/FALLBACK_UNVERIFIED|DB_UNAVAILABLE|EMPTY_INDUSTRIES_TABLE|column\s+".*"\s+does not exist/i.test(text)) {
-    return 'Hiện chưa tải được danh mục quy chuẩn từ cơ sở dữ liệu; hệ thống tạm thời giữ trạng thái cần rà soát để tránh sai sót.';
+  if (/FALLBACK_UNVERIFIED|DB_UNAVAILABLE|EMPTY_INDUSTRIES_TABLE|column\s+".*"\s+does not exist|error|exception/i.test(text)) {
+    return 'Hiện chưa tải được danh mục quy chuẩn từ cơ sở dữ liệu; hệ thống tạm thời giữ trạng thái cần rà soát để đảm bảo an toàn pháp lý.';
   }
 
   text = text
@@ -155,6 +205,8 @@ export function formatReasonForEndUser(rawReason) {
     .replace(/đang ở trạng thái NEEDS_LEGAL_VERIFICATION/gi, 'đang chờ đối chiếu xác minh từ văn bản gốc')
     .replace(/gắn cờ NEEDS_LEGAL_VERIFICATION/gi, 'đang chờ xác minh ngưỡng từ văn bản gốc')
     .replace(/quyết định xác minh VERIFIED phía server/gi, 'quyết định xác minh hợp lệ của quản trị viên')
+    .replace(/\bserver\b/gi, 'máy chủ')
+    .replace(/\badmin\b/gi, 'quản trị viên')
     .replace(/\s{2,}/g, ' ')
     .trim();
 

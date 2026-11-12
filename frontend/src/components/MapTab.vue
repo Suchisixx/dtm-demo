@@ -1,211 +1,3 @@
-<template>
-  <div class="page fade-up">
-    <div class="container">
-      <!-- PAGE HEADER -->
-      <div class="page-header">
-        <div>
-          <h2 class="section-head">Bản đồ Không gian Dự án (GIS Workspace)</h2>
-          <p class="section-desc">
-            Trực quan hóa vị trí địa lý các dự án đầu tư, vùng đệm tác động môi trường, phân khu Khu công nghiệp / vùng nhạy cảm và trạng thái quan trắc QCVN trên nền bản đồ số.
-          </p>
-        </div>
-      </div>
-
-      <div class="card map-workspace-card">
-        <!-- FILTER BAR -->
-        <div class="map-toolbar">
-          <div style="position:relative;min-width:200px;flex:1;max-width:260px">
-            <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
-            <input type="text" v-model="searchQuery" placeholder="Tìm tên dự án, địa chỉ..." style="padding-left:32px;height:36px" />
-          </div>
-
-          <div class="toolbar-select-group">
-            <label>Nhóm:</label>
-            <select v-model="filterNhom" style="width:136px;height:36px">
-              <option value="">Tất cả nhóm</option>
-              <option value="Nhóm I">Nhóm I</option>
-              <option value="Nhóm II">Nhóm II</option>
-              <option value="Nhóm III">Nhóm III</option>
-              <option value="Nhóm IV">Nhóm IV</option>
-              <option value="Cần rà soát">Cần rà soát</option>
-            </select>
-          </div>
-
-          <div class="toolbar-select-group">
-            <label>Hồ sơ:</label>
-            <select v-model="filterHoSo" style="width:142px;height:36px">
-              <option value="">Tất cả hồ sơ</option>
-              <option value="ĐTM">ĐTM</option>
-              <option value="GPMT">GPMT</option>
-              <option value="ĐKMT">ĐKMT</option>
-              <option value="Chưa xác định">Chưa xác định</option>
-            </select>
-          </div>
-
-          <div class="toolbar-select-group">
-            <label>Quan trắc:</label>
-            <select v-model="filterQcvn" style="width:155px;height:36px">
-              <option value="">Mọi trạng thái</option>
-              <option value="vuot_nguong">Vượt ngưỡng</option>
-              <option value="canh_bao">Cảnh báo</option>
-              <option value="dat">Đạt chuẩn</option>
-              <option value="chua_du_thong_so">Thiếu chỉ tiêu</option>
-              <option value="can_ra_soat">Cần rà soát</option>
-            </select>
-          </div>
-
-          <div class="toolbar-select-group">
-            <label>Địa phương:</label>
-            <select v-model="filterTinh" style="width:160px;height:36px">
-              <option value="">Tất cả Tỉnh/TP</option>
-              <option v-for="tinh in uniqueProvinces" :key="tinh" :value="tinh">{{ tinh }}</option>
-            </select>
-          </div>
-
-          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-            <span class="chip chip-gray">
-              <i class="ti ti-map-pin" style="color:var(--accent)"></i>
-              Hiển thị <strong>{{ filteredProjects.length }}</strong> / {{ projects.length }} dự án
-            </span>
-          </div>
-        </div>
-
-        <div v-if="error" style="padding:12px 16px;background:var(--red-bg);color:var(--red);border-bottom:1px solid var(--danger-border);font-size:13px">
-          <i class="ti ti-alert-circle"></i> {{ error }}
-        </div>
-
-        <!-- SPLIT WORKSPACE: SIDEBAR LIST + LARGE MAP -->
-        <div class="map-layout">
-          <!-- Left Sidebar: Project List -->
-          <div class="projects-list-side">
-            <div class="side-header">
-              <span>Danh sách dự án định vị ({{ filteredProjects.length }})</span>
-            </div>
-            <div class="side-scroll">
-              <div v-if="filteredProjects.length === 0" class="empty-side">
-                <i class="ti ti-map-off" style="font-size:24px;display:block;margin-bottom:6px"></i>
-                Không tìm thấy dự án phù hợp với bộ lọc.
-              </div>
-              <div
-                v-for="p in filteredProjects"
-                :key="p.id"
-                class="project-mini-card"
-                :class="{ active: selectedProjectId === p.id }"
-                @click="focusProject(p)"
-              >
-                <div class="p-header">
-                  <span class="p-nhom-badge" :style="{ backgroundColor: getNhomColor(p.nhom_du_an) }">
-                    {{ p.nhom_du_an || 'Cần rà soát' }}
-                  </span>
-                  <span class="p-hs-badge">{{ p.loai_ho_so || 'Chưa xác định' }}</span>
-                  <span
-                    v-if="p.quan_trac_gan_nhat_trang_thai"
-                    class="p-qcvn-badge"
-                    :class="getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).cls"
-                  >
-                    {{ getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).listLabel }}
-                  </span>
-                </div>
-                <div class="p-title">{{ p.ten_du_an }}</div>
-                <div class="p-meta">
-                  <i class="ti ti-map-pin" style="color:var(--text3)"></i>
-                  <span>{{ p.dia_chi || p.tinh || 'Chưa rõ địa chỉ' }}</span>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-                  <span class="p-user">
-                    <i class="ti ti-radar-2" style="color:var(--accent)"></i>
-                    R={{ ((p.impact_radius_meters || 1000) / 1000).toFixed(1) }}km • {{ p.user_name }}
-                  </span>
-                  <button type="button" class="btn-ghost btn-sm" style="height:24px;padding:0 8px;font-size:11px"
-                          @click.stop="emit('view-project', p.id)">
-                    <span>Mở hồ sơ</span>
-                    <i class="ti ti-arrow-right"></i>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right Area: Interactive GIS Map -->
-          <div class="map-container">
-            <!-- Floating Top-Left: Base Map Switcher -->
-            <div class="gis-floating-controls left">
-              <button
-                type="button"
-                class="gis-ctrl-pill"
-                :class="{ active: activeBaseMap === 'landuse' }"
-                @click="switchBaseMap('landuse')"
-                title="Bản đồ phân vùng đất (KCN, Khu dân cư, Rừng, Nông nghiệp)"
-              >
-                <i class="ti ti-polygon"></i>
-                <span>Phân vùng đất</span>
-              </button>
-              <button
-                type="button"
-                class="gis-ctrl-pill"
-                :class="{ active: activeBaseMap === 'voyager' }"
-                @click="switchBaseMap('voyager')"
-                title="Bản đồ Vector hiện đại, tối giản"
-              >
-                <i class="ti ti-map"></i>
-                <span>Tinh gọn</span>
-              </button>
-              <button
-                type="button"
-                class="gis-ctrl-pill"
-                :class="{ active: activeBaseMap === 'satellite' }"
-                @click="switchBaseMap('satellite')"
-                title="Ảnh vệ tinh kết hợp nhãn địa danh"
-              >
-                <i class="ti ti-satellite"></i>
-                <span>Vệ tinh</span>
-              </button>
-            </div>
-
-            <!-- Floating Top-Right: Layer Toggles -->
-            <div class="gis-floating-controls right">
-              <button
-                type="button"
-                class="gis-ctrl-pill"
-                :class="{ active: showImpactBuffers }"
-                @click="toggleImpactBuffers"
-                title="Hiển thị vòng tròn phạm vi bán kính ảnh hưởng môi trường của từng dự án"
-              >
-                <i class="ti ti-radar-2"></i>
-                <span>Vùng đệm tác động</span>
-              </button>
-              <button
-                type="button"
-                class="gis-ctrl-pill"
-                :class="{ active: showSensitiveLayers }"
-                @click="toggleSensitiveLayers"
-                title="Hiển thị các Khu công nghiệp và Vùng bảo tồn / Nhạy cảm môi trường trên bản đồ"
-              >
-                <i class="ti ti-layers-linked"></i>
-                <span>Lớp KCN &amp; Vùng bảo tồn</span>
-              </button>
-            </div>
-
-            <div id="gis-map" class="map-view"></div>
-
-            <div class="map-legend">
-              <div class="legend-title">Chú giải GIS Môi trường</div>
-              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ / Nguy cơ cao)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM / GPMT)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT / ĐKMT)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Ít nguy cơ)</div>
-              <div class="legend-item"><span class="color-dot" style="background: #6B7280;"></span> Cần rà soát / Chưa đủ dữ liệu</div>
-              <div class="legend-divider"></div>
-              <div class="legend-item"><span class="color-ring" style="border-color: #7C3AED; background: rgba(139,92,246,0.2);"></span> Khu công nghiệp tập trung</div>
-              <div class="legend-item"><span class="color-ring" style="border-color: #D65B5B; background: rgba(214,91,91,0.18);"></span> Khu bảo tồn / Di sản / Nguồn nước</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import {
@@ -567,6 +359,214 @@ onUnmounted(() => {
 })
 </script>
 
+<template>
+  <div class="page fade-up">
+    <div class="container">
+      <!-- PAGE HEADER -->
+      <div class="page-header">
+        <div>
+          <h2 class="section-head">Bản đồ Không gian Dự án (GIS Workspace)</h2>
+          <p class="section-desc">
+            Trực quan hóa vị trí địa lý các dự án đầu tư, vùng đệm tác động môi trường, phân khu Khu công nghiệp / vùng nhạy cảm và trạng thái quan trắc QCVN trên nền bản đồ số.
+          </p>
+        </div>
+      </div>
+
+      <div class="card map-workspace-card">
+        <!-- FILTER BAR -->
+        <div class="map-toolbar">
+          <div style="position:relative;min-width:200px;flex:1;max-width:260px">
+            <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
+            <input type="text" v-model="searchQuery" placeholder="Tìm tên dự án, địa chỉ..." style="padding-left:32px;height:36px" />
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Nhóm:</label>
+            <select v-model="filterNhom" style="width:136px;height:36px">
+              <option value="">Tất cả nhóm</option>
+              <option value="Nhóm I">Nhóm I</option>
+              <option value="Nhóm II">Nhóm II</option>
+              <option value="Nhóm III">Nhóm III</option>
+              <option value="Nhóm IV">Nhóm IV</option>
+              <option value="Cần rà soát">Cần rà soát</option>
+            </select>
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Hồ sơ:</label>
+            <select v-model="filterHoSo" style="width:142px;height:36px">
+              <option value="">Tất cả hồ sơ</option>
+              <option value="ĐTM">ĐTM</option>
+              <option value="GPMT">GPMT</option>
+              <option value="ĐKMT">ĐKMT</option>
+              <option value="Chưa xác định">Chưa xác định</option>
+            </select>
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Quan trắc:</label>
+            <select v-model="filterQcvn" style="width:155px;height:36px">
+              <option value="">Mọi trạng thái</option>
+              <option value="vuot_nguong">Vượt ngưỡng</option>
+              <option value="canh_bao">Cảnh báo</option>
+              <option value="dat">Đạt chuẩn</option>
+              <option value="chua_du_thong_so">Thiếu chỉ tiêu</option>
+              <option value="can_ra_soat">Cần rà soát</option>
+            </select>
+          </div>
+
+          <div class="toolbar-select-group">
+            <label>Địa phương:</label>
+            <select v-model="filterTinh" style="width:160px;height:36px">
+              <option value="">Tất cả Tỉnh/TP</option>
+              <option v-for="tinh in uniqueProvinces" :key="tinh" :value="tinh">{{ tinh }}</option>
+            </select>
+          </div>
+
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span class="chip chip-gray">
+              <i class="ti ti-map-pin" style="color:var(--accent)"></i>
+              Hiển thị <strong>{{ filteredProjects.length }}</strong> / {{ projects.length }} dự án
+            </span>
+          </div>
+        </div>
+
+        <div v-if="error" style="padding:12px 16px;background:var(--red-bg);color:var(--red);border-bottom:1px solid var(--danger-border);font-size:13px">
+          <i class="ti ti-alert-circle"></i> {{ error }}
+        </div>
+
+        <!-- SPLIT WORKSPACE: SIDEBAR LIST + LARGE MAP -->
+        <div class="map-layout">
+          <!-- Left Sidebar: Project List -->
+          <div class="projects-list-side">
+            <div class="side-header">
+              <span>Danh sách dự án định vị ({{ filteredProjects.length }})</span>
+            </div>
+            <div class="side-scroll">
+              <div v-if="filteredProjects.length === 0" class="empty-side">
+                <i class="ti ti-map-off" style="font-size:24px;display:block;margin-bottom:6px"></i>
+                Không tìm thấy dự án phù hợp với bộ lọc.
+              </div>
+              <div
+                v-for="p in filteredProjects"
+                :key="p.id"
+                class="project-mini-card"
+                :class="{ active: selectedProjectId === p.id }"
+                @click="focusProject(p)"
+              >
+                <div class="p-header">
+                  <span class="p-nhom-badge" :style="{ backgroundColor: getNhomColor(p.nhom_du_an) }">
+                    {{ p.nhom_du_an || 'Cần rà soát' }}
+                  </span>
+                  <span class="p-hs-badge">{{ p.loai_ho_so || 'Chưa xác định' }}</span>
+                  <span
+                    v-if="p.quan_trac_gan_nhat_trang_thai"
+                    class="p-qcvn-badge"
+                    :class="getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).cls"
+                  >
+                    {{ getQcvnBadgeMeta(p.quan_trac_gan_nhat_trang_thai).listLabel }}
+                  </span>
+                </div>
+                <div class="p-title">{{ p.ten_du_an }}</div>
+                <div class="p-meta">
+                  <i class="ti ti-map-pin" style="color:var(--text3)"></i>
+                  <span>{{ p.dia_chi || p.tinh || 'Chưa rõ địa chỉ' }}</span>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+                  <span class="p-user">
+                    <i class="ti ti-radar-2" style="color:var(--accent)"></i>
+                    R={{ ((p.impact_radius_meters || 1000) / 1000).toFixed(1) }}km • {{ p.user_name }}
+                  </span>
+                  <button type="button" class="btn-ghost btn-sm" style="height:24px;padding:0 8px;font-size:11px"
+                          @click.stop="emit('view-project', p.id)">
+                    <span>Mở hồ sơ</span>
+                    <i class="ti ti-arrow-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Area: Interactive GIS Map -->
+          <div class="map-container">
+            <!-- Floating Top-Left: Base Map Switcher -->
+            <div class="gis-floating-controls left">
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'landuse' }"
+                @click="switchBaseMap('landuse')"
+                title="Bản đồ phân vùng đất (KCN, Khu dân cư, Rừng, Nông nghiệp)"
+              >
+                <i class="ti ti-polygon"></i>
+                <span>Phân vùng đất</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'voyager' }"
+                @click="switchBaseMap('voyager')"
+                title="Bản đồ Vector hiện đại, tối giản"
+              >
+                <i class="ti ti-map"></i>
+                <span>Tinh gọn</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: activeBaseMap === 'satellite' }"
+                @click="switchBaseMap('satellite')"
+                title="Ảnh vệ tinh kết hợp nhãn địa danh"
+              >
+                <i class="ti ti-satellite"></i>
+                <span>Vệ tinh</span>
+              </button>
+            </div>
+
+            <!-- Floating Top-Right: Layer Toggles -->
+            <div class="gis-floating-controls right">
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: showImpactBuffers }"
+                @click="toggleImpactBuffers"
+                title="Hiển thị vòng tròn phạm vi bán kính ảnh hưởng môi trường của từng dự án"
+              >
+                <i class="ti ti-radar-2"></i>
+                <span>Vùng đệm tác động</span>
+              </button>
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: showSensitiveLayers }"
+                @click="toggleSensitiveLayers"
+                title="Hiển thị các Khu công nghiệp và Vùng bảo tồn / Nhạy cảm môi trường trên bản đồ"
+              >
+                <i class="ti ti-layers-linked"></i>
+                <span>Lớp KCN &amp; Vùng bảo tồn</span>
+              </button>
+            </div>
+
+            <div id="gis-map" class="map-view"></div>
+
+            <div class="map-legend">
+              <div class="legend-title">Chú giải GIS Môi trường</div>
+              <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ / Nguy cơ cao)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #e67e22;"></span> Nhóm II (ĐTM / GPMT)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #f1c40f;"></span> Nhóm III (GPMT / ĐKMT)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #27ae60;"></span> Nhóm IV (ĐKMT / Ít nguy cơ)</div>
+              <div class="legend-item"><span class="color-dot" style="background: #6B7280;"></span> Cần rà soát / Chưa đủ dữ liệu</div>
+              <div class="legend-divider"></div>
+              <div class="legend-item"><span class="color-ring" style="border-color: #7C3AED; background: rgba(139,92,246,0.2);"></span> Khu công nghiệp tập trung</div>
+              <div class="legend-item"><span class="color-ring" style="border-color: #D65B5B; background: rgba(214,91,91,0.18);"></span> Khu bảo tồn / Di sản / Nguồn nước</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <style scoped>
 .map-workspace-card {
   padding: 0;
@@ -867,40 +867,5 @@ onUnmounted(() => {
     border-top: 1px solid var(--border);
     max-height: 280px;
   }
-}
-</style>
-
-<style>
-#gis-map {
-  z-index: 0;
-}
-#gis-map .leaflet-pane {
-  z-index: 400;
-}
-#gis-map .leaflet-tile-pane {
-  z-index: 200;
-}
-#gis-map .leaflet-tile,
-#gis-map img.leaflet-tile {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  max-width: none !important;
-  max-height: none !important;
-  width: 256px !important;
-  height: 256px !important;
-}
-.custom-gis-pin-icon {
-  background: transparent !important;
-  border: none !important;
-}
-.gis-pin {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
-}
-.gis-pin:hover {
-  transform: scale(1.15);
 }
 </style>

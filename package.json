@@ -10,6 +10,8 @@
     "dev": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
     "concurrently": "^8.2.2"
   }
 }
