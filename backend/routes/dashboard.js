@@ -5,7 +5,7 @@ const { ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 const { getDashboardStats } = require('../services/dashboard-service');
 
-// GET /api/dashboard/stats - Tổng hợp số liệu thống kê cho Dashboard
+// GET /api/dashboard/stats — tổng hợp số liệu cho bảng điều khiển
 router.get('/stats', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const isAdmin = req.user.role === ROLES.ADMIN;

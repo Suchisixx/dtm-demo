@@ -1,5 +1,5 @@
 // backend/services/dashboard-service.js
-// Dịch vụ tổng hợp số liệu thống kê & KPI Dashboard
+// Dịch vụ tổng hợp số liệu thống kê và chỉ số bảng điều khiển
 const defaultDb = require('../config/db');
 const { ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
@@ -10,6 +10,7 @@ const {
   evaluateStoredProject,
 } = require('./classification-service');
 const { loadClassificationCatalog, loadGisLayers } = require('./rule-repository');
+const { listComplianceObligations, ALERT_LEVEL } = require('./compliance-reminder-service');
 
 // Nhãn hiển thị ngắn gọn cho 39 ngành nghề (đồng bộ 1-1 với INDUSTRY_META)
 const INDUSTRY_LABELS = {
@@ -69,6 +70,22 @@ const QCVN_TYPE_LABELS = {
   nuoc_ngam: 'Nước dưới đất (QCVN 09)'
 };
 
+function hasVerifiedSampleEvaluationMetadata(sample = {}) {
+  let details = sample.evaluation_details || {};
+  if (typeof details === 'string') {
+    try { details = JSON.parse(details); } catch { details = {}; }
+  }
+  return Boolean(
+    details.ruleSource === 'DATABASE'
+    && details.ruleVersion
+    && details.verificationStatus === 'VERIFIED'
+    && details.evaluationDate
+    && sample.overall_status === 'PASS'
+    && sample.evaluated_rule_version
+    && sample.evaluated_verification_status === 'VERIFIED'
+  );
+}
+
 async function loadSensitiveVerifMap() {
   try {
     const res = await db.query(
@@ -85,7 +102,7 @@ async function loadSensitiveVerifMap() {
   }
 }
 
-// GET /api/dashboard/stats - Tổng hợp số liệu thống kê cho Dashboard
+// GET /api/dashboard/stats — tổng hợp số liệu thống kê cho bảng điều khiển
 
 async function getDashboardStats({ userId, isAdmin = false, filterUserId = null, db = defaultDb }) {
   const targetUserId = isAdmin ? filterUserId : userId;
@@ -113,6 +130,10 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
           latest_qs.name AS latest_sample_name,
           latest_qs.type AS latest_sample_type,
           latest_qs.trang_thai_tong_quat AS latest_sample_status,
+          latest_qs.overall_status AS latest_sample_overall_status,
+          latest_qs.evaluation_details AS latest_sample_evaluation_details,
+          latest_qs.evaluated_rule_version AS latest_sample_rule_version,
+          latest_qs.evaluated_verification_status AS latest_sample_verification_status,
           latest_qs.created_at AS latest_sample_date
         FROM projects p
         LEFT JOIN users u ON p.user_id = u.id
@@ -124,7 +145,8 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
         ) sc ON sc.project_id = p.id
         LEFT JOIN (
           SELECT DISTINCT ON (project_id)
-            id, project_id, name, type, trang_thai_tong_quat, created_at
+            id, project_id, name, type, trang_thai_tong_quat, overall_status,
+            evaluation_details, evaluated_rule_version, evaluated_verification_status, created_at
           FROM qcvn_samples
           WHERE project_id IS NOT NULL
           ORDER BY project_id, created_at DESC
@@ -142,6 +164,10 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
           s.type,
           s.sub_type,
           s.trang_thai_tong_quat,
+          s.overall_status,
+          s.evaluation_details,
+          s.evaluated_rule_version,
+          s.evaluated_verification_status,
           s.created_at,
           p.name AS project_name,
           u.full_name AS user_name
@@ -162,17 +188,43 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
         : Promise.resolve({ rows: [] })
     ]);
 
-    // Nạp runtime catalog phân loại & GIS 1 lần dùng chung cho mọi dự án trên Dashboard
-    const [catalogRes, gisRes, verifMap] = await Promise.all([
+    // Nạp danh mục phân loại, GIS runtime và lịch nhắc hạn tuân thủ một lần
+    const [catalogRes, gisRes, verifMap, reminderData] = await Promise.all([
       loadClassificationCatalog({ db }),
       loadGisLayers({ db }),
       loadSensitiveVerifMap(),
+      listComplianceObligations({
+        db,
+        userId,
+        isAdmin,
+        filterUserId: targetUserId || null,
+      }).catch(() => ({
+        items: [],
+        allItems: [],
+        summary: { tong_so: 0, qua_han: 0, sap_den_han: 0, trong_han: 0, da_hoan_thanh: 0 },
+      })),
     ]);
     const activeCatalog = catalogRes.ok && catalogRes.catalog ? catalogRes.catalog : IND_DB;
     const activeRuleSource = catalogRes.ok ? 'DATABASE' : 'FALLBACK_UNVERIFIED';
     const activeGisLayers = gisRes.ok ? gisRes : null;
 
-    // 1. Phân tích dữ liệu Dự án
+    const nearestDeadlineByProject = new Map();
+    for (const ob of reminderData.allItems || []) {
+      if (ob.muc_canh_bao === ALERT_LEVEL.COMPLETED) continue;
+      if (!nearestDeadlineByProject.has(Number(ob.project_id))) {
+        nearestDeadlineByProject.set(Number(ob.project_id), {
+          id: ob.id,
+          tieu_de: ob.tieu_de,
+          han_nop: ob.han_nop,
+          so_ngay_con_lai: ob.so_ngay_con_lai,
+          muc_canh_bao: ob.muc_canh_bao,
+          nhan_muc_canh_bao: ob.nhan_muc_canh_bao,
+          nhan_trang_thai: ob.nhan_trang_thai,
+        });
+      }
+    }
+
+    // 1. Phân tích dữ liệu dự án
     const byGroup = { 'Nhóm I': 0, 'Nhóm II': 0, 'Nhóm III': 0, 'Nhóm IV': 0 };
     const byDossier = { DTM: 0, GPMT: 0, DKMT: 0 };
     const byAuthority = { cap_bo: 0, cap_so: 0, cap_xa: 0, cap_huyen: 0 };
@@ -300,8 +352,15 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
         latest_sample_id: row.latest_sample_id || null,
         latest_sample_name: row.latest_sample_name || null,
         latest_sample_type: row.latest_sample_type || null,
-        latest_sample_status: row.latest_sample_status || null,
+        latest_sample_status: row.latest_sample_status === 'dat'
+          && !hasVerifiedSampleEvaluationMetadata({
+            overall_status: row.latest_sample_overall_status,
+            evaluation_details: row.latest_sample_evaluation_details,
+            evaluated_rule_version: row.latest_sample_rule_version,
+            evaluated_verification_status: row.latest_sample_verification_status,
+          }) ? 'can_ra_soat' : (row.latest_sample_status || null),
         latest_sample_date: row.latest_sample_date || null,
+        han_tuan_thu_gan_nhat: nearestDeadlineByProject.get(Number(row.id)) || null,
         created_at: row.created_at
       };
     });
@@ -311,7 +370,7 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
       ? Math.round(totalChecklistPercent / totalProjects)
       : 0;
 
-    // 2. Phân tích dữ liệu Mẫu quan trắc QCVN
+    // 2. Phân tích dữ liệu mẫu quan trắc QCVN
     const qcvnByTypeMap = {};
     Object.keys(QCVN_TYPE_LABELS).forEach(typeKey => {
       qcvnByTypeMap[typeKey] = {
@@ -334,7 +393,11 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
     let reviewSamples = 0;
 
     samplesRes.rows.forEach(s => {
-      const status = s.trang_thai_tong_quat || 'can_ra_soat';
+      const persistedStatus = s.trang_thai_tong_quat || 'can_ra_soat';
+      const status = persistedStatus === 'dat' && !hasVerifiedSampleEvaluationMetadata(s)
+        ? 'can_ra_soat'
+        : persistedStatus;
+      s.dashboard_status = status;
       if (s.project_id) linkedSamples++;
 
       if (status === 'dat') passSamples++;
@@ -370,21 +433,21 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
       : 0;
 
     const alertSamples = samplesRes.rows
-      .filter(s => s.trang_thai_tong_quat === 'vuot_nguong' || s.trang_thai_tong_quat === 'canh_bao')
+      .filter(s => s.dashboard_status === 'vuot_nguong' || s.dashboard_status === 'canh_bao')
       .slice(0, 8)
       .map(s => ({
         id: s.id,
         name: s.name,
         type: s.type,
         type_label: QCVN_TYPE_LABELS[s.type] || s.type,
-        status: s.trang_thai_tong_quat,
+        status: s.dashboard_status,
         project_id: s.project_id,
         project_name: s.project_name || null,
         user_name: s.user_name || 'Ẩn danh',
         created_at: s.created_at
       }));
 
-    // 3. Phân tích dữ liệu Văn bản pháp lý
+    // 3. Phân tích dữ liệu văn bản pháp lý
     let totalLaws = 0;
     let validLaws = 0;
     let amendedLaws = 0;
@@ -403,6 +466,17 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
+
+    const upcomingDeadlines = (reminderData.allItems || [])
+      .filter((item) => item.muc_canh_bao !== ALERT_LEVEL.COMPLETED)
+      .slice(0, 8);
+    const reminderSummary = reminderData.summary || {
+      tong_so: 0,
+      qua_han: 0,
+      sap_den_han: 0,
+      trong_han: 0,
+      da_hoan_thanh: 0,
+    };
 
   return ({
       kpis: {
@@ -425,7 +499,11 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
         complianceRate,
         totalLaws,
         validLaws,
-        amendedLaws
+        amendedLaws,
+        quaHanCount: reminderSummary.qua_han,
+        sapDenHanCount: reminderSummary.sap_den_han,
+        trongHanCount: reminderSummary.trong_han,
+        daHoanThanhCount: reminderSummary.da_hoan_thanh,
       },
       distributions: {
         byGroup,
@@ -443,6 +521,8 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
         sensitiveCounts
       },
       alertSamples,
+      upcomingDeadlines,
+      reminderSummary,
       projectHealthList,
       staffList: usersRes.rows
     });

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-11-12T17:52:17.149Z" agent="Mozilla/5.0" version="24.0.0" type="device">
+  <diagram id="sd26_qcvn_flow" name="Sơ đồ 2.6: Lưu đồ Đối chiếu kết quả quan trắc với QCVN">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="950" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t6" value="SƠ ĐỒ 2.6: LƯU ĐỒ ĐỐI CHIẾU KẾT QUẢ QUAN TRẮC VỚI QCVN" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="20" width="750" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="q_start" value="Bắt đầu: Nhập kết quả mẫu đo
+(Loại mẫu: Nước thải CN/SH, Khí thải; Lưu lượng)" style="ellipse;fillColor=#286B4F;strokeColor=#1E563F;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="310" y="70" width="320" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="q_select" value="Tự động chọn bộ quy chuẩn &amp; Cột áp dụng
+(QCVN 40, 14, 19 theo Cột A hoặc Cột B)" style="shape=rect;rounded=1;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="160" width="280" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="q_gate" value="Đủ chỉ tiêu bắt buộc &amp;
+Đúng chu kỳ lấy mẫu?" style="rhombus;fillColor=#FEF3C7;strokeColor=#D97706;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="250" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="q_err" value="DỪNG: Gán INCOMPLETE
+(Khóa xuất báo cáo chính thức)" style="shape=rect;rounded=1;fillColor=#FEF2F2;strokeColor=#DC2626;fontColor=#DC2626;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="670" y="265" width="220" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="q_compare" value="So sánh từng thông số đo với ngưỡng quy chuẩn
+(Ngưỡng Max, Min, và Khoảng giá trị pH)" style="shape=rect;rounded=1;fillColor=#F0FDF4;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="320" y="370" width="300" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="q_branch" value="Đánh giá phân loại 3 mức trạng thái:
+• 🔴 Vượt ngưỡng: Có ít nhất 1 thông số vượt chuẩn
+• 🟡 Cảnh báo: Các chỉ tiêu đạt nhưng có chỉ tiêu &gt; 80% ngưỡng
+• 🟢 Đạt chuẩn: 100% chỉ tiêu nằm trong giới hạn an toàn" style="shape=rect;rounded=1;fillColor=#F8FAFC;strokeColor=#286B4F;strokeWidth=2;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="465" width="340" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="q_save" value="Lưu kết quả đánh giá vào CSDL (bảng qcvn_samples)
+Ghi nhận trang_thai_tong_quat &amp; evaluation_details" style="shape=rect;rounded=1;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="320" y="590" width="300" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="q_end" value="Kết thúc: Hiển thị ghim màu trên Bản đồ GIS
+(Xanh: Đạt · Vàng: Cảnh báo · Đỏ: Vượt)" style="ellipse;fillColor=#286B4F;strokeColor=#1E563F;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="310" y="685" width="320" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="e_q1" value="" style="endArrow=classic;html=1;strokeColor=#286B4F;strokeWidth=1.5;" edge="1" parent="1" source="q_start" target="q_select">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q2" value="" style="endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;" edge="1" parent="1" source="q_select" target="q_gate">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q3" value="Thiếu" style="endArrow=classic;html=1;strokeColor=#DC2626;strokeWidth=1.4;fontColor=#DC2626;" edge="1" parent="1" source="q_gate" target="q_err">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q4" value="Đầy đủ" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.4;fontColor=#16A34A;" edge="1" parent="1" source="q_gate" target="q_compare">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q5" value="" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;" edge="1" parent="1" source="q_compare" target="q_branch">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q6" value="" style="endArrow=classic;html=1;strokeColor=#286B4F;strokeWidth=1.5;" edge="1" parent="1" source="q_branch" target="q_save">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_q7" value="" style="endArrow=classic;html=1;strokeColor=#7C3AED;strokeWidth=1.5;" edge="1" parent="1" source="q_save" target="q_end">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,13 +1,13 @@
 {
   "name": "etc-legalhub",
   "version": "1.0.0",
-  "description": "ETC Environmental Legal Hub App with Auth and Project Storage",
+  "description": "Ứng dụng ETC LegalHub quản lý xác thực và hồ sơ dự án môi trường",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "init-db": "node init-db.js",
     "db:migrate": "node init-db.js --schema-only",
-    "test": "node --test tests/classification-p0.test.js tests/qcvn-p0.test.js tests/routes-and-parity.test.js",
+    "test": "node --test tests/classification-p0.test.js tests/qcvn-p0.test.js tests/routes-and-parity.test.js tests/compliance-reminder.test.js tests/administrative-boundaries.test.js",
     "test:pg": "node --test tests/postgres-integration.test.js"
   },
   "dependencies": {

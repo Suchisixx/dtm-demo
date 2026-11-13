@@ -14,12 +14,13 @@ const searchQuery = ref('')
 const currentFilter = ref('all')
 const selectedLaw = ref(null)
 const viewMode = ref('table') // 'table' | 'cards'
+const showLegalNotice = ref(false)
 
 // Phân trang
 const pageSize = ref(15)
 const currentPage = ref(1)
 
-// Accordion và tìm kiếm điều khoản trong drawer chi tiết
+// Danh sách điều khoản thu gọn/mở rộng và ô tìm kiếm trong ngăn chi tiết
 const expandedProvisions = ref(new Set())
 const provisionSearchQuery = ref('')
 
@@ -257,7 +258,7 @@ const getDirectLawLink = (l) => {
 
 <template>
   <div id="laws" class="page active container fade-up">
-    <!-- PAGE HEADER -->
+    <!-- Tiêu đề trang -->
     <div class="page-header">
       <div>
         <h2 class="section-head">Thư viện Văn bản Pháp lý Môi trường</h2>
@@ -267,7 +268,7 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- KPI SUMMARY ROW -->
+    <!-- Hàng chỉ số tổng hợp -->
     <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-card-top">
@@ -299,15 +300,26 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- LEGAL NOTICE BANNER -->
-    <div class="notice-banner">
-      <i class="ti ti-info-circle"></i>
-      <span>
-        <strong>Lưu ý áp dụng pháp lý:</strong> Nghị định 08/2022/NĐ-CP hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP và Văn bản hợp nhất 49/VBHN-BNNMT.
-      </span>
-    </div>
+    <!-- Lưu ý áp dụng pháp lý -->
+    <aside class="notice-banner legal-notice" role="note" aria-label="Lưu ý áp dụng pháp lý">
+      <div class="legal-notice-header">
+        <div class="legal-notice-title-wrap">
+          <i class="ti ti-info-circle"></i>
+          <strong class="legal-notice-title">Lưu ý áp dụng pháp lý</strong>
+        </div>
+        <button type="button"
+                class="btn-ghost btn-sm"
+                style="padding:2px 8px;font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:4px"
+                @click="showLegalNotice = !showLegalNotice">
+          <span>{{ showLegalNotice ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+        </button>
+      </div>
+      <div v-show="showLegalNotice" class="legal-notice-content">
+        <p>Nghị định 08/2022/NĐ-CP hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP và Văn bản hợp nhất 49/VBHN-BNNMT.</p>
+      </div>
+    </aside>
 
-    <!-- UNIFIED SEARCH & FILTER TOOLBAR -->
+    <!-- Thanh tìm kiếm và bộ lọc -->
     <div class="card" style="padding:16px 20px;margin-bottom:16px">
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
         <div style="position:relative;flex:1;min-width:260px">
@@ -349,13 +361,13 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- EMPTY STATE -->
+    <!-- Trạng thái không có kết quả -->
     <div v-if="filteredLaws.length === 0" class="card" style="text-align:center;padding:48px 20px;color:var(--text3)">
       <i class="ti ti-file-off" style="font-size:32px;display:block;margin-bottom:8px"></i>
       <div>Không tìm thấy văn bản pháp lý nào phù hợp với bộ lọc hiện tại.</div>
     </div>
 
-    <!-- TABLE VIEW (DEFAULT) -->
+    <!-- Dạng bảng (mặc định) -->
     <div v-else-if="viewMode === 'table'" class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto">
         <table class="saas-table" style="min-width:820px">
@@ -410,8 +422,8 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- CARDS VIEW (OPTIONAL) -->
-    <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px">
+    <!-- Dạng thẻ -->
+    <div v-else class="law-card-grid">
       <div v-for="l in paginatedLaws" :key="l.id"
            class="law-card" :class="{ expired: l.status === 'expired' }"
            style="margin-bottom:0;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer"
@@ -444,7 +456,7 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- BOTTOM PAGINATION -->
+    <!-- Phân trang phía dưới -->
     <div v-if="filteredLaws.length > 0"
          style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:14px;padding:12px 18px;background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)">
       <div style="font-size:12.5px;color:var(--text2)">
@@ -475,10 +487,10 @@ const getDirectLawLink = (l) => {
       </div>
     </div>
 
-    <!-- SLIDE-OVER READING DRAWER FOR LAW DETAILS -->
+    <!-- Ngăn trượt đọc chi tiết văn bản -->
     <div v-if="selectedLaw" class="drawer-overlay" @click.self="selectedLaw = null">
       <div class="drawer-panel">
-        <!-- Drawer Header -->
+        <!-- Tiêu đề ngăn trượt -->
         <div class="drawer-header">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span class="chip chip-gray">{{ getTypeLabel(selectedLaw.type) }}</span>
@@ -495,7 +507,7 @@ const getDirectLawLink = (l) => {
           </button>
         </div>
 
-        <!-- Drawer Body -->
+        <!-- Nội dung ngăn trượt -->
         <div class="drawer-body">
           <h3 style="font-size:19px;font-weight:700;color:var(--text);margin:0 0 8px;line-height:1.4">
             {{ selectedLaw.ten }}
@@ -506,7 +518,7 @@ const getDirectLawLink = (l) => {
             <span><strong style="color:var(--text)">Hiệu lực:</strong> {{ selectedLaw.hieuluc || 'Đang áp dụng' }}</span>
           </div>
 
-          <!-- Prominent 3rd-party direct link banner -->
+          <!-- Liên kết trực tiếp đến nguồn văn bản bên ngoài -->
           <div style="background:var(--accent2);border:1px solid var(--success-border);padding:12px 16px;border-radius:var(--radius);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
             <div style="font-size:13px;color:var(--accent);display:flex;align-items:center;gap:8px;font-weight:500">
               <i class="ti ti-world" style="font-size:18px"></i>
@@ -518,7 +530,7 @@ const getDirectLawLink = (l) => {
             </a>
           </div>
 
-          <!-- Summary -->
+          <!-- Tóm tắt -->
           <div v-if="selectedLaw.mo_ta" style="margin-bottom:18px">
             <div style="font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">
               Mô tả tóm tắt
@@ -528,7 +540,7 @@ const getDirectLawLink = (l) => {
             </p>
           </div>
 
-          <!-- Note if any -->
+          <!-- Ghi chú nếu có -->
           <div v-if="selectedLaw.note" style="margin-bottom:18px">
             <div style="font-size:13px;color:var(--warn);padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:var(--radius);display:flex;align-items:flex-start;gap:8px">
               <i class="ti ti-alert-triangle" style="font-size:16px;margin-top:2px"></i>
@@ -536,7 +548,7 @@ const getDirectLawLink = (l) => {
             </div>
           </div>
 
-          <!-- Provisions Accordion -->
+          <!-- Danh sách điều khoản có thể thu gọn -->
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
               <div style="font-size:12.5px;font-weight:600;color:var(--text);text-transform:uppercase;letter-spacing:0.04em">
@@ -610,7 +622,7 @@ const getDirectLawLink = (l) => {
           </div>
         </div>
 
-        <!-- Drawer Footer -->
+        <!-- Chân ngăn trượt -->
         <div class="drawer-footer">
           <button type="button" class="btn-secondary" @click="selectedLaw = null">
             <i class="ti ti-x"></i>

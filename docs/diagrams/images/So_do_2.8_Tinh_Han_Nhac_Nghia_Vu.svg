@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 950 750" width="950" height="750">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#DC2626"/>
+    </marker>
+    <marker id="generalization" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <polygon points="2,2 10,6 2,10" fill="#FFFFFF" stroke="#0F172A" stroke-width="1.5"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+  <rect x="100" y="20" width="750" height="35" fill="none" stroke="none" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="475" y="43.5" text-anchor="middle" font-size="15" font-weight="800" fill="#0F172A">SƠ ĐỒ 2.8: LƯU ĐỒ TÍNH HẠN VÀ PHÂN MỨC CẢNH BÁO NGHĨA VỤ MÔI TRƯỜNG</text>
+  <ellipse cx="470" cy="97.5" rx="170" ry="27.5" fill="#286B4F" stroke="#1E563F" stroke-width="1.5" stroke-dasharray="none" />
+  <text x="470" y="94.5" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Bắt đầu: Tác vụ cron chạy ngầm định kỳ hàng ngày (00:00)</text>
+  <text x="470" y="109.5" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Đọc danh mục dự án &amp; nghĩa vụ định kỳ trong CSDL</text>
+  <rect x="310" y="165" width="320" height="55" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="470" y="190" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Tính mốc thời hạn đến hạn tiếp theo (T_due)</text>
+  <text x="470" y="205" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">và khoảng cách số ngày còn lại: Δt = T_due - T_hien_tai</text>
+  <polygon points="470,260 570,300 470,340 370,300" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5" stroke-dasharray="none" />
+  <text x="470" y="304" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A">Phân loại số ngày còn lại (Δt)?</text>
+  <rect x="80" y="390" width="220" height="60" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="190" y="417.5" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">🔴 ĐÃ QUÁ HẠN (Δt &lt; 0)</text>
+  <text x="190" y="432.5" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">Cảnh báo mức cao nhất</text>
+  <rect x="360" y="390" width="220" height="60" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="470" y="417.5" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">🟡 SẮP ĐẾN HẠN (0 &lt;= Δt &lt;= 15)</text>
+  <text x="470" y="432.5" text-anchor="middle" font-size="11" font-weight="700" fill="#B45309">Nhắc nhở chuẩn bị nộp</text>
+  <rect x="640" y="390" width="220" height="60" fill="#ECFDF5" stroke="#059669" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="750" y="417.5" text-anchor="middle" font-size="11" font-weight="700" fill="#065F46">🟢 TRONG HẠN (Δt &gt; 15)</text>
+  <text x="750" y="432.5" text-anchor="middle" font-size="11" font-weight="700" fill="#065F46">Tiến độ tuân thủ an toàn</text>
+  <rect x="280" y="510" width="380" height="65" fill="#F8FAFC" stroke="#286B4F" stroke-width="2" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="470" y="540" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Cập nhật bảng reminders &amp; Tổng hợp KPI Dashboard</text>
+  <text x="470" y="555" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">(Hiển thị thẻ cảnh báo và thông tin hạn nộp)</text>
+  <ellipse cx="470" cy="650" rx="140" ry="25" fill="#286B4F" stroke="#1E563F" stroke-width="1.5" stroke-dasharray="none" />
+  <text x="470" y="654" text-anchor="middle" font-size="11.5" font-weight="700" fill="#FFFFFF">Hoàn tất chu kỳ tính hạn hàng ngày</text>
+  <line x1="470" y1="125" x2="470" y2="165" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <line x1="470" y1="220" x2="470" y2="260" stroke="#2563EB" stroke-width="1.5"  marker-end="url(#arrow-blue)" />
+  <line x1="370" y1="300" x2="300" y2="420" stroke="#DC2626" stroke-width="1.5"  marker-end="url(#arrow-red)" />
+  <text x="335" y="359" text-anchor="middle" font-size="10" font-weight="600" fill="#DC2626">Quá hạn</text>
+  <line x1="470" y1="340" x2="470" y2="390" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <rect x="438" y="352" width="64" height="16" fill="#FFFFFF" rx="2" />
+  <text x="470" y="364" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">Sắp hạn</text>
+  <line x1="570" y1="300" x2="640" y2="420" stroke="#16A34A" stroke-width="1.5"  marker-end="url(#arrow-green)" />
+  <text x="605" y="359" text-anchor="middle" font-size="10" font-weight="600" fill="#16A34A">Trong hạn</text>
+  <line x1="300" y1="420" x2="280" y2="542.5" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <line x1="470" y1="450" x2="470" y2="510" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <line x1="640" y1="420" x2="660" y2="542.5" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <line x1="470" y1="575" x2="470" y2="625" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+</svg>

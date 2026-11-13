@@ -1,65 +1,22 @@
 // backend/services/rule-repository.js
-// Repository quản lý Schema Migration an toàn, Seed không ghi đè dữ liệu đã duyệt,
-// và nạp rule runtime từ PostgreSQL (chỉ đọc bản ghi hợp lệ, loại bỏ DRAFT/PENDING_REVIEW/REJECTED).
+// Kho dữ liệu quản lý migration an toàn, seed không ghi đè dữ liệu đã duyệt
+// và nạp quy tắc runtime từ PostgreSQL, loại bỏ DRAFT/PENDING_REVIEW/REJECTED.
 
-const defaultDb = require('../config/db');
-
-const EXCLUDED_PUBLICATION_STATUSES = new Set([
-  'DRAFT',
-  'PENDING_REVIEW',
-  'EXTRACTED',
-  'RAW',
-  'REJECTED',
-  'ARCHIVED',
-]);
-
-function isActivePublicationStatus(status) {
-  if (!status) return true;
-  return !EXCLUDED_PUBLICATION_STATUSES.has(String(status).trim().toUpperCase());
-}
-
-function parseJsonSafe(val, fallback) {
-  if (val === undefined || val === null) return fallback;
-  if (typeof val === 'string') {
-    try {
-      return JSON.parse(val);
-    } catch {
-      return fallback;
-    }
-  }
-  return val;
-}
-
-function formatDateOnly(val) {
-  if (!val) return null;
-  if (typeof val === 'string') {
-    const m = val.trim().match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : null;
-  }
-  if (val instanceof Date && !Number.isNaN(val.getTime())) {
-    const yyyy = val.getFullYear();
-    const mm = String(val.getMonth() + 1).padStart(2, '0');
-    const dd = String(val.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-  return null;
-}
-
-function slugifyId(text) {
-  return String(text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 80);
-}
+const {
+  defaultDb,
+  EXCLUDED_PUBLICATION_STATUSES,
+  isActivePublicationStatus,
+  isVietnamesePhysicalSchema,
+  parseJsonSafe,
+  formatDateOnly,
+  slugifyId,
+} = require('./repository-shared');
 
 /**
- * Migration cộng thêm cho hệ thống phân loại (không chạy TRUNCATE, không làm mất dữ liệu cũ)
+ * Migration bổ sung cho hệ thống phân loại, không dùng TRUNCATE và không làm mất dữ liệu cũ
  */
 async function ensureClassificationSchema(client) {
+  if (await isVietnamesePhysicalSchema(client)) return;
   await client.query(`
     CREATE TABLE IF NOT EXISTS industries (
       code VARCHAR(50) PRIMARY KEY,
@@ -95,6 +52,7 @@ async function ensureClassificationSchema(client) {
   await client.query(`
     ALTER TABLE industries
       ADD COLUMN IF NOT EXISTS display_name VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS aliases JSONB DEFAULT '[]'::jsonb,
       ADD COLUMN IF NOT EXISTS capacity_label TEXT,
       ADD COLUMN IF NOT EXISTS unit VARCHAR(100),
       ADD COLUMN IF NOT EXISTS note TEXT,
@@ -135,9 +93,10 @@ async function ensureClassificationSchema(client) {
 }
 
 /**
- * Migration cộng thêm cho bảng qcvns & qcvn_samples
+ * Migration bổ sung cho bảng qcvns và qcvn_samples
  */
 async function ensureQcvnSchema(client) {
+  if (await isVietnamesePhysicalSchema(client)) return;
   await client.query(`
     CREATE TABLE IF NOT EXISTS qcvns (
       id VARCHAR(100) PRIMARY KEY,
@@ -257,7 +216,7 @@ function inferQcvnMetadata(id, qcvn) {
 }
 
 /**
- * Seed QCVN an toàn & idempotent:
+ * Seed QCVN an toàn, có thể chạy lặp mà không tạo dữ liệu trùng:
  * - Không bao giờ chạy TRUNCATE.
  * - Không ghi đè bản ghi đã VERIFIED / có verified_by hoặc đang ở luồng duyệt khác ngoài cập nhật metadata thiếu khi chưa duyệt.
  */
@@ -377,7 +336,7 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
 }
 
 /**
- * Seed danh mục ngành & toàn bộ ngưỡng (bao gồm cả industry.t và industry.processRules).
+ * Seed danh mục ngành và toàn bộ ngưỡng (bao gồm industry.t và industry.processRules).
  * Không chạy TRUNCATE, không ghi đè bản ghi VERIFIED / có approved_by.
  */
 async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}, ruleVersion = '2026.2-audit', force = false } = {}) {
@@ -400,22 +359,35 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
     const processStagesMeta = meta.processStages ? JSON.stringify(meta.processStages) : null;
     const indVerification = industry.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION';
 
+    const unaccented = String(displayName || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd');
+    const aliasesList = Array.from(new Set([
+      code,
+      unaccented,
+      ...unaccented.split(/[^a-z0-9]+/).filter(w => w.length > 2)
+    ]));
+    const aliasesJson = JSON.stringify(aliasesList);
+
     const existingIndRes = await client.query(
-      'SELECT code, display_name, verification_status, publication_status FROM industries WHERE code = $1',
+      'SELECT code, display_name, aliases, verification_status, publication_status FROM industries WHERE code = $1',
       [code]
     );
 
     if (existingIndRes.rowCount === 0) {
       await client.query(
         `INSERT INTO industries (
-          code, name, risk_level, display_name, capacity_label, unit, note, audit_note,
+          code, name, risk_level, display_name, aliases, capacity_label, unit, note, audit_note,
           process_stages_meta, verification_status, publication_status, rule_version, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'PUBLISHED', $11, CURRENT_TIMESTAMP)`,
+        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, 'PUBLISHED', $12, CURRENT_TIMESTAMP)`,
         [
           code,
           displayName,
           'medium',
           displayName,
+          aliasesJson,
           industry.lbl || '',
           unit,
           industry.note || null,
@@ -431,20 +403,21 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
       const indLocked = existingInd.verification_status === 'VERIFIED'
         || EXCLUDED_PUBLICATION_STATUSES.has(String(existingInd.publication_status || '').toUpperCase());
 
-      if (!indLocked && (force || !existingInd.display_name)) {
+      if (!indLocked && (force || !existingInd.display_name || !existingInd.aliases)) {
         await client.query(
           `UPDATE industries
            SET name = COALESCE($1, name),
                display_name = COALESCE($1, display_name),
-               capacity_label = COALESCE($2, capacity_label),
-               unit = COALESCE($3, unit),
-               note = COALESCE($4, note),
-               audit_note = COALESCE($5, audit_note),
-               process_stages_meta = COALESCE($6::jsonb, process_stages_meta),
-               rule_version = COALESCE($7, rule_version),
+               aliases = COALESCE(aliases, $2::jsonb),
+               capacity_label = COALESCE($3, capacity_label),
+               unit = COALESCE($4, unit),
+               note = COALESCE($5, note),
+               audit_note = COALESCE($6, audit_note),
+               process_stages_meta = COALESCE($7::jsonb, process_stages_meta),
+               rule_version = COALESCE($8, rule_version),
                updated_at = CURRENT_TIMESTAMP
-           WHERE code = $8`,
-          [displayName, industry.lbl || '', unit, industry.note || null, industry.auditNote || null, processStagesMeta, ruleVersion, code]
+           WHERE code = $9`,
+          [displayName, aliasesJson, industry.lbl || '', unit, industry.note || null, industry.auditNote || null, processStagesMeta, ruleVersion, code]
         );
         industriesEnriched++;
       }
@@ -518,22 +491,41 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
         }
         const safeLawId = candidateLawId && existingLawIds.has(candidateLawId) ? candidateLawId : null;
 
-        await client.query(
-          `INSERT INTO legal_appendices (id, law_id, appendix_name, item_number, content_summary)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (id) DO UPDATE SET
-             law_id = COALESCE(EXCLUDED.law_id, legal_appendices.law_id),
-             appendix_name = EXCLUDED.appendix_name,
-             item_number = EXCLUDED.item_number,
-             content_summary = EXCLUDED.content_summary`,
-          [
-            appendixId,
-            safeLawId,
-            appendixName,
-            itemNumber,
-            `Ngưỡng phân loại ${displayName} (${stageSlug}): ${tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'}`,
-          ]
-        );
+        if (await isVietnamesePhysicalSchema(client)) {
+          await client.query(
+            `INSERT INTO phu_luc_phap_ly (ma, luat_ma, ten_phu_luc, so_muc, tom_tat_noi_dung)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (ma) DO UPDATE SET
+               luat_ma = COALESCE(EXCLUDED.luat_ma, phu_luc_phap_ly.luat_ma),
+               ten_phu_luc = EXCLUDED.ten_phu_luc,
+               so_muc = EXCLUDED.so_muc,
+               tom_tat_noi_dung = EXCLUDED.tom_tat_noi_dung`,
+            [
+              appendixId,
+              safeLawId,
+              appendixName,
+              itemNumber,
+              `Ngưỡng phân loại ${displayName} (${stageSlug}): ${tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'}`,
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO legal_appendices (id, law_id, appendix_name, item_number, content_summary)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (id) DO UPDATE SET
+               law_id = COALESCE(EXCLUDED.law_id, legal_appendices.law_id),
+               appendix_name = EXCLUDED.appendix_name,
+               item_number = EXCLUDED.item_number,
+               content_summary = EXCLUDED.content_summary`,
+            [
+              appendixId,
+              safeLawId,
+              appendixName,
+              itemNumber,
+              `Ngưỡng phân loại ${displayName} (${stageSlug}): ${tier.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'}`,
+            ]
+          );
+        }
 
         const maxValue = i > 0 ? bucket.tiers[i - 1].min : null;
         const projectGroup = tier.projectGroup
@@ -584,14 +576,14 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
 }
 
 /**
- * Nạp danh mục ngành nghề & ngưỡng phân loại runtime từ PostgreSQL.
+ * Nạp danh mục ngành nghề và ngưỡng phân loại runtime từ PostgreSQL.
  * Loại bỏ các bản ghi DRAFT / PENDING_REVIEW / REJECTED / ARCHIVED.
  * Nếu DB lỗi hoặc rỗng -> trả ruleSource: 'FALLBACK_UNVERIFIED'.
  */
 async function loadClassificationCatalog({ db = defaultDb } = {}) {
   try {
     const indRes = await db.query(
-      `SELECT code, name, display_name, capacity_label, unit, note, audit_note,
+      `SELECT code, name, display_name, aliases, capacity_label, unit, note, audit_note,
               process_stages_meta, verification_status, publication_status, rule_version
        FROM industries
        ORDER BY code`
@@ -618,6 +610,8 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
       catalog[row.code] = {
         code: row.code,
         name: row.display_name || row.name || row.code,
+        displayName: row.display_name || row.name || row.code,
+        aliases: parseJsonSafe(row.aliases, []),
         lbl: row.capacity_label || (row.unit ? `${row.display_name || row.name} (${row.unit})` : (row.display_name || row.name)),
         unit: row.unit || '',
         note: row.note || '',
@@ -704,7 +698,7 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
 }
 
 /**
- * Nạp danh mục QCVN runtime từ PostgreSQL (đầy đủ metadata + trạng thái duyệt).
+ * Nạp danh mục QCVN runtime từ PostgreSQL (đầy đủ metadata và trạng thái duyệt).
  */
 async function loadQcvnCatalog({ db = defaultDb } = {}) {
   try {
@@ -766,471 +760,13 @@ async function loadQcvnCatalog({ db = defaultDb } = {}) {
   }
 }
 
-const SENSITIVE_FLAG_KEYS = ['kt', 'nt', 'dt', 'rung', 'di_san', 'lua', 'dd', 'bao_ton', 'bg'];
-
-function normalizeSensitiveFlags(flags = {}) {
-  const out = {};
-  for (const key of SENSITIVE_FLAG_KEYS) {
-    out[key] = Boolean(flags && flags[key]);
-  }
-  return out;
-}
-
-function normalizeSensitiveDetails(details = {}) {
-  if (!details || typeof details !== 'object') {
-    return {
-      insideCoreProtectedZone: false,
-      paddyConversionAreaHa: 0,
-      forestConversionAreaHa: 0,
-      hasSensitiveResettlement: false,
-      evidenceRef: null,
-    };
-  }
-  const paddyHa = Number(details.paddyConversionAreaHa);
-  const forestHa = Number(details.forestConversionAreaHa);
-  return {
-    insideCoreProtectedZone: details.insideCoreProtectedZone === true,
-    paddyConversionAreaHa: Number.isFinite(paddyHa) && paddyHa > 0 ? paddyHa : 0,
-    forestConversionAreaHa: Number.isFinite(forestHa) && forestHa > 0 ? forestHa : 0,
-    hasSensitiveResettlement: details.hasSensitiveResettlement === true,
-    evidenceRef: details.evidenceRef ? String(details.evidenceRef).trim() : null,
-  };
-}
+const projectVerificationRepository = require('./project-verification-repository')
 
 /**
- * Migration bảng xác minh yếu tố nhạy cảm phía server (Item 6)
- */
-async function ensureSensitiveVerificationSchema(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS project_sensitive_verifications (
-      id SERIAL PRIMARY KEY,
-      project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
-      declared_flags JSONB NOT NULL DEFAULT '{}'::jsonb,
-      declared_details JSONB NOT NULL DEFAULT '{}'::jsonb,
-      spatial_snapshot JSONB,
-      evidence_ref TEXT,
-      verification_status VARCHAR(40) NOT NULL DEFAULT 'PENDING_VERIFICATION',
-      verified_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      verified_at TIMESTAMP NULL,
-      verification_note TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(project_id)
-    );
-  `);
-}
-
-async function getProjectSensitiveVerification(projectId, { db = defaultDb } = {}) {
-  const numericId = Number(projectId);
-  if (!Number.isInteger(numericId) || numericId <= 0) return null;
-  try {
-    const res = await db.query(
-      `SELECT id, project_id, declared_flags, declared_details, spatial_snapshot,
-              evidence_ref, verification_status, verified_by, verified_at, verification_note,
-              created_at, updated_at
-       FROM project_sensitive_verifications
-       WHERE project_id = $1`,
-      [numericId]
-    );
-    if (!res || !Array.isArray(res.rows) || res.rows.length === 0) return null;
-    const row = res.rows[0];
-    return {
-      ...row,
-      declared_flags: parseJsonSafe(row.declared_flags, {}),
-      declared_details: parseJsonSafe(row.declared_details, {}),
-      spatial_snapshot: parseJsonSafe(row.spatial_snapshot, null),
-    };
-  } catch (err) {
-    // Fallback an toàn cho mock DB hoặc môi trường chưa chạy migration bảng mới
-    if (err && /does not exist|relation/i.test(String(err.message || ''))) {
-      return null;
-    }
-    return null;
-  }
-}
-
-async function upsertProjectSensitiveDeclaration(
-  client,
-  { projectId, declaredFlags = {}, declaredDetails = {}, spatialSnapshot = null, evidenceRef = null } = {}
-) {
-  const numericId = Number(projectId);
-  if (!Number.isInteger(numericId) || numericId <= 0) return null;
-
-  const flags = normalizeSensitiveFlags(declaredFlags);
-  const details = normalizeSensitiveDetails(declaredDetails);
-  const resolvedEvidenceRef = evidenceRef ? String(evidenceRef).trim() : details.evidenceRef;
-
-  const hasSpatialWarning = Boolean(spatialSnapshot && Array.isArray(spatialSnapshot.warnings) && spatialSnapshot.warnings.length > 0);
-  const hasTrigger = Object.values(flags).some(Boolean)
-    || details.insideCoreProtectedZone
-    || details.paddyConversionAreaHa > 0
-    || details.forestConversionAreaHa > 0
-    || details.hasSensitiveResettlement
-    || hasSpatialWarning;
-
-  try {
-    const existingRes = await client.query(
-      `SELECT id, declared_flags, declared_details, spatial_snapshot, verification_status, verified_by, verified_at, verification_note
-       FROM project_sensitive_verifications
-       WHERE project_id = $1`,
-      [numericId]
-    );
-    const existing = existingRes?.rows?.[0] || null;
-
-    if (!hasTrigger && !existing) {
-      return null;
-    }
-
-    if (existing) {
-      const prevFlags = normalizeSensitiveFlags(parseJsonSafe(existing.declared_flags, {}));
-      const prevDetails = normalizeSensitiveDetails(parseJsonSafe(existing.declared_details, {}));
-      const declarationChanged = JSON.stringify(prevFlags) !== JSON.stringify(flags)
-        || JSON.stringify(prevDetails) !== JSON.stringify(details);
-
-      let nextStatus = hasTrigger ? (existing.verification_status || 'PENDING_VERIFICATION') : 'NOT_REQUIRED';
-      let nextVerifiedBy = existing.verified_by || null;
-      let nextVerifiedAt = existing.verified_at || null;
-      let nextNote = existing.verification_note || null;
-
-      if (!hasTrigger) {
-        nextVerifiedBy = null;
-        nextVerifiedAt = null;
-      } else if (existing.verification_status === 'VERIFIED' && declarationChanged) {
-        nextStatus = 'PENDING_VERIFICATION';
-        nextVerifiedBy = null;
-        nextVerifiedAt = null;
-        nextNote = 'Tự động đưa về PENDING_VERIFICATION do hồ sơ thay đổi khai báo vùng nhạy cảm.';
-      } else if (existing.verification_status === 'NOT_REQUIRED' || existing.verification_status === 'REJECTED') {
-        if (declarationChanged) {
-          nextStatus = 'PENDING_VERIFICATION';
-          nextVerifiedBy = null;
-          nextVerifiedAt = null;
-        }
-      }
-
-      const updRes = await client.query(
-        `UPDATE project_sensitive_verifications
-         SET declared_flags = $1::jsonb,
-             declared_details = $2::jsonb,
-             spatial_snapshot = $3::jsonb,
-             evidence_ref = COALESCE($4, evidence_ref),
-             verification_status = $5,
-             verified_by = $6,
-             verified_at = $7,
-             verification_note = $8,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE project_id = $9
-         RETURNING *`,
-        [
-          JSON.stringify(flags),
-          JSON.stringify(details),
-          spatialSnapshot ? JSON.stringify(spatialSnapshot) : null,
-          resolvedEvidenceRef || null,
-          nextStatus,
-          nextVerifiedBy,
-          nextVerifiedAt,
-          nextNote,
-          numericId,
-        ]
-      );
-      return updRes?.rows?.[0] || null;
-    }
-
-    const insRes = await client.query(
-      `INSERT INTO project_sensitive_verifications (
-         project_id, declared_flags, declared_details, spatial_snapshot, evidence_ref, verification_status
-       ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, 'PENDING_VERIFICATION')
-       ON CONFLICT (project_id) DO UPDATE SET
-         declared_flags = EXCLUDED.declared_flags,
-         declared_details = EXCLUDED.declared_details,
-         spatial_snapshot = EXCLUDED.spatial_snapshot,
-         evidence_ref = COALESCE(EXCLUDED.evidence_ref, project_sensitive_verifications.evidence_ref),
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [
-        numericId,
-        JSON.stringify(flags),
-        JSON.stringify(details),
-        spatialSnapshot ? JSON.stringify(spatialSnapshot) : null,
-        resolvedEvidenceRef || null,
-      ]
-    );
-    return insRes?.rows?.[0] || null;
-  } catch (err) {
-    if (err && /does not exist|relation/i.test(String(err.message || ''))) {
-      return null;
-    }
-    throw err;
-  }
-}
-
-async function reviewProjectSensitiveVerification(
-  client,
-  { projectId, verificationStatus, verifiedBy, evidenceRef = null, verificationNote = null } = {}
-) {
-  const numericId = Number(projectId);
-  if (!Number.isInteger(numericId) || numericId <= 0) {
-    throw new Error('INVALID_PROJECT_ID');
-  }
-  const normalizedStatus = String(verificationStatus || '').trim().toUpperCase();
-  if (!['VERIFIED', 'REJECTED', 'PENDING_VERIFICATION'].includes(normalizedStatus)) {
-    throw new Error('INVALID_VERIFICATION_STATUS');
-  }
-  if (normalizedStatus === 'VERIFIED' && !verifiedBy) {
-    throw new Error('VERIFIED_BY_REQUIRED');
-  }
-
-  const projRes = await client.query('SELECT id, form_data FROM projects WHERE id = $1', [numericId]);
-  if (!projRes || projRes.rowCount === 0) {
-    throw new Error('PROJECT_NOT_FOUND');
-  }
-
-  const fd = parseJsonSafe(projRes.rows[0].form_data, {});
-  const flags = normalizeSensitiveFlags(fd);
-  const details = normalizeSensitiveDetails(fd.sensitiveDetails || {});
-
-  const existingRes = await client.query(
-    'SELECT id FROM project_sensitive_verifications WHERE project_id = $1',
-    [numericId]
-  );
-
-  if (existingRes.rowCount === 0) {
-    const ins = await client.query(
-      `INSERT INTO project_sensitive_verifications (
-         project_id, declared_flags, declared_details, evidence_ref,
-         verification_status, verified_by, verified_at, verification_note
-       ) VALUES ($1, $2::jsonb, $3::jsonb, $4, $5, $6, CURRENT_TIMESTAMP, $7)
-       RETURNING *`,
-      [
-        numericId,
-        JSON.stringify(flags),
-        JSON.stringify(details),
-        evidenceRef || details.evidenceRef || null,
-        normalizedStatus,
-        normalizedStatus === 'PENDING_VERIFICATION' ? null : verifiedBy,
-        verificationNote || null,
-      ]
-    );
-    return ins.rows[0];
-  }
-
-  const upd = await client.query(
-    `UPDATE project_sensitive_verifications
-     SET verification_status = $1::varchar,
-         verified_by = $2,
-         verified_at = CASE WHEN $1::text = 'PENDING_VERIFICATION' THEN NULL ELSE CURRENT_TIMESTAMP END,
-         evidence_ref = COALESCE(NULLIF($3::text, ''), evidence_ref),
-         verification_note = COALESCE($4, verification_note),
-         updated_at = CURRENT_TIMESTAMP
-     WHERE project_id = $5
-     RETURNING *`,
-    [
-      normalizedStatus,
-      normalizedStatus === 'PENDING_VERIFICATION' ? null : verifiedBy,
-      evidenceRef || '',
-      verificationNote || null,
-      numericId,
-    ]
-  );
-  return upd.rows[0];
-}
-
-/**
- * Schema & Repository GIS Layers từ PostgreSQL (Item 10)
- */
-async function ensureGisSchema(client) {
-  await client.query(`
-    CREATE TABLE IF NOT EXISTS gis_layers (
-      id VARCHAR(120) PRIMARY KEY,
-      layer_type VARCHAR(40) NOT NULL,
-      name VARCHAR(255) NOT NULL,
-      category VARCHAR(100),
-      flag_key VARCHAR(40),
-      latitude DOUBLE PRECISION NOT NULL,
-      longitude DOUBLE PRECISION NOT NULL,
-      radius_km DOUBLE PRECISION NOT NULL DEFAULT 1,
-      geometry_json JSONB,
-      province VARCHAR(150),
-      legal_ref TEXT,
-      verification_status VARCHAR(50) NOT NULL DEFAULT 'NEEDS_LEGAL_VERIFICATION',
-      publication_status VARCHAR(30) NOT NULL DEFAULT 'PUBLISHED',
-      source_document TEXT,
-      verified_by VARCHAR(100),
-      verified_at TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-}
-
-async function seedGisLayers(client, { sensitiveZones = [], industrialParks = [], force = false } = {}) {
-  const existingRes = await client.query(
-    'SELECT id, verification_status, publication_status, verified_by FROM gis_layers'
-  );
-  const existingMap = new Map((existingRes?.rows || []).map(r => [r.id, r]));
-
-  let inserted = 0;
-  let updated = 0;
-  let skippedVerified = 0;
-
-  const entries = [
-    ...sensitiveZones.map((z, idx) => ({
-      id: z.id || `sz_${slugifyId(z.name || idx)}`,
-      layer_type: 'SENSITIVE_ZONE',
-      name: z.name,
-      category: z.category || null,
-      flag_key: z.flagKey || z.flag_key || null,
-      latitude: Number(z.lat ?? z.latitude),
-      longitude: Number(z.lng ?? z.longitude),
-      radius_km: Number(z.radiusKm ?? z.radius_km ?? 5),
-      geometry_json: z.geometry || null,
-      province: z.province || null,
-      legal_ref: z.legalRef || z.legal_ref || null,
-      verification_status: z.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
-      source_document: z.sourceDocument || null,
-    })),
-    ...industrialParks.map((p, idx) => ({
-      id: p.id || `ip_${slugifyId(p.name || idx)}`,
-      layer_type: 'INDUSTRIAL_PARK',
-      name: p.name,
-      category: p.category || 'Khu công nghiệp',
-      flag_key: 'kcn',
-      latitude: Number(p.lat ?? p.latitude),
-      longitude: Number(p.lng ?? p.longitude),
-      radius_km: Number(p.radiusKm ?? p.radius_km ?? 2),
-      geometry_json: p.geometry || null,
-      province: p.province || null,
-      legal_ref: p.legalRef || p.legal_ref || null,
-      verification_status: p.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
-      source_document: p.sourceDocument || null,
-    })),
-  ];
-
-  for (const item of entries) {
-    if (!Number.isFinite(item.latitude) || !Number.isFinite(item.longitude) || !item.name) continue;
-    const prev = existingMap.get(item.id);
-    if (!prev) {
-      await client.query(
-        `INSERT INTO gis_layers (
-           id, layer_type, name, category, flag_key, latitude, longitude, radius_km,
-           geometry_json, province, legal_ref, verification_status, publication_status, source_document
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, 'PUBLISHED', $13)`,
-        [
-          item.id,
-          item.layer_type,
-          item.name,
-          item.category,
-          item.flag_key,
-          item.latitude,
-          item.longitude,
-          item.radius_km,
-          item.geometry_json ? JSON.stringify(item.geometry_json) : null,
-          item.province,
-          item.legal_ref,
-          item.verification_status,
-          item.source_document,
-        ]
-      );
-      inserted++;
-      continue;
-    }
-
-    const isLocked = prev.verification_status === 'VERIFIED'
-      || Boolean(prev.verified_by)
-      || EXCLUDED_PUBLICATION_STATUSES.has(String(prev.publication_status || '').toUpperCase());
-
-    if (isLocked) {
-      skippedVerified++;
-      continue;
-    }
-
-    if (force) {
-      await client.query(
-        `UPDATE gis_layers
-         SET layer_type = $1, name = $2, category = $3, flag_key = $4,
-             latitude = $5, longitude = $6, radius_km = $7,
-             geometry_json = $8::jsonb, province = $9, legal_ref = $10,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $11`,
-        [
-          item.layer_type,
-          item.name,
-          item.category,
-          item.flag_key,
-          item.latitude,
-          item.longitude,
-          item.radius_km,
-          item.geometry_json ? JSON.stringify(item.geometry_json) : null,
-          item.province,
-          item.legal_ref,
-          item.id,
-        ]
-      );
-      updated++;
-    }
-  }
-
-  return { inserted, updated, skippedVerified };
-}
-
-async function loadGisLayers({ db = defaultDb } = {}) {
-  try {
-    const res = await db.query(
-      `SELECT id, layer_type, name, category, flag_key, latitude, longitude, radius_km,
-              geometry_json, province, legal_ref, verification_status, publication_status,
-              source_document, verified_by, verified_at
-       FROM gis_layers
-       ORDER BY layer_type, name`
-    );
-
-    if (!res || !Array.isArray(res.rows) || res.rows.length === 0) {
-      return { ok: false, gisSource: 'FALLBACK_UNVERIFIED', sensitiveZones: [], industrialParks: [], error: 'EMPTY_GIS_LAYERS' };
-    }
-
-    const sensitiveZones = [];
-    const industrialParks = [];
-
-    for (const row of res.rows) {
-      if (!isActivePublicationStatus(row.publication_status)) continue;
-      const item = {
-        id: row.id,
-        layerType: row.layer_type,
-        name: row.name,
-        category: row.category || '',
-        flagKey: row.flag_key || null,
-        lat: Number(row.latitude),
-        lng: Number(row.longitude),
-        radiusKm: Number(row.radius_km || 1),
-        geometry: parseJsonSafe(row.geometry_json, null),
-        province: row.province || '',
-        legalRef: row.legal_ref || '',
-        verificationStatus: row.verification_status === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
-        sourceDocument: row.source_document || null,
-      };
-      if (row.layer_type === 'INDUSTRIAL_PARK') industrialParks.push(item);
-      else sensitiveZones.push(item);
-    }
-
-    if (sensitiveZones.length === 0 && industrialParks.length === 0) {
-      return { ok: false, gisSource: 'FALLBACK_UNVERIFIED', sensitiveZones: [], industrialParks: [], error: 'NO_PUBLISHED_GIS_LAYERS' };
-    }
-
-    return { ok: true, gisSource: 'DATABASE', sensitiveZones, industrialParks };
-  } catch (error) {
-    return {
-      ok: false,
-      gisSource: 'FALLBACK_UNVERIFIED',
-      sensitiveZones: [],
-      industrialParks: [],
-      error: error.message || 'GIS_DB_LOAD_FAILED',
-    };
-  }
-}
-
-/**
- * Schema & Repository Đồng bộ Crawler -> Rule Engine & Admin Review Center (Items 8, 9)
+ * Schema và kho đồng bộ crawler với bộ quy tắc/trung tâm kiểm duyệt
  */
 async function ensureCrawlerSyncSchema(client) {
+  if (await isVietnamesePhysicalSchema(client)) return;
   await client.query(`
     CREATE TABLE IF NOT EXISTS law_rule_impacts (
       id SERIAL PRIMARY KEY,
@@ -1814,24 +1350,163 @@ async function getRuleManagementCatalog({ db = defaultDb } = {}) {
   };
 }
 
+/**
+ * Lấy danh sách ngưỡng phân loại cho giao diện quản trị quy tắc tinh gọn.
+ * Hỗ trợ lọc theo trạng thái: ALL, DRAFT, NEEDS_REVIEW (NEEDS_LEGAL_VERIFICATION), VERIFIED.
+ */
+async function listThresholdRules({ status = null, db = defaultDb } = {}) {
+  let query = `
+    SELECT ct.id, ct.industry_code,
+           COALESCE(ind.display_name, ind.name, ct.industry_code) AS industry_name,
+           ct.process_stage, ct.min_value, ct.max_value, ct.operator, ct.unit,
+           ct.project_group, ct.legal_doc_required, ct.tq, ct.historical_tq,
+           ct.phu_luc, ct.legal_ref, ct.law_id, ct.effective_from, ct.effective_to,
+           ct.verification_status, ct.publication_status, ct.approved_by, ct.approved_at,
+           ct.tier_order, ct.rule_version, ct.updated_at
+    FROM classification_thresholds ct
+    LEFT JOIN industries ind ON ct.industry_code = ind.code
+  `;
+  const params = [];
+  if (status && status !== 'ALL') {
+    if (status === 'NEEDS_REVIEW') {
+      params.push('NEEDS_LEGAL_VERIFICATION');
+      query += ` WHERE ct.verification_status = $1`;
+    } else {
+      params.push(status);
+      query += ` WHERE ct.verification_status = $1`;
+    }
+  }
+  query += ` ORDER BY ct.industry_code, COALESCE(ct.process_stage, ''), ct.tier_order ASC, ct.min_value DESC`;
+
+  const res = await db.query(query, params);
+  return (res.rows || []).map(r => ({
+    ...r,
+    min_value: parseFloat(r.min_value),
+    max_value: r.max_value !== null && r.max_value !== undefined ? parseFloat(r.max_value) : null,
+    effective_from: formatDateOnly(r.effective_from),
+    effective_to: formatDateOnly(r.effective_to),
+  }));
+}
+
+/**
+ * Cập nhật nội dung một ngưỡng phân loại.
+ * Bất biến quan trọng:
+ * - Nếu asDraft=true: chuyển về DRAFT.
+ * - Nếu sửa quy tắc VERIFIED: tự hạ về NEEDS_LEGAL_VERIFICATION, xóa approved_by/approved_at để bắt buộc thẩm định lại.
+ */
+async function updateThresholdRule(id, patch = {}, { asDraft = false, user = null, db = defaultDb } = {}) {
+  const existingRes = await db.query('SELECT * FROM classification_thresholds WHERE id = $1', [id]);
+  if (!existingRes || existingRes.rowCount === 0) {
+    throw new Error('RULE_NOT_FOUND');
+  }
+  const existing = existingRes.rows[0];
+
+  const minValue = patch.min_value !== undefined ? parseFloat(patch.min_value) : parseFloat(existing.min_value);
+  const maxValue = patch.max_value !== undefined
+    ? (patch.max_value === null || patch.max_value === '' ? null : parseFloat(patch.max_value))
+    : (existing.max_value !== null && existing.max_value !== undefined ? parseFloat(existing.max_value) : null);
+  const operator = patch.operator !== undefined ? patch.operator : (existing.operator || '>=');
+  const unit = patch.unit !== undefined ? patch.unit : existing.unit;
+  const projectGroup = patch.project_group !== undefined ? patch.project_group : existing.project_group;
+  const legalDocRequired = patch.legal_doc_required !== undefined ? patch.legal_doc_required : existing.legal_doc_required;
+  const tq = patch.tq !== undefined ? patch.tq : existing.tq;
+  const processStage = patch.process_stage !== undefined ? patch.process_stage : existing.process_stage;
+  const phuLuc = patch.phu_luc !== undefined ? patch.phu_luc : existing.phu_luc;
+  const legalRef = patch.legal_ref !== undefined ? patch.legal_ref : existing.legal_ref;
+  const effectiveFrom = patch.effective_from !== undefined ? patch.effective_from : existing.effective_from;
+  const effectiveTo = patch.effective_to !== undefined ? patch.effective_to : existing.effective_to;
+
+  let newStatus = existing.verification_status;
+  let approvedBy = existing.approved_by;
+  let approvedAt = existing.approved_at;
+
+  if (asDraft) {
+    newStatus = 'DRAFT';
+    approvedBy = null;
+    approvedAt = null;
+  } else {
+    // Sửa quy tắc đã VERIFIED -> tự động thu hồi xác minh và chuyển về NEEDS_LEGAL_VERIFICATION
+    if (existing.verification_status === 'VERIFIED') {
+      newStatus = 'NEEDS_LEGAL_VERIFICATION';
+      approvedBy = null;
+      approvedAt = null;
+    } else if (existing.verification_status === 'DRAFT') {
+      newStatus = 'NEEDS_LEGAL_VERIFICATION';
+    }
+  }
+
+  const updateRes = await db.query(
+    `UPDATE classification_thresholds
+     SET min_value = $1, max_value = $2, operator = $3, unit = $4,
+         project_group = $5, legal_doc_required = $6, tq = $7, process_stage = $8,
+         phu_luc = $9, legal_ref = $10, effective_from = $11, effective_to = $12,
+         verification_status = $13, approved_by = $14, approved_at = $15,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $16
+     RETURNING *`,
+    [
+      minValue, maxValue, operator, unit,
+      projectGroup, legalDocRequired, tq, processStage,
+      phuLuc, legalRef, effectiveFrom || null, effectiveTo || null,
+      newStatus, approvedBy, approvedAt,
+      id
+    ]
+  );
+
+  return updateRes.rows[0];
+}
+
+/**
+ * Xác minh và phê duyệt ngưỡng phân loại (chuyển sang VERIFIED).
+ * Bắt buộc phải có căn cứ pháp lý (legal_ref) và ngày bắt đầu hiệu lực (effective_from).
+ */
+async function verifyThresholdRule(id, { verifiedBy, legalRef = null, effectiveFrom = null, db = defaultDb } = {}) {
+  const existingRes = await db.query('SELECT * FROM classification_thresholds WHERE id = $1', [id]);
+  if (!existingRes || existingRes.rowCount === 0) {
+    throw new Error('RULE_NOT_FOUND');
+  }
+  const existing = existingRes.rows[0];
+
+  const finalLegalRef = (legalRef !== null && legalRef !== undefined)
+    ? String(legalRef).trim()
+    : (existing.legal_ref || '').trim();
+  const finalEffectiveFrom = (effectiveFrom !== null && effectiveFrom !== undefined)
+    ? String(effectiveFrom).trim()
+    : (formatDateOnly(existing.effective_from) || '').trim();
+
+  if (!finalLegalRef || !finalEffectiveFrom) {
+    throw new Error('LEGAL_REF_AND_EFFECTIVE_DATE_REQUIRED');
+  }
+
+  const updateRes = await db.query(
+    `UPDATE classification_thresholds
+     SET verification_status = 'VERIFIED',
+         publication_status = 'PUBLISHED',
+         approved_by = $1,
+         approved_at = CURRENT_TIMESTAMP,
+         legal_ref = $2,
+         effective_from = $3,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $4
+     RETURNING *`,
+    [verifiedBy || 'admin', finalLegalRef, finalEffectiveFrom, id]
+  );
+
+  return updateRes.rows[0];
+}
+
 module.exports = {
   EXCLUDED_PUBLICATION_STATUSES,
   isActivePublicationStatus,
   formatDateOnly,
   ensureClassificationSchema,
   ensureQcvnSchema,
-  ensureSensitiveVerificationSchema,
-  ensureGisSchema,
+  ...projectVerificationRepository,
   ensureCrawlerSyncSchema,
   seedClassificationCatalog,
   seedQcvnCatalog,
-  seedGisLayers,
   loadClassificationCatalog,
   loadQcvnCatalog,
-  loadGisLayers,
-  getProjectSensitiveVerification,
-  upsertProjectSensitiveDeclaration,
-  reviewProjectSensitiveVerification,
   listLawRuleImpacts,
   resolveLawRuleImpact,
   listRuleCandidates,
@@ -1841,4 +1516,7 @@ module.exports = {
   verifyAndPublishQcvn,
   upsertTransitionalQcvn,
   verifyAndPublishIndustryRules,
+  listThresholdRules,
+  updateThresholdRule,
+  verifyThresholdRule,
 };

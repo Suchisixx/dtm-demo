@@ -1,10 +1,10 @@
 // backend/utils/helpers.js
-// Helper functions dùng chung giữa các route
+// Các hàm hỗ trợ dùng chung giữa các tuyến API
 
 const db = require('../config/db')
 
 /**
- * Parse phân trang từ query string
+ * Phân tích tham số phân trang từ chuỗi truy vấn
  */
 const paginate = (query) => {
   const page = parseInt(query.page || '1', 10)
@@ -14,7 +14,7 @@ const paginate = (query) => {
 }
 
 /**
- * Tạo object pagination cho response
+ * Tạo đối tượng phân trang cho phản hồi
  */
 const buildPagination = (totalCount, page, limit) => ({
   totalCount,
@@ -24,7 +24,7 @@ const buildPagination = (totalCount, page, limit) => ({
 })
 
 /**
- * Ghi log truy vấn vào bảng query_logs (không throw lỗi)
+ * Ghi nhật ký truy vấn vào bảng query_logs; lỗi ghi log không làm hỏng yêu cầu chính
  */
 const logQuery = async (userId, queryType, inputParams, outputResult) => {
   try {

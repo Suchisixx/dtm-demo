@@ -151,13 +151,20 @@ export const ADMIN_STATUS_LABELS = {
   OPEN: 'Đang chờ xử lý',
   RESOLVED: 'Đã xử lý',
   IGNORED: 'Bỏ qua',
+  EXTRACTED: 'Đã bóc tách (chờ duyệt)',
   PENDING_REVIEW: 'Chờ kiểm duyệt',
+  PENDING_VERIFICATION: 'Chờ xác minh',
+  NEEDS_REVIEW: 'Cần rà soát',
   APPLIED: 'Đã áp dụng',
   REJECTED: 'Đã từ chối',
   VERIFIED: 'Đã xác minh',
   NEEDS_LEGAL_VERIFICATION: 'Chờ đối chiếu văn bản',
   DRAFT: 'Bản nháp',
   PUBLISHED: 'Đã công bố',
+  ACTIVE: 'Đang hoạt động',
+  INACTIVE: 'Ngưng hoạt động',
+  SUCCESS: 'Thành công',
+  FAILED: 'Thất bại',
 };
 
 export const ADMIN_TARGET_TYPE_LABELS = {
@@ -169,19 +176,22 @@ export const ADMIN_TARGET_TYPE_LABELS = {
 };
 
 export function getAdminSeverityMeta(severity) {
-  return ADMIN_SEVERITY_LABELS[severity] || { label: severity || 'Thông thường', color: '#475569', bg: '#F1F5F9' };
+  return ADMIN_SEVERITY_LABELS[severity] || { label: 'Thông thường', color: '#475569', bg: '#F1F5F9' };
 }
 
 export function getAdminEventActionLabel(action) {
-  return ADMIN_EVENT_LABELS[action] || action;
+  if (!action) return 'Cập nhật hệ thống';
+  return ADMIN_EVENT_LABELS[action] || (/^[A-Z0-9_]+$/.test(action) ? 'Cập nhật quy định' : action);
 }
 
 export function getAdminStatusLabel(status) {
-  return ADMIN_STATUS_LABELS[status] || status;
+  if (!status) return 'Chờ rà soát';
+  return ADMIN_STATUS_LABELS[status] || (/^[A-Z0-9_]+$/.test(status) ? 'Chờ rà soát' : status);
 }
 
 export function getAdminTargetTypeLabel(type) {
-  return ADMIN_TARGET_TYPE_LABELS[type] || type;
+  if (!type) return 'Quy định';
+  return ADMIN_TARGET_TYPE_LABELS[type] || (/^[A-Z0-9_]+$/.test(type) ? 'Quy định' : type);
 }
 
 export function formatReasonForEndUser(rawReason) {
@@ -205,6 +215,19 @@ export function formatReasonForEndUser(rawReason) {
     .replace(/đang ở trạng thái NEEDS_LEGAL_VERIFICATION/gi, 'đang chờ đối chiếu xác minh từ văn bản gốc')
     .replace(/gắn cờ NEEDS_LEGAL_VERIFICATION/gi, 'đang chờ xác minh ngưỡng từ văn bản gốc')
     .replace(/quyết định xác minh VERIFIED phía server/gi, 'quyết định xác minh hợp lệ của quản trị viên')
+    .replace(/\bNEEDS_LEGAL_VERIFICATION\b/g, 'chờ xác minh quy định pháp lý')
+    .replace(/\bNEEDS_REVIEW\b/g, 'cần rà soát lại')
+    .replace(/\bMISSING_PROCESS_STAGE\b/g, 'thiếu thông tin công đoạn/loại hình')
+    .replace(/\bINVALID_PROCESS_STAGE\b/g, 'công đoạn/loại hình chưa hợp lệ')
+    .replace(/\bINVALID_CAPACITY\b/g, 'quy mô công suất chưa hợp lệ')
+    .replace(/\bUNKNOWN_INDUSTRY\b/g, 'chưa xác định được ngành nghề')
+    .replace(/\bMISSING_FLOW_RATE\b/g, 'chưa có lưu lượng xả thải')
+    .replace(/\bMISSING_RECEIVING_SOURCE\b/g, 'chưa xác nhận nguồn tiếp nhận')
+    .replace(/\bTRANSITION_TABLE_NOT_AVAILABLE\b/g, 'chưa có bảng quy chuẩn chuyển tiếp được phê duyệt')
+    .replace(/\bPERIOD_MISMATCH\b/g, 'lệch chu kỳ trung bình lấy mẫu')
+    .replace(/\bPENDING_REVIEW\b/g, 'chờ kiểm duyệt')
+    .replace(/\bVERIFIED\b/g, 'đã xác minh')
+    .replace(/\bDRAFT\b/g, 'bản nháp')
     .replace(/\bserver\b/gi, 'máy chủ')
     .replace(/\badmin\b/gi, 'quản trị viên')
     .replace(/\s{2,}/g, ' ')

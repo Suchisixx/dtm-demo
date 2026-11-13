@@ -10,9 +10,9 @@ const { BCRYPT_SALT_ROUNDS, ACTIONS } = require('../utils/constants');
 // Yêu cầu phân quyền Admin cho tất cả các định tuyến dưới đây
 router.use(requireAdmin);
 
-// 👥 QUẢN LÝ NHÂN VIÊN (ACCOUNTS CRUD)
+// Quản lý nhân viên và tài khoản
 
-// GET /api/admin/users - Danh sách toàn bộ tài khoản
+// GET /api/admin/users — danh sách toàn bộ tài khoản
 router.get('/users', async (req, res) => {
   try {
     const result = await db.query(
@@ -25,7 +25,7 @@ router.get('/users', async (req, res) => {
   }
 });
 
-// POST /api/admin/users - Tạo tài khoản mới
+// POST /api/admin/users — tạo tài khoản mới
 router.post('/users', async (req, res) => {
   const { username, password, fullName, role } = req.body;
 
@@ -63,7 +63,7 @@ router.post('/users', async (req, res) => {
   }
 });
 
-// PUT /api/admin/users/:id - Cập nhật thông tin tài khoản
+// PUT /api/admin/users/:id — cập nhật thông tin tài khoản
 router.put('/users/:id', async (req, res) => {
   const targetId = req.params.id;
   const { username, password, fullName, role } = req.body;
@@ -116,7 +116,7 @@ router.put('/users/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/admin/users/:id - Xóa tài khoản
+// DELETE /api/admin/users/:id — xóa tài khoản
 router.delete('/users/:id', async (req, res) => {
   const targetId = parseInt(req.params.id, 10);
   const currentAdminId = req.user.id;
@@ -147,9 +147,9 @@ router.delete('/users/:id', async (req, res) => {
   }
 });
 
-// 📂 QUẢN LÝ DỰ ÁN (PROJECT MANAGEMENT)
+// Quản lý dự án
 
-// GET /api/admin/projects - Xem toàn bộ dự án của tất cả tài khoản
+// GET /api/admin/projects — xem dự án của mọi tài khoản
 router.get('/projects', async (req, res) => {
   try {
     const result = await db.query(`
@@ -166,7 +166,7 @@ router.get('/projects', async (req, res) => {
   }
 });
 
-// DELETE /api/admin/projects/:id - Xóa dự án bất kỳ
+// DELETE /api/admin/projects/:id — xóa dự án
 router.delete('/projects/:id', async (req, res) => {
   const projectId = req.params.id;
   try {

@@ -1,5 +1,5 @@
 :root {
-  /* Core SaaS Palette */
+  /* Bảng màu nền tảng */
   --bg: #F6F8F6;
   --bg-main: #F6F8F6;
   --surface: #FFFFFF;
@@ -8,14 +8,14 @@
   --border: #E5EBE6;
   --border-strong: #D0DCD3;
 
-  /* Brand & Primary */
+  /* Màu thương hiệu và màu chủ đạo */
   --accent: #286B4F;
   --primary: #286B4F;
   --primary-hover: #20573F;
   --accent2: #EAF3ED;
   --primary-light: #EAF3ED;
 
-  /* Typography Colors */
+  /* Màu chữ */
   --text: #192A21;
   --text-heading: #192A21;
   --text2: #526158;
@@ -23,7 +23,7 @@
   --text3: #89958D;
   --text-muted: #89958D;
 
-  /* Semantic Status Colors */
+  /* Màu sắc trạng thái */
   --success: #25845B;
   --success-bg: #EAF5EF;
   --success-border: #BCE0CE;
@@ -41,7 +41,7 @@
   --info-bg: #EFF4F8;
   --info-border: #C7DAE9;
 
-  /* Geometry & Elevation */
+  /* Kích thước, bo góc và độ nổi */
   --tag-h: 24px;
   --control-h: 38px;
   --radius-sm: 6px;
@@ -52,7 +52,7 @@
   --shadow-md: 0 4px 12px rgba(25, 42, 33, 0.07);
   --shadow-lg: 0 12px 32px rgba(25, 42, 33, 0.12);
 
-  /* Layout Dimensions */
+  /* Kích thước bố cục */
   --sidebar-w: 248px;
   --sidebar-collapsed-w: 68px;
   --topbar-h: 58px;
@@ -78,7 +78,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ── CUSTOM SLIM SCROLLBAR ── */
+/* ── Thanh cuộn mảnh tùy chỉnh ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -94,7 +94,7 @@ body {
   background: var(--text3);
 }
 
-/* ── APP SHELL (SIDEBAR + TOPBAR + MAIN) ── */
+/* ── Khung ứng dụng (thanh bên + thanh trên + nội dung chính) ── */
 .app-shell {
   display: flex;
   min-height: 100vh;
@@ -296,7 +296,7 @@ body {
   margin-left: var(--sidebar-collapsed-w);
 }
 
-/* ── TOPBAR ── */
+/* ── Thanh tiêu đề trên ── */
 .app-topbar {
   height: var(--topbar-h);
   background: var(--surface);
@@ -452,7 +452,7 @@ body {
   z-index: 190;
 }
 
-/* ── PAGE CONTAINER & HEADINGS ── */
+/* ── Khung trang và tiêu đề ── */
 .container {
   max-width: 1360px;
   margin: 0 auto;
@@ -507,7 +507,7 @@ body {
   margin: 16px 0;
 }
 
-/* ── WORKSPACE TOP SELECTOR BAR (FOR CLASSIFY & QCVN) ── */
+/* ── Thanh chọn dự án phía trên (phân loại và QCVN) ── */
 .workspace-bar {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -560,7 +560,7 @@ body {
   flex-wrap: wrap;
 }
 
-/* ── SLIDE-OVER DRAWER (LAWS DETAIL, SAVED PROJECTS, SAVED SAMPLES) ── */
+/* ── Ngăn trượt (chi tiết văn bản, dự án đã lưu, mẫu đã lưu) ── */
 .drawer-overlay {
   position: fixed;
   inset: 0;
@@ -654,7 +654,7 @@ body {
   to { transform: translateX(0); }
 }
 
-/* ── CARDS & KPI BLOCKS ── */
+/* ── Thẻ và khối chỉ số ── */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -765,7 +765,7 @@ body {
   margin-top: 6px;
 }
 
-/* ── BADGES & CHIPS ── */
+/* ── Nhãn trạng thái và thẻ thông tin ── */
 .chip,
 .badge {
   display: inline-flex;
@@ -857,7 +857,7 @@ body {
   border: 1px solid var(--danger-border);
 }
 
-/* ── BUTTONS ── */
+/* ── Nút thao tác ── */
 .btn,
 .btn-primary,
 .btn-secondary,
@@ -897,7 +897,7 @@ body {
   line-height: 1;
 }
 
-/* Primary */
+/* Nút chính */
 .btn-primary,
 .btn-classify {
   background: var(--accent);
@@ -924,7 +924,7 @@ body {
   box-shadow: none;
 }
 
-/* Secondary */
+/* Nút phụ */
 .btn-secondary,
 .btn-export {
   background: var(--surface);
@@ -945,7 +945,7 @@ body {
   background: #DCEBE1;
 }
 
-/* Ghost */
+/* Nút trong suốt */
 .btn-ghost,
 .btn-clear {
   background: transparent;
@@ -966,7 +966,7 @@ body {
   background: var(--border);
 }
 
-/* Danger */
+/* Nút nguy hiểm */
 .btn-danger {
   background: var(--red-bg);
   color: var(--red);
@@ -984,7 +984,7 @@ body {
   border-color: #C04A4A;
 }
 
-/* Focus (keyboard) */
+/* Trạng thái tiêu điểm khi điều khiển bằng bàn phím */
 .btn:focus-visible,
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
@@ -997,7 +997,7 @@ body {
   box-shadow: 0 0 0 3px var(--accent2);
 }
 
-/* Small size */
+/* Kích thước nhỏ */
 .btn-sm {
   height: 32px;
   padding: 0 13px;
@@ -1010,7 +1010,7 @@ body {
   font-size: 14px;
 }
 
-/* Disabled */
+/* Trạng thái vô hiệu hóa */
 .btn:disabled,
 .btn-primary:disabled,
 .btn-secondary:disabled,
@@ -1024,7 +1024,7 @@ body {
   box-shadow: none;
 }
 
-/* Clickable chips */
+/* Thẻ có thể bấm */
 button.chip {
   cursor: pointer;
   padding: 0 11px;
@@ -1038,7 +1038,7 @@ button.chip-gray:hover {
   color: var(--accent);
 }
 
-/* Segmented view toggle (Laws: Bảng / Thẻ) */
+/* Nút chuyển chế độ xem (văn bản: bảng/thẻ) */
 .view-toggle {
   display: inline-flex;
   gap: 2px;
@@ -1079,7 +1079,7 @@ button.chip-gray:hover {
   background: var(--primary-hover);
 }
 
-/* Leaflet popup action button (Map tab) */
+/* Nút thao tác trong cửa sổ bật lên của Leaflet ở màn hình bản đồ */
 .gis-popup-btn {
   display: block;
   width: 100%;
@@ -1143,7 +1143,7 @@ button.chip-gray:hover {
   color: #fff;
 }
 
-/* ── FORMS, INPUTS & SELECTS ── */
+/* ── Biểu mẫu, ô nhập và danh sách chọn ── */
 .form-group {
   margin-bottom: 14px;
 }
@@ -1200,7 +1200,7 @@ input:disabled {
   gap: 14px;
 }
 
-/* ── FILTER BARS & SEGMENTED CONTROLS ── */
+/* ── Thanh lọc và nút chọn nhóm ── */
 .filter-bar {
   display: flex;
   gap: 6px;
@@ -1240,26 +1240,77 @@ input:disabled {
 .notice-banner {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
   border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 10px 14px;
   font-size: 13px;
   color: var(--text2);
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 8px;
   box-shadow: var(--shadow-xs);
 }
 
 .notice-banner i {
-  font-size: 18px;
+  font-size: 16px;
   color: var(--accent);
-  margin-top: 1px;
   flex-shrink: 0;
 }
 
-/* ── STANDARDIZED SAAS DATA TABLES ── */
+.legal-notice {
+  padding: 10px 14px;
+  box-shadow: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.legal-notice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.legal-notice-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.legal-notice-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.legal-notice-content {
+  min-width: 0;
+  max-width: 1080px;
+  font-size: 12.5px;
+  color: var(--text2);
+  line-height: 1.5;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.legal-notice-content p {
+  margin: 0;
+  color: var(--text2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.law-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  align-items: stretch;
+  gap: 14px;
+}
+
+/* ── Bảng dữ liệu dùng chung ── */
 .saas-table,
 .admin-table,
 .qcvn-table {
@@ -1304,7 +1355,7 @@ input:disabled {
   background: var(--surface-hover);
 }
 
-/* ── LAWS EXPLORER ── */
+/* ── Thư viện văn bản pháp lý ── */
 .law-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -1331,6 +1382,7 @@ input:disabled {
   color: var(--text);
   line-height: 1.45;
   margin-bottom: 4px;
+  overflow-wrap: anywhere;
 }
 
 .law-number {
@@ -1372,7 +1424,7 @@ input:disabled {
 .status-dot.amended { background: var(--warn); }
 .status-dot.expired { background: var(--red); }
 
-/* ── CLASSIFY STUDIO ── */
+/* ── Khu vực phân loại dự án ── */
 .classify-studio-grid {
   display: grid;
   grid-template-columns: 480px 1fr;
@@ -1703,7 +1755,7 @@ input:disabled {
   font-weight: 500;
 }
 
-/* ── QCVN COMPLIANCE ── */
+/* ── Đối chiếu quy chuẩn QCVN ── */
 .qcvn-toolbar {
   display: flex;
   gap: 12px;
@@ -1771,7 +1823,7 @@ input:disabled {
   font-size: 12px;
 }
 
-/* Subtle row highlight for QCVN without harsh full saturation */
+/* Tô nhẹ hàng QCVN, tránh dùng màu nền quá gắt */
 .row-fail td:first-child {
   border-left: 3px solid var(--red);
 }
@@ -1842,7 +1894,7 @@ input:disabled {
   padding: 8px 16px !important;
 }
 
-/* ── SAVED ITEMS LIST (INSIDE DRAWER) ── */
+/* ── Danh sách mục đã lưu trong ngăn trượt ── */
 .project-item {
   display: flex;
   align-items: center;
@@ -1902,7 +1954,7 @@ input:disabled {
   color: var(--red);
 }
 
-/* ── PAGINATION ── */
+/* ── Phân trang ── */
 .pagination-container {
   display: flex;
   justify-content: center;
@@ -1945,7 +1997,7 @@ input:disabled {
   cursor: not-allowed;
 }
 
-/* ── ADMIN CONSOLE ── */
+/* ── Khu vực quản trị ── */
 .admin-tabs-bar {
   display: flex;
   gap: 6px;
@@ -2055,7 +2107,7 @@ input:disabled {
   display: none;
 }
 
-/* ── RESPONSIVE DESIGN ── */
+/* ── Bố cục thích ứng theo kích thước màn hình ── */
 @media (max-width: 1220px) {
   .classify-studio-grid {
     grid-template-columns: 440px 1fr;
@@ -2104,8 +2156,32 @@ input:disabled {
 }
 
 @media (max-width: 640px) {
+  html,
+  body,
+  .app-shell,
+  .app-main {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
   .container {
     padding: 16px;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .card,
+  .classify-studio-grid > *,
+  .kpi-grid > *,
+  .form-grid-2 > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .form-row,
+  .toolbar-actions,
+  .filter-bar {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
   }
   .app-topbar {
     padding: 0 16px;
@@ -2121,9 +2197,22 @@ input:disabled {
   .info-grid {
     grid-template-columns: 1fr;
   }
+  .legal-notice {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+  .legal-notice-icon {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+  .law-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-/* ── PRINT MEDIA ── */
+/* ── Kiểu hiển thị khi in ── */
 @media print {
   body {
     background: #fff !important;

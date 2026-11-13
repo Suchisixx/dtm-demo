@@ -25,7 +25,7 @@ function resolveOptionalUser(req) {
   }
 }
 
-// GET /api/qcvns - Lấy toàn bộ danh sách QCVN kèm metadata đầy đủ từ PostgreSQL
+// GET /api/qcvns — lấy danh sách QCVN và metadata từ PostgreSQL
 router.get('/', async (req, res) => {
   try {
     const loaded = await loadQcvnCatalog({ db });
@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/qcvns/select - Xác định QCVN áp dụng hoàn toàn phía Server
+// POST /api/qcvns/select — xác định QCVN áp dụng hoàn toàn ở máy chủ
 router.post('/select', async (req, res) => {
   try {
     const body = req.body || {};
@@ -183,7 +183,7 @@ async function runServerQcvnEvaluationWithSelection({
   return { serverEvaluation, serverSelection };
 }
 
-// POST /api/qcvns/evaluate - Đối chiếu live bảng thông số quan trắc trên Server
+// POST /api/qcvns/evaluate — đối chiếu bảng thông số quan trắc ở máy chủ
 router.post('/evaluate', async (req, res) => {
   try {
     const body = req.body || {};
@@ -235,7 +235,7 @@ router.post('/evaluate', async (req, res) => {
   }
 });
 
-// GET /api/qcvns/samples - Lấy danh sách kết quả mẫu đã lưu (Hỗ trợ phân trang)
+// GET /api/qcvns/samples — lấy danh sách mẫu đã lưu, có phân trang
 router.get('/samples', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const { page, limit, offset } = paginate(req.query);
@@ -269,7 +269,7 @@ router.get('/samples', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/qcvns/samples/:id - Lấy 1 mẫu cụ thể theo ID (hỗ trợ cross-tab loading)
+// GET /api/qcvns/samples/:id — lấy mẫu cụ thể để mở từ màn hình khác
 router.get('/samples/:id', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const sampleId = parseInt(req.params.id, 10);
@@ -297,7 +297,7 @@ router.get('/samples/:id', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/qcvns/samples - Lưu mẫu kết quả quan trắc (Luôn đánh giá lại ở Server)
+// POST /api/qcvns/samples — lưu mẫu quan trắc và luôn đánh giá lại ở máy chủ
 router.post('/samples', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const {
@@ -333,7 +333,7 @@ router.post('/samples', requireAuth, async (req, res) => {
       }
     }
 
-    // Luôn tự đánh giá lại mẫu và kiểm chứng chéo chọn QCVN phía Backend theo catalog QCVN trong DB
+    // Luôn đánh giá lại mẫu và đối chiếu lựa chọn QCVN ở máy chủ theo danh mục trong DB
     const { serverEvaluation, serverSelection } = await runServerQcvnEvaluationWithSelection({
       subType: sub_type,
       values,
@@ -470,7 +470,7 @@ router.post('/samples', requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/qcvns/samples/:id - Xóa mẫu kết quả quan trắc
+// DELETE /api/qcvns/samples/:id — xóa mẫu quan trắc
 router.delete('/samples/:id', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const sampleId = req.params.id;

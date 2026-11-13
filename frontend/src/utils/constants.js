@@ -6,7 +6,7 @@ export const DEFAULT_LAT = 10.776889
 export const DEFAULT_LNG = 106.700806
 export const DEFAULT_ZOOM = 8
 
-// API endpoints
+// Các địa chỉ API
 export const API = {
   AUTH_ME: '/api/auth/me',
   AUTH_LOGIN: '/api/auth/login',
@@ -22,6 +22,8 @@ export const API = {
   CLASSIFY_METADATA: '/api/classification/metadata',
   CLASSIFY_SPATIAL_CHECK: '/api/classification/spatial-check',
   CLASSIFY_GIS_LAYERS: '/api/classification/gis-layers',
+  CLASSIFY_ADMIN_BOUNDARY: '/api/classification/administrative-units',
+  CLASSIFY_ADMIN_LOCATE: '/api/classification/administrative-units/locate',
   ADMIN_USERS: '/api/admin/users',
   ADMIN_PROJECTS: '/api/admin/projects',
   ADMIN_RULES_IMPACTS: '/api/admin/rules/impacts',
@@ -30,27 +32,52 @@ export const API = {
   ADMIN_RULES_QCVN_VERIFY: '/api/admin/rules/qcvns',
   ADMIN_RULES_QCVN_TRANSITIONAL: '/api/admin/rules/qcvns/transitional/upsert',
   ADMIN_RULES_INDUSTRY_VERIFY: '/api/admin/rules/industries',
+  ADMIN_RULES_THRESHOLDS: '/api/admin/rules/thresholds',
+  INDUSTRIES: '/api/industries',
   CRAWLER_SETTINGS: '/api/crawler/settings',
   CRAWLER_RUN: '/api/crawler/run',
   CRAWLER_HISTORY: '/api/crawler/history',
   PROJECTS_SEARCH: '/api/projects/search',
   QCVN_SAMPLE_BY_ID: '/api/qcvns/samples',  // append /:id when calling
   DASHBOARD_STATS: '/api/dashboard/stats',
+  REMINDERS: '/api/reminders',
+  REMINDERS_SCAN: '/api/reminders/scan',
 }
 
-// Helper function cho endpoints có param
+// Hàm hỗ trợ tạo địa chỉ API có tham số
 export const projectQcvnSamples = (id) => `/api/projects/${id}/qcvn-samples`
 export const projectSensitiveVerification = (id) => `/api/projects/${id}/sensitive-verification`
+export const projectRemindersSync = (id) => `/api/reminders/projects/${id}/sync`
+export const reminderComplete = (id) => `/api/reminders/${id}/complete`
+export const reminderById = (id) => `/api/reminders/${id}`
 
-// Tile Layer configs (100% Free, No API Key Required — Modern, Landuse & Satellite Hybrid)
+export const REMINDER_ALERT_META = {
+  qua_han: { label: 'Quá hạn', chipClass: 'danger', badgeBg: '#FEE2E2', badgeColor: '#991B1B', badgeBorder: '#FECACA' },
+  sap_den_han: { label: 'Sắp đến hạn', chipClass: 'warn', badgeBg: '#FEF3C7', badgeColor: '#92400E', badgeBorder: '#FDE68A' },
+  trong_han: { label: 'Trong hạn', chipClass: 'success', badgeBg: '#DCFCE7', badgeColor: '#166534', badgeBorder: '#BBF7D0' },
+  da_hoan_thanh: { label: 'Đã hoàn thành', chipClass: 'muted', badgeBg: '#F1F5F9', badgeColor: '#475569', badgeBorder: '#CBD5E1' },
+}
+
+export const REMINDER_RECURRENCE_OPTIONS = [
+  { value: 'mot_lan', label: 'Một lần' },
+  { value: 'hang_quy', label: 'Hàng quý (3 tháng)' },
+  { value: 'sau_thang', label: '6 tháng / lần' },
+  { value: 'hang_nam', label: 'Hàng năm' },
+]
+
+// Cấu hình lớp nền bản đồ tiếng Việt rõ nét kèm nguồn dự phòng khi tile lỗi
 export const CARTO_VOYAGER_URL = 'https://mt{s}.google.com/vt/lyrs=m&hl=vi&x={x}&y={y}&z={z}'
 export const CARTO_ATTRIBUTION = '&copy; Google Maps Vietnam'
+export const FALLBACK_CARTO_VOYAGER_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+export const FALLBACK_CARTO_ATTRIBUTION = '&copy; OpenStreetMap contributors &copy; CARTO'
 export const OSM_LANDUSE_URL = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png'
 export const OSM_ATTRIBUTION = '&copy; OpenStreetMap contributors, Tiles courtesy of HOT OSM'
 export const ESRI_IMAGERY_URL = 'https://mt{s}.google.com/vt/lyrs=y&hl=vi&x={x}&y={y}&z={z}'
+export const ADMIN_WMS_URL = 'https://sapnhap.bando.com.vn/gis/'
+export const ADMIN_WMS_MAP_PATH = '/opt/sapnhap/vnsapnhap10.qgz'
 export const OVERPASS_URL = 'https://overpass-api.de/api/interpreter'
 
-// Danh mục Khu công nghiệp & Vùng nhạy cảm môi trường nhúng sẵn ở Frontend (hoạt động ngay cả khi chưa restart Backend)
+// Danh mục KCN và vùng nhạy cảm nhúng ở giao diện, dùng được trước khi khởi động lại máy chủ
 export const EMBEDDED_GIS_LAYERS = {
   industrialParks: [
     { id: 'kcn_tra_noc', name: 'Khu công nghiệp Trà Nóc 1 & 2', lat: 10.095, lng: 105.712, radiusKm: 2.5, province: 'Cần Thơ' },
@@ -104,7 +131,7 @@ export const EMBEDDED_GIS_LAYERS = {
   ]
 }
 
-// Màu sắc phân vùng quy hoạch sử dụng đất (Landuse Zoning)
+// Màu sắc các vùng quy hoạch sử dụng đất
 export const LANDUSE_STYLES = {
   industrial: {
     label: 'Khu công nghiệp / Nhà máy',
@@ -144,7 +171,7 @@ export const LANDUSE_STYLES = {
   }
 }
 
-// Pages / Routes
+// Các trang và đường dẫn
 export const PAGES = ['laws', 'dashboard', 'classify', 'qcvn', 'map', 'admin']
 export const PRIVATE_PAGES = ['dashboard', 'classify', 'qcvn', 'map']
 export const DEFAULT_PAGE = 'laws'
@@ -161,7 +188,7 @@ export const NHOM_COLORS = {
 // Nominatim
 export const NOMINATIM_URL = 'https://nominatim.openstreetmap.org'
 
-// Luật Môi Trường base URL
+// Địa chỉ gốc của trang Luật Môi trường
 export const LAW_BASE_URL = 'https://www.luatmoitruong.vn/'
 
 // Tọa độ trung tâm 63 Tỉnh/Thành phố Việt Nam

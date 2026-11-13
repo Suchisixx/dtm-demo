@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1050 600" width="1050" height="600">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#DC2626"/>
+    </marker>
+    <marker id="generalization" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <polygon points="2,2 10,6 2,10" fill="#FFFFFF" stroke="#0F172A" stroke-width="1.5"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+  <rect x="75" y="20" width="900" height="35" fill="none" stroke="none" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="525" y="43.5" text-anchor="middle" font-size="15" font-weight="800" fill="#0F172A">SƠ ĐỒ 2.9: LUỒNG TRUY VẤN VÀ HIỂN THỊ DỮ LIỆU KHÔNG GIAN GIS (POSTGIS -&gt; LEAFLET)</text>
+  <rect x="50" y="70" width="280" height="500" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5" rx="0" ry="0" stroke-dasharray="none" />
+  <text x="66" y="92" text-anchor="start" font-size="12" font-weight="700" fill="#16A34A">CLIENT: GIAO DIỆN LEAFLET.JS</text>
+  <rect x="380" y="70" width="300" height="500" fill="#F0F9FF" stroke="#0284C7" stroke-width="1.5" rx="0" ry="0" stroke-dasharray="none" />
+  <text x="396" y="92" text-anchor="start" font-size="12" font-weight="700" fill="#0284C7">SERVER: EXPRESS API &amp; GIS SERVICE</text>
+  <rect x="730" y="70" width="270" height="500" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5" rx="0" ry="0" stroke-dasharray="none" />
+  <text x="746" y="92" text-anchor="start" font-size="12" font-weight="700" fill="#7C3AED">DATABASE: POSTGRESQL &amp; POSTGIS</text>
+  <rect x="80" y="120" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="190" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Người dùng chọn bộ lọc</text>
+  <text x="190" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">(Tỉnh, Nhóm I/II/III, Trạng thái)</text>
+  <rect x="420" y="120" width="220" height="60" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="530" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Nhận GET /api/projects/geo</text>
+  <text x="530" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Xác thực phiên đăng nhập JWT</text>
+  <rect x="760" y="120" width="210" height="60" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="865" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Thực thi SQL không gian:</text>
+  <text x="865" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Lấy tọa độ &amp; mẫu đo gần nhất</text>
+  <rect x="420" y="250" width="220" height="60" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="530" y="277.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Phân tích bán kính tác động R</text>
+  <text x="530" y="292.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">&amp; Đóng gói mảng GeoJSON</text>
+  <rect x="80" y="250" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="190" y="277.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Dựng ghim Marker theo màu:</text>
+  <text x="190" y="292.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">🟢 Đạt · 🟡 Cảnh báo · 🔴 Vượt</text>
+  <rect x="80" y="370" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="190" y="397.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Vẽ vòng tròn bán kính R &amp;</text>
+  <text x="190" y="412.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Chồng lớp đa giác KCN, bảo vệ</text>
+  <rect x="80" y="480" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="190" y="507.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Gắn Popup thông tin dự án &amp;</text>
+  <text x="190" y="522.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Nút xem chi tiết hồ sơ</text>
+  <line x1="300" y1="150" x2="420" y2="150" stroke="#16A34A" stroke-width="1.5"  marker-end="url(#arrow-green)" />
+  <text x="360" y="149" text-anchor="middle" font-size="10" font-weight="600" fill="#16A34A">1. Gọi API</text>
+  <line x1="640" y1="150" x2="760" y2="150" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <text x="700" y="149" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">2. SQL Query</text>
+  <line x1="760" y1="150" x2="640" y2="280" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <text x="700" y="214" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">3. Trả tọa độ</text>
+  <line x1="420" y1="280" x2="300" y2="280" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <text x="360" y="279" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">4. GeoJSON</text>
+  <line x1="190" y1="310" x2="190" y2="370" stroke="#16A34A" stroke-width="1.5"  marker-end="url(#arrow-green)" />
+  <line x1="190" y1="430" x2="190" y2="480" stroke="#16A34A" stroke-width="1.5"  marker-end="url(#arrow-green)" />
+</svg>

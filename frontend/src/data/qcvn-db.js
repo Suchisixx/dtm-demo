@@ -1,6 +1,6 @@
 // frontend/src/data/qcvn-db.js
-// Dữ liệu seed / fixture Quy chuẩn Kỹ thuật Quốc gia về Môi trường (QCVN).
-// Thuật toán đối chiếu chuẩn đặt tại frontend/src/utils/qcvn-evaluator.js (dùng chung cho UI & Backend DB runtime).
+// Dữ liệu nền/kiểm thử cho Quy chuẩn Kỹ thuật Quốc gia về Môi trường (QCVN).
+// Thuật toán đối chiếu nằm tại frontend/src/utils/qcvn-evaluator.js, dùng chung cho giao diện và máy chủ.
 // Lưu ý kiểm toán pháp lý: Các giá trị giới hạn chưa đối chiếu trực tiếp từ bản PDF đóng dấu chính thức
 // được gắn cờ verificationStatus: 'NEEDS_LEGAL_VERIFICATION'.
 
@@ -123,7 +123,7 @@ function buildQcvn40Params(col, flowTier) {
   ];
 }
 
-// Hàm tiện ích tạo bộ thông số QCVN 14:2025 theo loại đối tượng (domestic vs urban) và Cột (A, B, C)
+// Hàm hỗ trợ tạo bộ thông số QCVN 14:2025 theo loại đối tượng (sinh hoạt/đô thị) và Cột (A, B, C)
 function buildQcvn14Params(col, isUrban = false) {
   const isColA = col === 'A';
   const isColB = col === 'B';
@@ -772,8 +772,8 @@ export const QCVN_DATA = {
 };
 
 /**
- * Wrapper tương thích cho cây quyết định chọn QCVN.
- * Khi caller không truyền catalog từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
+ * Lớp bọc tương thích cho cây quyết định chọn QCVN.
+ * Nếu bên gọi không truyền danh mục từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
  */
 export function selectApplicableQcvn(options = {}) {
   const hasCustomCatalog = options.qcvnDatabase && Object.keys(options.qcvnDatabase).length > 0;
@@ -786,8 +786,8 @@ export function selectApplicableQcvn(options = {}) {
 }
 
 /**
- * Wrapper tương thích cho evaluator đối chiếu mẫu quan trắc.
- * Khi caller không truyền catalog từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
+ * Lớp bọc tương thích cho bộ đánh giá mẫu quan trắc.
+ * Nếu bên gọi không truyền danh mục từ API/DB (`qcvnDatabase`), dùng QCVN_DATA với ruleSource = 'FALLBACK_UNVERIFIED'.
  */
 export function evaluateQcvnSample(options = {}) {
   const hasCustomCatalog = options.qcvnDatabase && Object.keys(options.qcvnDatabase).length > 0;

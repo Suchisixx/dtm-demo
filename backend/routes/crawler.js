@@ -5,8 +5,9 @@ const { runCrawler, getCrawlerRunningState } = require('../utils/crawler');
 const { requireAdmin } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const { CRAWLER_SETTING_KEY } = require('../utils/constants');
+const { isVietnamesePhysicalSchema } = require('../services/repository-shared');
 
-// 1. GET settings (Trạng thái quét tự động)
+// 1. GET settings — xem trạng thái thu thập tự động
 router.get('/settings', requireAdmin, async (req, res) => {
   try {
     const settingRes = await db.query('SELECT value FROM system_settings WHERE key = $1', [CRAWLER_SETTING_KEY]);
@@ -22,7 +23,7 @@ router.get('/settings', requireAdmin, async (req, res) => {
   }
 });
 
-// 2. POST update settings (Bật/tắt quét tự động)
+// 2. POST settings — bật/tắt thu thập tự động
 router.post('/settings', requireAdmin, async (req, res) => {
   const { enabled } = req.body;
   
@@ -31,12 +32,23 @@ router.post('/settings', requireAdmin, async (req, res) => {
   }
 
   try {
-    await db.query(
-      `INSERT INTO system_settings (key, value)
-       VALUES ($1, $2)
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-      [CRAWLER_SETTING_KEY, enabled ? 'true' : 'false']
-    );
+    const val = enabled ? 'true' : 'false';
+    const useViSchema = await isVietnamesePhysicalSchema(db);
+    if (useViSchema) {
+      await db.query(
+        `INSERT INTO cai_dat_he_thong (khoa, gia_tri)
+         VALUES ($1, $2)
+         ON CONFLICT (khoa) DO UPDATE SET gia_tri = EXCLUDED.gia_tri`,
+        [CRAWLER_SETTING_KEY, val]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO system_settings (key, value)
+         VALUES ($1, $2)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [CRAWLER_SETTING_KEY, val]
+      );
+    }
     
     return res.json({
       success: true,
@@ -48,7 +60,7 @@ router.post('/settings', requireAdmin, async (req, res) => {
   }
 });
 
-// 3. POST run (Chạy crawler thủ công ngay lập tức)
+// 3. POST run — chạy crawler thủ công ngay lập tức
 router.post('/run', requireAdmin, async (req, res) => {
   if (getCrawlerRunningState()) {
     return res.status(409).json({
@@ -79,7 +91,7 @@ router.post('/run', requireAdmin, async (req, res) => {
   }
 });
 
-// 4. GET history (Lịch sử cập nhật văn bản)
+// 4. GET history — xem lịch sử cập nhật văn bản
 router.get('/history', requireAdmin, async (req, res) => {
   try {
     const historyRes = await db.query(`

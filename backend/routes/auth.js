@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 const { JWT_SECRET, JWT_EXPIRY, COOKIE_NAME, COOKIE_MAX_AGE, ACTIONS } = require('../utils/constants');
 require('dotenv').config();
 
-// POST /api/auth/login
+// POST /api/auth/login — đăng nhập
 router.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout
+// POST /api/auth/logout — đăng xuất
 router.post('/logout', async (req, res) => {
   const token = req.cookies[COOKIE_NAME];
   if (token) {
@@ -75,14 +75,14 @@ router.post('/logout', async (req, res) => {
       const decoded = jwt.verify(token, JWT_SECRET);
       await logAudit(decoded.id, ACTIONS.LOGOUT, req);
     } catch (e) {
-      // ignore
+      // Bỏ qua lỗi khi xóa cookie phiên
     }
   }
   res.clearCookie(COOKIE_NAME);
   return res.json({ message: 'Đăng xuất thành công!' });
 });
 
-// GET /api/auth/me
+// GET /api/auth/me — lấy thông tin phiên hiện tại
 router.get('/me', async (req, res) => {
   const token = req.cookies[COOKIE_NAME];
 

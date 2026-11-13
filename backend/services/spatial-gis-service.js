@@ -1,5 +1,5 @@
 // backend/services/spatial-gis-service.js
-// Dịch vụ Phân tích Không gian (Spatial GIS Engine) phục vụ Phân loại Hồ sơ & Giám sát Môi trường
+// Dịch vụ phân tích không gian GIS phục vụ phân loại hồ sơ và giám sát môi trường
 // Căn cứ: Điều 25 Luật BVMT 2020, Nghị định 08/2022/NĐ-CP, Nghị định 48/2026/NĐ-CP (VBHN 49/2026)
 
 const EARTH_RADIUS_KM = 6371;

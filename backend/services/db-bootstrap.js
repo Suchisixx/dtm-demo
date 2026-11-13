@@ -4,6 +4,7 @@
 
 const defaultDb = require('../config/db');
 const logger = require('../utils/logger');
+const { migrateVietnameseSchema } = require('./vietnamese-schema');
 const {
   ensureClassificationSchema,
   ensureQcvnSchema,
@@ -137,6 +138,54 @@ async function ensureBaseTables(db) {
   `);
 }
 
+async function ensureComplianceReminderSchema(db) {
+  const existing = await db.query(
+    `SELECT
+       EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'nghia_vu_tuan_thu' AND c.relkind IN ('r', 'p')
+       ) AS has_vn,
+       EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'compliance_obligations' AND c.relkind IN ('r', 'p')
+       ) AS has_en`
+  );
+  if (existing.rows?.[0]?.has_vn || existing.rows?.[0]?.has_en) {
+    return;
+  }
+
+  const hasVnParents = await db.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relname = 'du_an' AND c.relkind IN ('r', 'p')
+     ) AS has_du_an`
+  );
+  const projectRef = hasVnParents.rows?.[0]?.has_du_an ? 'du_an(ma)' : 'projects(id)';
+  const userRef = hasVnParents.rows?.[0]?.has_du_an ? 'nguoi_dung(ma)' : 'users(id)';
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS compliance_obligations (
+      id SERIAL PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES ${projectRef} ON DELETE CASCADE,
+      user_id INTEGER REFERENCES ${userRef} ON DELETE SET NULL,
+      obligation_code VARCHAR(60) NOT NULL DEFAULT 'tuy_chinh',
+      title VARCHAR(255) NOT NULL,
+      legal_basis VARCHAR(255),
+      recurrence VARCHAR(30) NOT NULL DEFAULT 'mot_lan',
+      due_date DATE NOT NULL,
+      warning_days INTEGER NOT NULL DEFAULT 30,
+      status VARCHAR(30) NOT NULL DEFAULT 'chua_hoan_thanh',
+      completed_at TIMESTAMP NULL,
+      completed_by INTEGER REFERENCES ${userRef} ON DELETE SET NULL,
+      completion_note TEXT NULL,
+      last_alert_level VARCHAR(30) NULL,
+      last_alerted_at TIMESTAMP NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+}
+
 async function loadQcvnSeedModule() {
   try {
     return require('../../frontend/src/data/qcvn-db.js');
@@ -149,18 +198,55 @@ async function loadQcvnSeedModule() {
 }
 
 /**
- * Kiểm tra & nâng cấp schema an toàn lúc khởi động runtime.
+ * Kiểm tra và nâng cấp schema an toàn khi khởi động máy chủ.
  * Tự động bổ sung cột mới (như display_name, verification_status, ...) và điền metadata nền còn thiếu
  * cho các bản ghi chưa duyệt mà không bao giờ ghi đè bản ghi đã VERIFIED/PUBLISHED.
  */
 async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true } = {}) {
   try {
-    await ensureBaseTables(db);
-    await ensureQcvnSchema(db);
-    await ensureClassificationSchema(db);
-    await ensureSensitiveVerificationSchema(db);
-    await ensureGisSchema(db);
-    await ensureCrawlerSyncSchema(db);
+    const schemaState = await db.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'nguoi_dung' AND c.relkind IN ('r', 'p')
+       ) AS vietnamese_schema,
+       EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'users' AND c.relkind IN ('r', 'p')
+       ) AS legacy_schema`
+    );
+    const isVietnameseSchema = schemaState.rows?.[0]?.vietnamese_schema === true;
+    const hasLegacySchema = schemaState.rows?.[0]?.legacy_schema === true;
+
+    if (hasLegacySchema && !isVietnameseSchema) {
+      throw new Error('VIETNAMESE_SCHEMA_MIGRATION_REQUIRED: create a database backup, then run backend/scripts/migrate-vietnamese-schema.js');
+    }
+
+    if (!isVietnameseSchema) {
+      await ensureBaseTables(db);
+      await ensureQcvnSchema(db);
+      await ensureClassificationSchema(db);
+      await ensureSensitiveVerificationSchema(db);
+      await ensureGisSchema(db);
+      await ensureCrawlerSyncSchema(db);
+      await ensureComplianceReminderSchema(db);
+
+      // Chạy migration sau khi bootstrap cũ đã bổ sung các bảng runtime.
+      const tableKeys = Object.keys(require('./vietnamese-schema').TABLES);
+      const physicalTables = await db.query(
+        `SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')
+           AND c.relname = ANY($1::text[])`,
+        [tableKeys]
+      );
+      if (!hasLegacySchema && physicalTables.rows?.[0]?.count === tableKeys.length) {
+        await migrateVietnameseSchema(db);
+      }
+    } else {
+      // Đảm bảo bảng mới (nếu có) được tạo trước khi đồng bộ schema/view tiếng Việt.
+      await ensureComplianceReminderSchema(db);
+      // Đảm bảo các tên SQL tương thích vẫn tồn tại ở ranh giới API/tầng truy cập dữ liệu.
+      await migrateVietnameseSchema(db);
+    }
 
     if (!seedIfMissing) {
       return { ok: true };
@@ -198,7 +284,7 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
         `DB runtime bootstrap đã bổ sung an toàn: QCVN(+${qcvnStats.inserted}/bổ sung ${qcvnStats.enriched}), Ngành(+${classStats.industriesInserted}/bổ sung ${classStats.industriesEnriched}/ngưỡng +${classStats.thresholdsInserted}), GIS(+${gisStats.inserted}).`
       );
     } else {
-      logger.info('DB runtime schema & danh mục đã sẵn sàng.');
+      logger.info('Cơ sở dữ liệu và danh mục quy tắc đã sẵn sàng.');
     }
 
     return { ok: true, qcvnStats, classStats, gisStats };

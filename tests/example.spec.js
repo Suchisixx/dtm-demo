@@ -4,16 +4,16 @@ import { test, expect } from '@playwright/test';
 test('has title', async ({ page }) => {
   await page.goto('https://playwright.dev/');
 
-  // Expect a title "to contain" a substring.
+  // Kiểm tra tiêu đề có chứa một đoạn văn bản.
   await expect(page).toHaveTitle(/Playwright/);
 });
 
 test('get started link', async ({ page }) => {
   await page.goto('https://playwright.dev/');
 
-  // Click the get started link.
+  // Bấm vào liên kết bắt đầu.
   await page.getByRole('link', { name: 'Get started' }).click();
 
-  // Expects page to have a heading with the name of Installation.
+  // Kiểm tra trang có tiêu đề hướng dẫn cài đặt.
   await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
 });

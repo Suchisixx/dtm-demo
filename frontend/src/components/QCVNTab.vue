@@ -1,9 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { SUB_TYPES, QCVN_DATA, selectApplicableQcvn, evaluateQcvnSample } from '../data/qcvn-db.js'
+import { SUB_TYPES, selectApplicableQcvn, evaluateQcvnSample } from '../data/qcvn-db.js'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { removeAccents } from '../utils/string-helpers.js'
+import { MAP_KEYWORDS } from '../utils/qcvn-keywords.js'
 import {
   getQcvnOverallStatusMeta,
   getQcvnCatalogChipText,
@@ -17,97 +18,8 @@ const props = defineProps({
 })
 const emit = defineEmits(['sample-loaded'])
 
-// Keywords mapping for parsing pasted text
-const MAP_KEYWORDS = {
-  'ph': 'pH',
-  'do': 'DO',
-  'bod': 'BOD5',
-  'cod': 'COD',
-  'tss': 'TSS',
-  'ran lo lung': 'TSS',
-  'amoni': 'NH4N',
-  'nh4': 'NH4N',
-  'nitrit': 'NO2N',
-  'no2': 'NO2N',
-  'nitrat': 'NO3N',
-  'no3': 'NO3N',
-  'phosphat': 'PO4P',
-  'po4': 'PO4P',
-  'phospho': 'TotalP',
-  'total p': 'TotalP',
-  'nito': 'TotalN',
-  'total n': 'TotalN',
-  'xyanua': 'CN',
-  'cyanide': 'CN',
-  'cn': 'CN',
-  'asen': 'As',
-  'arsenic': 'As',
-  'as': 'As',
-  'cadimi': 'Cd',
-  'cadmium': 'Cd',
-  'cd': 'Cd',
-  'chi': 'Pb',
-  'lead': 'Pb',
-  'pb': 'Pb',
-  'crom vi': 'Cr6',
-  'crom 6': 'Cr6',
-  'cr6': 'Cr6',
-  'crom iii': 'Cr3',
-  'crom 3': 'Cr3',
-  'cr3': 'Cr3',
-  'crom': 'Cr_tong',
-  'cr': 'Cr_tong',
-  'thuy ngan': 'Hg',
-  'mercury': 'Hg',
-  'hg': 'Hg',
-  'dong': 'Cu',
-  'copper': 'Cu',
-  'cu': 'Cu',
-  'kem': 'Zn',
-  'zinc': 'Zn',
-  'zn': 'Zn',
-  'sat': 'Fe',
-  'iron': 'Fe',
-  'fe': 'Fe',
-  'mangan': 'Mn',
-  'manganese': 'Mn',
-  'mn': 'Mn',
-  'niken': 'Ni',
-  'nickel': 'Ni',
-  'ni': 'Ni',
-  'florua': 'F',
-  'fluoride': 'F',
-  'f': 'F',
-  'clo': 'Cl2',
-  'chlorine': 'Cl2',
-  'cl2': 'Cl2',
-  'sunfua': 'Sulfide',
-  'sulfide': 'Sulfide',
-  's': 'Sulfide',
-  'dau mo': 'Oil',
-  'oil': 'Oil',
-  'coliform': 'Coliform',
-  'ecoli': 'Ecoli',
-  'so2': 'SO2',
-  'co': 'CO',
-  'o3': 'O3',
-  'ozon': 'O3',
-  'tsp': 'TSP',
-  'pm10': 'PM10',
-  'pm25': 'PM25',
-  'pm2.5': 'PM25',
-  'tds': 'TDS',
-  'do cung': 'Hardness',
-  'hardness': 'Hardness',
-  'clorua': 'Cl',
-  'chloride': 'Cl',
-  'cl': 'Cl',
-  'sunfat': 'SO4',
-  'sulfate': 'SO4',
-  'so4': 'SO4'
-}
-
-// State
+// Từ khóa dùng để phân tích nội dung được dán vào
+// Trạng thái giao diện
 const selectedType = ref('nuoc_mat')
 const selectedSubType = ref('qcvn08_a')
 const runtimeQcvnData = ref({})
@@ -124,12 +36,29 @@ const isExistingFacility = ref(false)
 const isUrbanArea = ref(false)
 const evaluationDate = ref(new Date().toISOString().slice(0, 10))
 const samplingPeriods = ref({ _default: '' })
+const showPermitLimits = ref(false)
+const customPermitLimits = ref({})
+
+const effectivePermitLimits = computed(() => {
+  const base = (linkedProject.value?.form_data?.permitLimits && typeof linkedProject.value.form_data.permitLimits === 'object')
+    ? { ...linkedProject.value.form_data.permitLimits }
+    : {}
+  for (const [key, rawVal] of Object.entries(customPermitLimits.value || {})) {
+    if (rawVal === '' || rawVal === null || rawVal === undefined) continue
+    const num = Number(rawVal)
+    if (!Number.isNaN(num) && num >= 0) {
+      base[key] = { max: num }
+    }
+  }
+  return Object.keys(base).length > 0 ? base : null
+})
 
 const serverSelection = ref(null)
 const serverEvaluation = ref(null)
 const isSelectingQcvn = ref(false)
 const isEvaluatingServer = ref(false)
 const selectionMismatchWarning = ref('')
+const showQcvnNotice = ref(false)
 let evaluateServerTimer = null
 
 const loadedSamples = ref([])
@@ -254,12 +183,12 @@ const fetchQcvnCatalog = async () => {
       }
     }
     const errPayload = await res.json().catch(() => ({}))
-    runtimeQcvnData.value = QCVN_DATA
+    runtimeQcvnData.value = {}
     qcvnRuleSource.value = 'FALLBACK_UNVERIFIED'
     qcvnCatalogError.value = errPayload.error || `HTTP_${res.status}`
   } catch (err) {
     logger.error('Lỗi đồng bộ danh mục QCVN từ API:', err)
-    runtimeQcvnData.value = QCVN_DATA
+    runtimeQcvnData.value = {}
     qcvnRuleSource.value = 'FALLBACK_UNVERIFIED'
     qcvnCatalogError.value = err.message || 'NETWORK_ERROR'
   }
@@ -295,8 +224,6 @@ const buildQcvnSelectionPayload = (projectOverride = null) => {
     evaluationDate: evaluationDate.value || new Date().toISOString().slice(0, 10),
   }
 }
-
-const showQcvnDebugCodes = ref(false)
 
 const formatSelectionNotice = (sel) => {
   if (!sel) return ''
@@ -389,7 +316,7 @@ const requestServerQcvnEvaluation = async () => {
         sub_type: selectedSubType.value,
         values: finalValues,
         samplingPeriods: activeSamplingPeriods.value,
-        permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+        permitLimits: effectivePermitLimits.value,
         ...selCtx,
       })
     })
@@ -443,7 +370,7 @@ const sampleEvaluation = computed(() => {
     qcvnId: selectedSubType.value,
     measuredValues: measuredValues.value,
     samplingPeriods: activeSamplingPeriods.value,
-    permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+    permitLimits: effectivePermitLimits.value,
     receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
     qcvnDatabase: runtimeQcvnData.value,
     ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
@@ -685,7 +612,7 @@ const saveSample = async () => {
     values: finalValues,
     project_id: linkedProject.value?.id || null,
     samplingPeriods: activeSamplingPeriods.value,
-    permitLimits: linkedProject.value?.form_data?.permitLimits || null,
+    permitLimits: effectivePermitLimits.value,
     receivingWaterConfirmed: selCtx.receivingWaterConfirmed,
     flowRate: selCtx.flowRate,
     receivingWaterClass: selCtx.receivingWaterClass,
@@ -842,7 +769,7 @@ const exportPDF = () => {
   window.print()
 }
 
-// Reset subtype when main type changes
+// Đặt lại loại con khi người dùng đổi loại chính
 watch(selectedType, (newType) => {
   if (isAutoMatching.value) return
   const list = SUB_TYPES[newType] || []
@@ -905,7 +832,7 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 
-// Cross-tab: load mẫu cụ thể từ tab Phân loại
+// Nhận yêu cầu mở một mẫu cụ thể từ màn hình Phân loại
 watch(() => props.loadSampleId, async (newId) => {
   if (newId) {
     try {
@@ -914,7 +841,7 @@ watch(() => props.loadSampleId, async (newId) => {
         const data = await res.json()
         if (data.sample) {
           selectSample(data.sample)
-          // Nếu có project info từ JOIN, khôi phục đầy đủ
+          // Nếu JOIN trả về thông tin dự án, khôi phục đầy đủ
           if (data.sample.project_id && data.sample.project_name) {
             const cr = data.sample.project_classification_result || {}
             const fd = data.sample.project_form_data || {}
@@ -941,7 +868,7 @@ const showQuickPaste = ref(false)
 
 <template>
   <div id="qcvn" class="page container fade-up">
-    <!-- Printable Header (Print Only) -->
+    <!-- Tiêu đề chỉ hiển thị khi in -->
     <div class="print-only-header" v-if="currentQcvn">
       <div style="text-align: center; margin-bottom: 24px; font-family: 'Be Vietnam Pro', sans-serif;">
         <h2 style="font-size: 22px; font-weight: 700; color: #286B4F; margin-bottom: 4px;">ETC LEGALHUB — BÁO CÁO QUAN TRẮC MÔI TRƯỜNG</h2>
@@ -982,7 +909,7 @@ const showQuickPaste = ref(false)
       </div>
     </div>
 
-    <!-- PAGE HEADER -->
+    <!-- Tiêu đề trang -->
     <div class="page-header no-print">
       <div>
         <h2 class="section-head">Đối chiếu Kết quả Quan trắc với QCVN</h2>
@@ -992,15 +919,31 @@ const showQuickPaste = ref(false)
       </div>
     </div>
 
-    <!-- TRANSITION NOTICE -->
-    <div class="notice-banner no-print">
-      <i class="ti ti-info-circle"></i>
-      <span>
-        <strong>Lộ trình áp dụng quy chuẩn mới:</strong> Hệ thống áp dụng <strong>QCVN 40:2025/BTNMT</strong> (Nước thải công nghiệp), <strong>QCVN 14:2025/BTNMT</strong> (Nước thải sinh hoạt) và <strong>QCVN 05:2023/BTNMT</strong> (Không khí xung quanh). Trạng thái đánh giá: <strong style="color:var(--success)">Đạt chuẩn</strong>, <strong style="color:var(--warn)">Cảnh báo (&gt;80% ngưỡng)</strong>, <strong style="color:var(--red)">Vượt ngưỡng</strong>.
-      </span>
+    <!-- Lưu ý và thông tin chuyển tiếp có thể thu gọn -->
+    <div class="notice-banner no-print" style="background:#F8FAF9;border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)">
+          <i class="ti ti-shield-check" style="color:var(--accent);font-size:16px"></i>
+          <strong>Lưu ý pháp lý &amp; Quy chuẩn áp dụng</strong>
+        </div>
+        <button type="button"
+                class="btn-ghost btn-sm"
+                style="padding:2px 8px;font-size:11.5px;color:var(--text2);display:inline-flex;align-items:center;gap:4px"
+                @click="showQcvnNotice = !showQcvnNotice">
+          <span>{{ showQcvnNotice ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+        </button>
+      </div>
+      <div v-show="showQcvnNotice" style="font-size:12.5px;color:var(--text2);line-height:1.55;padding-top:8px;border-top:1px dashed var(--border);margin-top:4px">
+        <div style="margin-bottom:5px">
+          <strong>Lộ trình áp dụng quy chuẩn mới:</strong> Hệ thống áp dụng <strong>QCVN 40:2025/BTNMT</strong> (Nước thải công nghiệp), <strong>QCVN 14:2025/BTNMT</strong> (Nước thải sinh hoạt) và <strong>QCVN 05:2023/BTNMT</strong> (Không khí xung quanh).
+        </div>
+        <div>
+          <strong>Lưu ý pháp lý:</strong> Kết quả chỉ hỗ trợ đối chiếu kỹ thuật theo dữ liệu đã cấu hình trong hệ thống; không thay thế kết quả phân tích phòng thí nghiệm được công nhận hoặc kết luận của cơ quan nhà nước có thẩm quyền.
+        </div>
+      </div>
     </div>
 
-    <!-- TOP WORKSPACE SAMPLE BAR -->
+    <!-- Thanh chọn mẫu ở đầu vùng làm việc -->
     <div class="workspace-bar no-print">
       <div class="workspace-bar-left">
         <span style="font-size:12.5px;color:var(--text3);font-weight:500">Mẫu đang kiểm tra:</span>
@@ -1029,7 +972,7 @@ const showQuickPaste = ref(false)
       </div>
     </div>
 
-    <!-- COLLAPSIBLE QUICK PASTE PANEL -->
+    <!-- Khung nhập nhanh có thể thu gọn -->
     <div v-if="showQuickPaste" class="card no-print fade-up" style="background:var(--surface);border-color:var(--accent)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div class="card-title" style="font-size:13.5px">
@@ -1055,9 +998,9 @@ const showQuickPaste = ref(false)
       </div>
     </div>
 
-    <!-- CONFIGURATION & PROJECT LINKING CARD -->
+    <!-- Thẻ cấu hình và liên kết dự án -->
     <div class="card no-print" style="padding:18px 22px;margin-bottom:16px">
-      <!-- Row 1: Project Link -->
+      <!-- Hàng 1: liên kết dự án -->
       <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">
         <label class="form-label" style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
           <i class="ti ti-link" style="color:var(--accent)"></i>
@@ -1071,7 +1014,7 @@ const showQuickPaste = ref(false)
               {{ linkedProject.loai_ho_so }} · {{ linkedProject.nhom_du_an || '' }} · {{ linkedProject.tinh_thanh || linkedProject.dia_chi_hien_thi || '' }}
             </div>
             <div v-if="autoMatchMessage" style="font-size:11.5px;color:var(--accent);font-weight:500;margin-top:4px;display:flex;align-items:center;gap:4px">
-              <i class="ti ti-sparkles"></i> {{ autoMatchMessage }}
+              <i class="ti ti-link"></i> {{ autoMatchMessage }}
             </div>
           </div>
           <button type="button" class="btn-secondary btn-sm" @click="unlinkProject" title="Gỡ liên kết dự án">
@@ -1100,7 +1043,7 @@ const showQuickPaste = ref(false)
         </div>
       </div>
 
-      <!-- Row 2: QCVN Selection & Actions -->
+      <!-- Hàng 2: chọn QCVN và thao tác -->
       <div class="qcvn-toolbar">
         <div class="form-group" style="min-width:230px">
           <label class="form-label">Loại hình quy chuẩn (QCVN)</label>
@@ -1159,7 +1102,7 @@ const showQuickPaste = ref(false)
         </div>
       </div>
 
-      <!-- Row 3: Completeness, Source Confirmation, Flow Rate & Sampling Period Gates -->
+      <!-- Hàng 3: kiểm tra dữ liệu đủ, nguồn tiếp nhận, lưu lượng và chu kỳ lấy mẫu -->
       <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
         <template v-if="needsReceivingConfirmation">
           <div style="display:flex;align-items:center;gap:6px;font-size:12.5px">
@@ -1204,9 +1147,9 @@ const showQuickPaste = ref(false)
           </select>
         </div>
 
-        <button type="button" class="btn-secondary btn-sm" :disabled="isSelectingQcvn" @click="requestServerQcvnSelection({ clearSourceType: false })" title="Tự động gợi ý quy chuẩn phù hợp từ thông số đầu vào">
-          <i class="ti ti-sparkles"></i>
-          <span>{{ isSelectingQcvn ? 'Đang kiểm tra...' : 'Gợi ý quy chuẩn phù hợp' }}</span>
+        <button type="button" class="btn-secondary btn-sm" :disabled="isSelectingQcvn" @click="requestServerQcvnSelection({ clearSourceType: false })" title="Tự động đối chiếu quy chuẩn phù hợp từ thông số đầu vào">
+          <i class="ti ti-check"></i>
+          <span>{{ isSelectingQcvn ? 'Đang kiểm tra...' : 'Đối chiếu quy chuẩn phù hợp' }}</span>
         </button>
 
         <span class="chip" :class="qcvnRuleSource === 'DATABASE' ? 'chip-info' : 'chip-gray'" style="margin-left:auto;font-size:11px">
@@ -1262,22 +1205,9 @@ const showQuickPaste = ref(false)
       <div v-if="summary.periodMismatch > 0" style="margin-top:4px">
         • Phát hiện <strong>{{ summary.periodMismatch }}</strong> chỉ tiêu lệch chu kỳ trung bình lấy mẫu (cần kiểm tra và rà soát lại).
       </div>
-      <div style="margin-top:6px;display:flex;justify-content:flex-end">
-        <button type="button"
-                class="btn-ghost btn-sm"
-                style="padding:2px 6px;font-size:11px;color:#92400E"
-                @click="showQcvnDebugCodes = !showQcvnDebugCodes">
-          {{ showQcvnDebugCodes ? 'Ẩn mã kỹ thuật ▴' : 'Xem mã kỹ thuật ▾' }}
-        </button>
-      </div>
-      <div v-if="showQcvnDebugCodes" style="margin-top:4px;padding:6px 8px;border-radius:6px;background:#FEF3C7;font-family:monospace;font-size:11px;color:#78350F">
-        overall={{ sampleEvaluation.overallStatus }} · dbStatus={{ sampleEvaluation.trang_thai_tong_quat }} · ruleSource={{ qcvnRuleSource }}
-        <template v-if="sampleEvaluation.reason"> · reason={{ sampleEvaluation.reason }}</template>
-        <template v-if="qcvnCatalogError"> · error={{ qcvnCatalogError }}</template>
-      </div>
     </div>
 
-    <!-- KPI SUMMARY STRIP -->
+    <!-- Dải chỉ số tổng hợp -->
     <div class="kpi-grid" v-if="summary.total > 0">
       <div class="kpi-card">
         <div class="kpi-card-top">
@@ -1309,16 +1239,20 @@ const showQuickPaste = ref(false)
       </div>
     </div>
 
-    <!-- FULL-WIDTH PARAMETERS DATA TABLE -->
+    <!-- Bảng thông số quan trắc toàn chiều rộng -->
     <div class="card" style="padding:0;overflow:hidden" v-if="currentQcvn">
-      <!-- Top Table Bar -->
+      <!-- Thanh công cụ phía trên bảng -->
       <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px">
         <div style="font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px">
           <i class="ti ti-table" style="color:var(--accent);font-size:16px"></i>
           <span>Danh mục <strong>{{ evaluatedParams.filter(p => !p.nhom).length }}</strong> chỉ tiêu theo <strong>{{ currentQcvn.ten }}</strong></span>
           <span v-if="paramPageSize < 999 && totalParamPages > 1" style="color:var(--text3)">(Trang {{ paramCurrentPage }}/{{ totalParamPages }})</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2)">
+        <div style="display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--text2);flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:500">
+            <input type="checkbox" v-model="showPermitLimits" />
+            <span>Nhập giới hạn GPMT riêng</span>
+          </label>
           <span>Hiển thị:</span>
           <select v-model.number="paramPageSize" style="width:140px;height:32px;font-size:12.5px">
             <option :value="10">10 thông số / trang</option>
@@ -1333,18 +1267,19 @@ const showQuickPaste = ref(false)
         <table class="qcvn-table" style="width:100%;min-width:780px">
           <thead>
             <tr>
-              <th style="width:30%">Thông số ô nhiễm</th>
-              <th style="width:12%">Đơn vị</th>
-              <th style="width:16%">Giá trị giới hạn</th>
-              <th style="width:14%">Kết quả đo</th>
-              <th style="width:14%">Kết luận</th>
+              <th style="width:28%">Thông số ô nhiễm</th>
+              <th style="width:10%">Đơn vị</th>
+              <th style="width:15%">Giá trị giới hạn</th>
+              <th v-if="showPermitLimits" style="width:13%">Giới hạn GPMT</th>
+              <th style="width:13%">Kết quả đo</th>
+              <th style="width:13%">Kết luận</th>
               <th style="width:14%">Tỉ lệ so với ngưỡng</th>
             </tr>
           </thead>
           <tbody>
             <template v-for="(p, i) in paginatedParams" :key="i">
               <tr v-if="p.nhom">
-                <td class="param-group-head" colspan="6">{{ p.nhom }}</td>
+                <td class="param-group-head" :colspan="showPermitLimits ? 7 : 6">{{ p.nhom }}</td>
               </tr>
 
               <tr v-else :class="{ 'row-pass': p.status === 'pass', 'row-fail': p.status === 'fail', 'row-near': p.status === 'near' }">
@@ -1354,6 +1289,10 @@ const showQuickPaste = ref(false)
                   <span class="limit-val">
                     {{ p.loai === 'range' ? `${p.min} – ${p.max}` : p.loai === 'min' ? `≥ ${p.gioi_han}` : (p.note || `≤ ${p.gioi_han}`) }}
                   </span>
+                </td>
+                <td v-if="showPermitLimits">
+                  <input type="number" step="any" min="0" v-model.number="customPermitLimits[p.key]" placeholder="Mặc định" class="no-print" />
+                  <span class="print-only">{{ customPermitLimits[p.key] !== undefined && customPermitLimits[p.key] !== null && customPermitLimits[p.key] !== '' ? customPermitLimits[p.key] : '—' }}</span>
                 </td>
                 <td>
                   <input type="number" step="any" min="0" v-model.number="measuredValues[p.key]" placeholder="—" class="no-print" />
@@ -1390,7 +1329,7 @@ const showQuickPaste = ref(false)
         </table>
       </div>
 
-      <!-- Bottom Table Pagination -->
+      <!-- Phân trang phía dưới bảng -->
       <div v-if="paramPageSize < 999 && totalParamPages > 1" class="no-print"
            style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-top:1px solid var(--border);background:var(--surface);flex-wrap:wrap;gap:10px">
         <div style="font-size:12.5px;color:var(--text2)">
@@ -1403,14 +1342,14 @@ const showQuickPaste = ref(false)
         </div>
       </div>
 
-      <!-- Footer note -->
+      <!-- Ghi chú cuối bảng -->
       <div style="padding:12px 20px;border-top:1px solid var(--border);background:var(--bg);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <span class="no-print">Nhập giá trị vào cột "Kết quả đo" — kết luận đối chiếu được tính toán theo thời gian thực.</span>
         <span>Áp dụng: {{ currentQcvn.ap_dung }}</span>
       </div>
     </div>
 
-    <!-- SLIDE-OVER DRAWER: SAVED SAMPLES -->
+    <!-- Ngăn trượt chứa các mẫu đã lưu -->
     <div v-if="showSamplesDrawer" class="drawer-overlay no-print" @click.self="showSamplesDrawer = false">
       <div class="drawer-panel drawer-sm">
         <div class="drawer-header">

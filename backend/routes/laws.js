@@ -15,7 +15,7 @@ function formatLawRecord(row) {
   };
 }
 
-// GET /api/laws - Lấy toàn bộ danh sách văn bản pháp lý (Công khai)
+// GET /api/laws — lấy danh sách văn bản pháp lý công khai
 router.get('/', async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM laws ORDER BY sort_date DESC, id DESC');
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
 });
 
 // Các API dưới đây yêu cầu quyền Admin
-// POST /api/laws - Thêm mới văn bản pháp lý
+// POST /api/laws — thêm văn bản pháp lý
 router.post('/', requireAdmin, async (req, res) => {
   const { id, type, year, sortDate, so, ten, hieuluc, status, mo_ta, dieu_khoang, note, link } = req.body;
 
@@ -98,7 +98,7 @@ router.post('/', requireAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/laws/:id - Cập nhật văn bản pháp lý
+// PUT /api/laws/:id — cập nhật văn bản pháp lý
 router.put('/:id', requireAdmin, async (req, res) => {
   const targetId = req.params.id;
   const { type, year, sortDate, so, ten, hieuluc, status, mo_ta, dieu_khoang, note, link } = req.body;
@@ -149,7 +149,7 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/laws/:id - Xóa văn bản pháp lý
+// DELETE /api/laws/:id — xóa văn bản pháp lý
 router.delete('/:id', requireAdmin, async (req, res) => {
   const targetId = req.params.id;
 

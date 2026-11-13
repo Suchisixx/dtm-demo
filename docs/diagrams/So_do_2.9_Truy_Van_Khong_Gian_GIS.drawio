@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-11-12T17:52:17.155Z" agent="Mozilla/5.0" version="24.0.0" type="device">
+  <diagram id="sd29_gis_spatial" name="Sơ đồ 2.9: Luồng truy vấn và hiển thị dữ liệu không gian GIS">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1050" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t9" value="SƠ ĐỒ 2.9: LUỒNG TRUY VẤN VÀ HIỂN THỊ DỮ LIỆU KHÔNG GIAN GIS (POSTGIS -&gt; LEAFLET)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="75" y="20" width="900" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="col_client" value="CLIENT: GIAO DIỆN LEAFLET.JS" style="shape=rect;rounded=0;fillColor=#F0FDF4;strokeColor=#16A34A;strokeWidth=1.5;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="70" width="280" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="col_server" value="SERVER: EXPRESS API &amp; GIS SERVICE" style="shape=rect;rounded=0;fillColor=#F0F9FF;strokeColor=#0284C7;strokeWidth=1.5;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="70" width="300" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="col_db" value="DATABASE: POSTGRESQL &amp; POSTGIS" style="shape=rect;rounded=0;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=1.5;verticalAlign=top;spacingTop=8;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="70" width="270" height="500" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step1" value="Người dùng chọn bộ lọc
+(Tỉnh, Nhóm I/II/III, Trạng thái)" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step2" value="Nhận GET /api/projects/geo
+Xác thực phiên đăng nhập JWT" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#0284C7;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="120" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step3" value="Thực thi SQL không gian:
+Lấy tọa độ &amp; mẫu đo gần nhất" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#7C3AED;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="120" width="210" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step4" value="Phân tích bán kính tác động R
+&amp; Đóng gói mảng GeoJSON" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#0284C7;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="420" y="250" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step5" value="Dựng ghim Marker theo màu:
+🟢 Đạt · 🟡 Cảnh báo · 🔴 Vượt" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="250" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step6" value="Vẽ vòng tròn bán kính R &amp;
+Chồng lớp đa giác KCN, bảo vệ" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="370" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="g_step7" value="Gắn Popup thông tin dự án &amp;
+Nút xem chi tiết hồ sơ" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="480" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e_g_1" value="1. Gọi API" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;" edge="1" parent="1" source="g_step1" target="g_step2">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_g_2" value="2. SQL Query" style="endArrow=classic;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="1" source="g_step2" target="g_step3">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_g_3" value="3. Trả tọa độ" style="endArrow=classic;html=1;strokeColor=#7C3AED;strokeWidth=1.5;" edge="1" parent="1" source="g_step3" target="g_step4">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_g_4" value="4. GeoJSON" style="endArrow=classic;html=1;strokeColor=#0284C7;strokeWidth=1.5;" edge="1" parent="1" source="g_step4" target="g_step5">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_g_5" value="" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;" edge="1" parent="1" source="g_step5" target="g_step6">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_g_6" value="" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;" edge="1" parent="1" source="g_step6" target="g_step7">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

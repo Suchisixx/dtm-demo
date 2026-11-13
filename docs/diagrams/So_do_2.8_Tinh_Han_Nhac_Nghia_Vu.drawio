@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-11-12T17:52:17.152Z" agent="Mozilla/5.0" version="24.0.0" type="device">
+  <diagram id="sd28_reminder" name="Sơ đồ 2.8: Lưu đồ Tính hạn và phân mức cảnh báo nghĩa vụ môi trường">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="950" pageHeight="750" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t8" value="SƠ ĐỒ 2.8: LƯU ĐỒ TÍNH HẠN VÀ PHÂN MỨC CẢNH BÁO NGHĨA VỤ MÔI TRƯỜNG" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="20" width="750" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_start" value="Bắt đầu: Tác vụ cron chạy ngầm định kỳ hàng ngày (00:00)
+Đọc danh mục dự án &amp; nghĩa vụ định kỳ trong CSDL" style="ellipse;fillColor=#286B4F;strokeColor=#1E563F;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="300" y="70" width="340" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_calc" value="Tính mốc thời hạn đến hạn tiếp theo (T_due)
+và khoảng cách số ngày còn lại: Δt = T_due - T_hien_tai" style="shape=rect;rounded=1;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="310" y="165" width="320" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_branch" value="Phân loại số ngày còn lại (Δt)?" style="rhombus;fillColor=#FEF3C7;strokeColor=#D97706;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="260" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_danger" value="🔴 ĐÃ QUÁ HẠN (Δt &lt; 0)
+Cảnh báo mức cao nhất" style="shape=rect;rounded=1;fillColor=#FEF2F2;strokeColor=#DC2626;fontColor=#DC2626;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="390" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_warn" value="🟡 SẮP ĐẾN HẠN (0 &lt;= Δt &lt;= 15)
+Nhắc nhở chuẩn bị nộp" style="shape=rect;rounded=1;fillColor=#FFFBEB;strokeColor=#D97706;fontColor=#B45309;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="390" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_normal" value="🟢 TRONG HẠN (Δt &gt; 15)
+Tiến độ tuân thủ an toàn" style="shape=rect;rounded=1;fillColor=#ECFDF5;strokeColor=#059669;fontColor=#065F46;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="390" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_update" value="Cập nhật bảng reminders &amp; Tổng hợp KPI Dashboard
+(Hiển thị thẻ cảnh báo và thông tin hạn nộp)" style="shape=rect;rounded=1;fillColor=#F8FAFC;strokeColor=#286B4F;strokeWidth=2;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="510" width="380" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="rm_end" value="Hoàn tất chu kỳ tính hạn hàng ngày" style="ellipse;fillColor=#286B4F;strokeColor=#1E563F;fontStyle=1;fontColor=#FFFFFF;" vertex="1" parent="1">
+          <mxGeometry x="330" y="625" width="280" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rm_1" value="" style="endArrow=classic;html=1;strokeColor=#286B4F;strokeWidth=1.5;" edge="1" parent="1" source="rm_start" target="rm_calc">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_2" value="" style="endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;" edge="1" parent="1" source="rm_calc" target="rm_branch">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_3" value="Quá hạn" style="endArrow=classic;html=1;strokeColor=#DC2626;strokeWidth=1.4;fontColor=#DC2626;" edge="1" parent="1" source="rm_branch" target="rm_danger">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_4" value="Sắp hạn" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;fontColor=#D97706;" edge="1" parent="1" source="rm_branch" target="rm_warn">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_5" value="Trong hạn" style="endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;fontColor=#059669;" edge="1" parent="1" source="rm_branch" target="rm_normal">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_6" value="" style="endArrow=classic;html=1;strokeColor=#64748B;" edge="1" parent="1" source="rm_danger" target="rm_update">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_7" value="" style="endArrow=classic;html=1;strokeColor=#64748B;" edge="1" parent="1" source="rm_warn" target="rm_update">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_8" value="" style="endArrow=classic;html=1;strokeColor=#64748B;" edge="1" parent="1" source="rm_normal" target="rm_update">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_rm_9" value="" style="endArrow=classic;html=1;strokeColor=#286B4F;strokeWidth=1.5;" edge="1" parent="1" source="rm_update" target="rm_end">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

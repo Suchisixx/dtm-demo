@@ -1,0 +1,58 @@
+<mxfile host="Electron" agent="Mozilla/5.0">
+  <diagram id="sd22_architecture" name="Sơ đồ 2.2: Sơ đồ Kiến trúc hệ thống 4 tầng">
+    <mxGraphModel dx="2332" dy="688" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="580" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" value="SƠ ĐỒ KIẾN TRÚC HỆ THỐNG 4 TẦNG" vertex="1">
+          <mxGeometry height="35" width="900" x="150" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="n_user" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;strokeColor=#1E293B;" value="Người dùng (Chuyên viên / QTV)" vertex="1">
+          <mxGeometry height="90" width="50" x="-80" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="n_web" parent="1" style="shape=rect;rounded=1;fillColor=#F8FAFC;strokeColor=#2563EB;strokeWidth=2;fontStyle=1;align=center;" value="TẦNG TRÌNH BÀY (CLIENT) &#xa; Vue.js 3 &#xa;&#xa; • Quản lý phân loại hồ sơ&#xa;• Đối chiếu quy chuẩn QCVN &#xa;• Bản đồ không gian Leaflet.js &#xa;• Bảng điều khiển Chart.js" vertex="1">
+          <mxGeometry height="170" width="220" x="90" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="box_app" parent="1" style="shape=rect;rounded=1;dashed=1;strokeWidth=2;strokeColor=#16A34A;fillColor=#F0FDF4;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=11.5;" value="TẦNG NGHIỆP VỤ (EXPRESS API SERVERS)" vertex="1">
+          <mxGeometry height="370" width="320" x="440" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_1" parent="1" style="shape=cylinder;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;" value="&#xa;&#xa;Động cơ Phân loại &#xa;Nghị định 08/2022 &amp; NĐ 48/2026" vertex="1">
+          <mxGeometry height="80" width="260" x="470" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_2" parent="1" style="shape=cylinder;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;" value="&#xa;&#xa;Động cơ Đối chiếu QCVN &#xa;QCVN 40, QCVN 14, QCVN 19" vertex="1">
+          <mxGeometry height="90" width="260" x="470" y="268" as="geometry" />
+        </mxCell>
+        <mxCell id="srv_3" parent="1" style="shape=cylinder;whiteSpace=wrap;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;" value="&#xa;&#xa;Dịch vụ GIS &amp; Thống kê &#xa;và Phân tích bán kính R &amp; Cảnh báo" vertex="1">
+          <mxGeometry height="80" width="260" x="470" y="375" as="geometry" />
+        </mxCell>
+        <mxCell id="n_db" parent="1" style="shape=cylinder;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=2;fontStyle=1;align=center;" value="TẦNG DỮ LIỆU (DATABASE) &#xa; &#xa;&#xa;&#xa;PostgreSQL &amp; PostGIS &#xa;• Dữ liệu dự án &amp; Tọa độ GIS &#xa;• Tri thức quy tắc &amp; QCVN &#xa;• Mẫu quan trắc môi trường" vertex="1">
+          <mxGeometry height="160" width="220" x="870" y="225" as="geometry" />
+        </mxCell>
+        <mxCell id="n_cron" parent="1" style="shape=rect;rounded=1;fillColor=#FFFBEB;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;" value="Tác vụ nền: Web Crawler (tự động quét)" vertex="1">
+          <mxGeometry height="55" width="260" x="470" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="n_source" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;" value="Trang nguồn: luatmoitruong.vn&#xa;Nguồn dự phòng : thuvienphapluat" vertex="1">
+          <mxGeometry height="55" width="250" x="860" y="525" as="geometry" />
+        </mxCell>
+        <mxCell id="e22_1" edge="1" parent="1" source="n_user" style="endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;" target="n_web" value="HTTP / JSON">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22_2" edge="1" parent="1" source="n_web" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="box_app" value="REST API">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22_3" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#7C3AED;strokeWidth=1.5;" target="n_db" value="SQL / PostGIS">
+          <mxGeometry relative="1" x="0.0182" as="geometry">
+            <mxPoint as="offset" />
+            <mxPoint x="760" y="305" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e22_4" edge="1" parent="1" source="n_cron" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.5;" target="n_source" value="Tải HTML">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22_5" edge="1" parent="1" source="n_cron" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.2;dashed=1;" target="srv_3" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

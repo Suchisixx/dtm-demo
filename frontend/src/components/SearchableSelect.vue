@@ -33,25 +33,43 @@
       </div>
 
       <div class="options-container">
-        <div v-if="filteredOptions.length === 0" class="empty-option">
-          Không tìm thấy kết quả phù hợp
-        </div>
-        <div
-          v-for="opt in filteredOptions"
-          :key="opt.code || opt.name"
-          class="option-item"
-          :class="{ 'is-selected': isSelected(opt) }"
-          @click="selectOption(opt)"
-        >
-          <div class="option-content">
-            <div class="option-title-group">
+        <template v-if="groups.length">
+          <template v-for="group in filteredGroups" :key="group.groupLabel">
+            <div class="option-group-heading">{{ group.groupLabel }}</div>
+            <div
+              v-for="opt in group.items"
+              :key="opt.code || opt.name"
+              class="option-item"
+              :class="{ 'is-selected': isSelected(opt) }"
+              @click="selectOption(opt)"
+            >
               <span class="option-name">{{ opt.name }}</span>
-              <span v-if="opt.subText" class="option-subtext">{{ opt.subText }}</span>
+              <i v-if="isSelected(opt)" class="ti ti-check check-mark"></i>
             </div>
-            <span v-if="opt.districtName" class="option-dist-badge">{{ opt.districtName }}</span>
+          </template>
+        </template>
+        <template v-else>
+          <div v-if="filteredOptions.length === 0" class="empty-option">
+            Không tìm thấy kết quả phù hợp
           </div>
-          <i v-if="isSelected(opt)" class="ti ti-check check-mark"></i>
-        </div>
+          <div
+            v-for="opt in filteredOptions"
+            :key="opt.code || opt.name"
+            class="option-item"
+            :class="{ 'is-selected': isSelected(opt) }"
+            @click="selectOption(opt)"
+          >
+            <div class="option-content">
+              <div class="option-title-group">
+                <span class="option-name">{{ opt.name }}</span>
+                <span v-if="opt.subText" class="option-subtext">{{ opt.subText }}</span>
+              </div>
+              <span v-if="opt.districtName" class="option-dist-badge">{{ opt.districtName }}</span>
+            </div>
+            <i v-if="isSelected(opt)" class="ti ti-check check-mark"></i>
+          </div>
+        </template>
+        <div v-if="groups.length && filteredGroups.length === 0" class="empty-option">Không tìm thấy kết quả phù hợp</div>
       </div>
     </div>
   </div>
@@ -70,6 +88,7 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  groups: { type: Array, default: () => [] },
   placeholder: {
     type: String,
     default: 'Chọn danh mục...'
@@ -126,6 +145,17 @@ const filteredOptions = computed(() => {
            subClean.includes(query) || 
            aliasClean.includes(query)
   })
+})
+
+const filteredGroups = computed(() => {
+  const query = normalizeString(searchQuery.value.trim())
+  return props.groups.map(group => ({
+    ...group,
+    items: (group.items || []).filter(opt => {
+      if (!query) return true
+      return [opt.name, opt.alias, opt.code].some(value => normalizeString(String(value || '')).includes(query))
+    })
+  })).filter(group => group.items.length)
 })
 
 const toggleDropdown = () => {
@@ -335,6 +365,19 @@ watch(() => props.disabled, (newVal) => {
   gap: 8px;
 }
 
+.option-group-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px 6px;
+  background: var(--surface2, #f4f7f5);
+  border-top: 1px solid var(--border, #e5ebe6);
+  color: var(--text2, #52645a);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
 .option-content {
   display: flex;
   align-items: center;
@@ -352,9 +395,8 @@ watch(() => props.disabled, (newVal) => {
 }
 
 .option-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
   font-weight: 500;
 }
 

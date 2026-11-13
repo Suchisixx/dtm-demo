@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-11-12T17:52:17.145Z" agent="Mozilla/5.0" version="24.0.0" type="device">
+  <diagram id="sd24_erd" name="Sơ đồ 2.4: Sơ đồ Quan hệ thực thể (ERD Crow&apos;s Foot)">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="650" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t4" value="SƠ ĐỒ 2.4: SƠ ĐỒ QUAN HỆ THỰC THỂ (ENTITY RELATIONSHIP DIAGRAM)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="20" width="900" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_users" value="USERS (Tài khoản)
++ id: SERIAL [PK]
+- username: VARCHAR
+- role: VARCHAR (admin/staff)
+- full_name: VARCHAR" style="shape=rect;fillColor=#EFF6FF;strokeColor=#2563EB;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="100" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_audit" value="AUDIT_LOGS (Nhật ký)
++ id: SERIAL [PK]
+# user_id: INT [FK]
+- action: VARCHAR
+- created_at: TIMESTAMPTZ" style="shape=rect;fillColor=#F8FAFC;strokeColor=#64748B;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="60" y="320" width="260" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_proj" value="PROJECTS (Hồ sơ dự án)
++ id: SERIAL [PK]
+# user_id: INT [FK]
+- name: VARCHAR
+- latitude: NUMERIC
+- longitude: NUMERIC
+- classification_result: JSONB" style="shape=rect;fillColor=#ECFDF5;strokeColor=#059669;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="420" y="100" width="270" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_samples" value="QCVN_SAMPLES (Mẫu quan trắc)
++ id: SERIAL [PK]
+# project_id: INT [FK]
+# user_id: INT [FK]
+- sub_type: VARCHAR [FK]
+- trang_thai_tong_quat: VARCHAR" style="shape=rect;fillColor=#ECFDF5;strokeColor=#059669;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="420" y="310" width="270" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_reminders" value="REMINDERS (Nhắc hạn)
++ id: SERIAL [PK]
+# project_id: INT [FK]
+- next_due_date: DATE
+- alert_level: VARCHAR" style="shape=rect;fillColor=#FEF3C7;strokeColor=#D97706;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="420" y="500" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_ind" value="INDUSTRIES (Ngành nghề)
++ id: SERIAL [PK]
+- code: VARCHAR [UNIQUE]
+- name: VARCHAR
+- sector: VARCHAR" style="shape=rect;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="790" y="100" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_thresh" value="CLASSIFICATION_THRESHOLDS
++ id: SERIAL [PK]
+# industry_id: INT [FK]
+- group_name: VARCHAR (I/II/III)
+- dossier_type: VARCHAR (ĐTM/GPMT)" style="shape=rect;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="790" y="280" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="erd_qcvn" value="QCVNS (Quy chuẩn kỹ thuật)
++ id: VARCHAR [PK]
+- standard_code: VARCHAR
+- column: VARCHAR (A/B)
+- parameters: JSONB" style="shape=rect;fillColor=#F5F3FF;strokeColor=#7C3AED;strokeWidth=1.5;align=left;" vertex="1" parent="1">
+          <mxGeometry x="790" y="460" width="260" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="e_erd_1" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#2563EB;strokeWidth=1.5;" edge="1" parent="1" source="erd_users" target="erd_proj">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_erd_2" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#64748B;strokeWidth=1.2;" edge="1" parent="1" source="erd_users" target="erd_audit">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_erd_3" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#059669;strokeWidth=1.5;" edge="1" parent="1" source="erd_proj" target="erd_samples">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_erd_4" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#D97706;strokeWidth=1.2;" edge="1" parent="1" source="erd_proj" target="erd_reminders">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_erd_5" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#7C3AED;strokeWidth=1.5;" edge="1" parent="1" source="erd_ind" target="erd_thresh">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_erd_6" value="1 : N" style="endArrow=ERmany;startArrow=ERone;html=1;strokeColor=#7C3AED;strokeWidth=1.5;" edge="1" parent="1" source="erd_qcvn" target="erd_samples">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

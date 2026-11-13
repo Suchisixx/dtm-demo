@@ -1,6 +1,6 @@
 // backend/services/crawler-sync-service.js
-// Đồng bộ sự kiện Crawler -> Phát hiện Rule bị tác động (law_rule_impacts)
-// và trích xuất đề xuất Rule mới ở trạng thái PENDING_REVIEW (không bao giờ tự PUBLISHED).
+// Đồng bộ sự kiện crawler, phát hiện quy tắc bị tác động (law_rule_impacts)
+// và tạo đề xuất quy tắc ở trạng thái PENDING_REVIEW, không tự công bố.
 
 const defaultDb = require('../config/db');
 
@@ -19,7 +19,7 @@ function normalizeSearchTokens(docData = {}) {
 }
 
 /**
- * Phát hiện các rule phân loại & QCVN đang tham chiếu tới văn bản vừa sửa/hết hiệu lực.
+ * Phát hiện quy tắc phân loại/QCVN đang tham chiếu văn bản vừa sửa đổi hoặc hết hiệu lực.
  */
 async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
   const {
@@ -122,15 +122,15 @@ async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
       }
     }
   } catch {
-    // Bảo vệ crawler không bị gián đoạn nếu schema test tối giản
+    // Không để crawler bị gián đoạn nếu schema kiểm thử chỉ có cấu trúc tối thiểu
   }
 
   return createdImpacts;
 }
 
 /**
- * Trích xuất có kiểm soát đề xuất rule candidate từ văn bản mới/cập nhật.
- * Luôn tạo ở trạng thái PENDING_REVIEW — tuyệt đối KHÔNG ghi trực tiếp vào rule runtime PUBLISHED.
+ * Tạo đề xuất quy tắc có kiểm soát từ văn bản mới/cập nhật.
+ * Luôn tạo ở trạng thái PENDING_REVIEW, tuyệt đối không ghi thẳng vào quy tắc runtime đã công bố.
  */
 async function extractRuleCandidatesFromLaw(docData = {}, { db = defaultDb } = {}) {
   const lawId = docData.id || docData.lawId;

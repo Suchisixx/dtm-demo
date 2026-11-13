@@ -38,7 +38,7 @@ function createMockClassificationDb({ failQuery = false } = {}) {
       if (trimmed.startsWith('SELECT id FROM laws')) {
         return { rows: state.laws.map(l => ({ ...l })), rowCount: state.laws.length };
       }
-      if (trimmed.startsWith('SELECT code, display_name, verification_status, publication_status FROM industries WHERE code = $1')) {
+      if (trimmed.includes('FROM industries WHERE code = $1')) {
         const rows = state.industries.filter(r => r.code === params[0]);
         return { rows, rowCount: rows.length };
       }
@@ -48,25 +48,26 @@ function createMockClassificationDb({ failQuery = false } = {}) {
           name: params[1],
           risk_level: params[2],
           display_name: params[3],
-          capacity_label: params[4],
-          unit: params[5],
-          note: params[6],
-          audit_note: params[7],
-          process_stages_meta: params[8],
-          verification_status: params[9],
+          aliases: params[4],
+          capacity_label: params[5],
+          unit: params[6],
+          note: params[7],
+          audit_note: params[8],
+          process_stages_meta: params[9],
+          verification_status: params[10],
           publication_status: 'PUBLISHED',
-          rule_version: params[10],
+          rule_version: params[11],
         });
         return { rows: [], rowCount: 1 };
       }
       if (trimmed.startsWith('UPDATE industries')) {
-        const code = params[7];
+        const code = params[params.length - 1];
         const row = state.industries.find(r => r.code === code);
         if (row) {
           row.name = params[0] || row.name;
           row.display_name = params[0] || row.display_name;
-          row.capacity_label = params[1] || row.capacity_label;
-          row.unit = params[2] || row.unit;
+          row.capacity_label = params[2] || row.capacity_label;
+          row.unit = params[3] || row.unit;
         }
         return { rows: [], rowCount: row ? 1 : 0 };
       }
@@ -84,7 +85,7 @@ function createMockClassificationDb({ failQuery = false } = {}) {
         );
         return { rows: [], rowCount: 1 };
       }
-      if (trimmed.startsWith('INSERT INTO legal_appendices')) {
+      if (trimmed.startsWith('INSERT INTO legal_appendices') || trimmed.startsWith('INSERT INTO phu_luc_phap_ly')) {
         const existing = state.legal_appendices.find(a => a.id === params[0]);
         if (!existing) {
           state.legal_appendices.push({ id: params[0], law_id: params[1], appendix_name: params[2], item_number: params[3], content_summary: params[4] });
@@ -151,7 +152,7 @@ test('Seed phan loai an toan: khong TRUNCATE, seed du 39 nganh + 6 processRules 
   assert.ok(processStages.has('det_nhuom:dyeing_washing'));
   assert.ok(processStages.has('dien_tu:surface_chemical_or_component'));
 
-  // Danh dau 1 nganh va tier la VERIFIED roi seed lai (ke ca force: true) -> khong duoc ghi de
+  // Đánh dấu ngành và ngưỡng VERIFIED rồi chạy seed lại (kể cả force: true); dữ liệu không được ghi đè.
   const xiMangInd = db.state.industries.find(i => i.code === 'xi_mang');
   xiMangInd.verification_status = 'VERIFIED';
   xiMangInd.display_name = 'Xi mang da duyet thu cong';
@@ -183,7 +184,7 @@ test('CL-01: Ma nganh khong ton tai hoac da loai bo (dien_hat_nhan, cang_song) f
     assert.equal(res.canExportOfficialReport, false);
   }
 
-  // Alias san_bay van anh xa dung sang cang_hang_khong
+  // Bí danh san_bay phải ánh xạ đúng sang cang_hang_khong.
   const aliasRes = await evaluateClassificationWithDb({ nganh: 'san_bay', capacity: 5 }, { db });
   assert.equal(aliasRes.ruleSource, 'DATABASE');
   assert.equal(aliasRes.preliminary.hs, 'DTM');
@@ -242,7 +243,7 @@ test('CL-07: Rule NEEDS_LEGAL_VERIFICATION khong duoc tra ket luan chinh thuc, c
   assert.ok(unverifiedRes.unverifiedReasons.length > 0);
   assert.equal(unverifiedRes.preliminary.hs, 'DTM');
 
-  // Khi duoc duyet VERIFIED ca nganh lan tier (DTM Nhom I) -> cho phep ket luan chinh thuc
+  // Khi ngành và ngưỡng đều được duyệt VERIFIED, cho phép kết luận chính thức ĐTM Nhóm I.
   db.state.industries.find(i => i.code === 'che_bien_go').verification_status = 'VERIFIED';
   db.state.classification_thresholds
     .filter(t => t.industry_code === 'che_bien_go')
@@ -261,7 +262,7 @@ test('CL-14 & CL-15: Sua rule trong DB doi ket qua ngay; rule DRAFT / PENDING_RE
   const db = createMockClassificationDb();
   await seedClassificationCatalog(db, { indDb: IND_DB, industryMeta: INDUSTRY_META });
 
-  // CL-14: Duyet va ha nguong cao su cb tu 15000 xuong 5000 -> capacity 6000 doi tu Nhom II/III sang Nhom I DTM
+  // CL-14: Hạ ngưỡng cao su chế biến từ 15.000 xuống 5.000; công suất 6.000 chuyển từ Nhóm II/III sang Nhóm I/ĐTM.
   const ind = db.state.industries.find(i => i.code === 'cao_su_cb');
   ind.verification_status = 'VERIFIED';
   const tiers = db.state.classification_thresholds.filter(t => t.industry_code === 'cao_su_cb');
@@ -280,7 +281,7 @@ test('CL-14 & CL-15: Sua rule trong DB doi ket qua ngay; rule DRAFT / PENDING_RE
   assert.equal(after.hs, 'DTM');
   assert.equal(after.tq, 'cap_bo');
 
-  // CL-15: Them rule DRAFT cho cao_su_cb co nguong rat nho (min 0 -> DKMT cap_xa) nhung engine PHAI BO QUA
+  // CL-15: Bỏ qua quy tắc DRAFT cho cao_su_cb, kể cả khi ngưỡng thấp dẫn đến ĐKMT cấp xã.
   db.state.classification_thresholds.unshift({
     id: 9999,
     industry_code: 'cao_su_cb',
@@ -302,7 +303,7 @@ test('CL-14 & CL-15: Sua rule trong DB doi ket qua ngay; rule DRAFT / PENDING_RE
   assert.equal(withDraft.nhom, 'Nhóm I');
   assert.equal(withDraft.hs, 'DTM');
 
-  // Nganh moi chi co tier PENDING_REVIEW -> khong co rule active
+  // Ngành mới chỉ có ngưỡng PENDING_REVIEW nên không có quy tắc hoạt động.
   db.state.industries.push({
     code: 'nganh_nhap',
     name: 'Nganh dang cho duyet',
@@ -354,7 +355,7 @@ test('Phase 2 Item 5: Effective-Date Versioning & Historical Authority (evaluati
   await ensureClassificationSchema(db);
   await seedClassificationCatalog(db, { indDb: IND_DB, industryMeta: INDUSTRY_META });
 
-  // Mark thuc_pham tiers & industry as VERIFIED, with historical-through-current rule starting 2025-01-06 on DKMT tier
+  // Xác minh ngành và các ngưỡng thực phẩm; ngưỡng ĐKMT có hiệu lực liên tục từ 06/01/2025.
   const ind = db.state.industries.find(i => i.code === 'thuc_pham');
   ind.verification_status = 'VERIFIED';
   ind.publication_status = 'PUBLISHED';
@@ -368,7 +369,7 @@ test('Phase 2 Item 5: Effective-Date Versioning & Historical Authority (evaluati
       }
     });
 
-  // 1. Historical evaluation before 2025-07-01 for small tier (DKMT -> cap_huyen historical vs cap_xa current)
+  // 1. Trước 01/07/2025, ĐKMT của ngưỡng nhỏ thuộc cấp huyện; hiện tại thuộc cấp xã.
   const histRes = await evaluateClassificationWithDb({
     nganh: 'thuc_pham',
     capacity: 50,
@@ -389,7 +390,7 @@ test('Phase 2 Item 5: Effective-Date Versioning & Historical Authority (evaluati
   assert.equal(curRes.tq, 'cap_xa');
   assert.equal(curRes.hs, 'DKMT');
 
-  // 2. Invalid evaluationDate must fail closed
+  // 2. Ngày đánh giá không hợp lệ phải trả kết quả cần rà soát.
   const badDateRes = await evaluateClassificationWithDb({
     nganh: 'thuc_pham',
     capacity: 50,
@@ -402,7 +403,7 @@ test('Phase 2 Item 5: Effective-Date Versioning & Historical Authority (evaluati
   assert.equal(badDateRes.tq, null);
   assert.equal(badDateRes.isOfficialConclusion, false);
 
-  // 3. Date outside effective window must fail closed NO_ACTIVE_RULE_FOR_DATE
+  // 3. Ngày ngoài thời hạn áp dụng phải trả NO_ACTIVE_RULE_FOR_DATE.
   db.state.classification_thresholds
     .filter(t => t.industry_code === 'thuc_pham')
     .forEach(t => {
@@ -440,8 +441,8 @@ test('Phase 2 Item 6: Reject client spoofed sensitiveCriteriaVerified & escalate
       t.publication_status = 'PUBLISHED';
     });
 
-  // Base che_bien_go capacity=60000 is Nhom II / DTM / cap_so (between 50,000 and 200,000).
-  // Client sends spoofed sensitiveCriteriaVerified: true and insideCoreProtectedZone: true without server verification:
+  // Cơ sở chế biến gỗ công suất 60.000 thuộc Nhóm II/ĐTM/cấp sở (từ 50.000 đến 200.000).
+  // Máy khách giả gửi sensitiveCriteriaVerified và insideCoreProtectedZone là true nhưng chưa được máy chủ xác minh:
   const spoofedRes = await evaluateClassificationWithDb({
     nganh: 'che_bien_go',
     capacity: 60000,
@@ -455,7 +456,7 @@ test('Phase 2 Item 6: Reject client spoofed sensitiveCriteriaVerified & escalate
   assert.equal(spoofedRes.canExportOfficialReport, false);
   assert.notEqual(spoofedRes.nhom, 'Nhóm I');
 
-  // With server-authoritative VERIFIED record passed via evaluateClassification options:
+  // Khi truyền bản ghi VERIFIED do máy chủ xác nhận qua tùy chọn evaluateClassification:
   const { loadClassificationCatalog } = require('../services/rule-repository');
   const loaded = await loadClassificationCatalog({ db });
   const verifiedRes = evaluateClassification(
@@ -481,4 +482,9 @@ test('Phase 2 Item 6: Reject client spoofed sensitiveCriteriaVerified & escalate
   assert.equal(verifiedRes.nhom, 'Nhóm I');
   assert.equal(verifiedRes.hs, 'DTM');
   assert.equal(verifiedRes.isOfficialConclusion, true);
+  assert.ok(verifiedRes.classificationRationale, 'Phai co classificationRationale giai trinh dau vao va luat');
+  assert.equal(verifiedRes.classificationRationale.industryCode, 'che_bien_go');
+  assert.equal(verifiedRes.classificationRationale.inputCapacity, 60000);
+  assert.ok(verifiedRes.classificationRationale.legalRefs.length > 0);
+  assert.ok(verifiedRes.classificationRationale.summaryText.includes('60.000'));
 });

@@ -20,6 +20,7 @@ const {
   upsertProjectSensitiveDeclaration,
   reviewProjectSensitiveVerification,
 } = require('../services/rule-repository');
+const { syncProjectDefaultObligations } = require('../services/compliance-reminder-service');
 
 async function loadSensitiveVerificationMap() {
   try {
@@ -37,9 +38,9 @@ async function loadSensitiveVerificationMap() {
   }
 }
 
-// ── GIS API (trước requireAuth vì route /geo cũng cần auth nhưng query khác) ──
+// ── API GIS (đặt trước requireAuth vì /geo dùng cách xác thực khác) ──
 
-// GET /api/projects/geo - Lấy TẤT CẢ dự án có toạ độ (cho bản đồ GIS)
+// GET /api/projects/geo — lấy toàn bộ dự án có tọa độ cho bản đồ GIS
 // Route này PHẢI đặt TRƯỚC router.use(requireAuth) và trước GET '/'
 router.get('/geo', requireAuth, async (req, res) => {
   try {
@@ -127,7 +128,7 @@ router.get('/geo', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/projects/search - Tìm kiếm dự án cho autocomplete liên kết QCVN
+// GET /api/projects/search — tìm dự án để liên kết với mẫu QCVN
 router.get('/search', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -173,7 +174,7 @@ router.get('/search', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/projects/:id/qcvn-samples - Lịch sử quan trắc QCVN theo dự án
+// GET /api/projects/:id/qcvn-samples — lịch sử quan trắc QCVN của dự án
 router.get('/:id/qcvn-samples', requireAuth, async (req, res) => {
   const userId = req.user.id;
   const userRole = req.user.role;
@@ -248,7 +249,7 @@ router.patch('/:id/location', requireAuth, async (req, res) => {
 // ── Tất cả các tuyến còn lại yêu cầu đăng nhập ──
 router.use(requireAuth);
 
-// GET /api/projects - Lấy danh sách dự án của user hiện tại (Hỗ trợ phân trang)
+// GET /api/projects — lấy danh sách dự án của người dùng hiện tại, có phân trang
 router.get('/', async (req, res) => {
   const userId = req.user.id;
   const { page, limit, offset } = paginate(req.query);
@@ -277,7 +278,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/projects/:id - Lấy chi tiết 1 dự án theo ID (hỗ trợ xem chi tiết từ Bản đồ GIS)
+// GET /api/projects/:id — lấy chi tiết dự án, dùng cả khi mở từ bản đồ GIS
 router.get('/:id', async (req, res) => {
   const projectId = req.params.id;
   try {
@@ -301,7 +302,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT /api/projects/:id/sensitive-verification - Admin xác minh yếu tố nhạy cảm phía Server (Item 6)
+// PUT /api/projects/:id/sensitive-verification — quản trị viên xác minh yếu tố nhạy cảm ở máy chủ
 router.put('/:id/sensitive-verification', requireAdmin, async (req, res) => {
   const projectId = parseInt(req.params.id, 10);
   if (Number.isNaN(projectId) || projectId <= 0) {
@@ -367,7 +368,7 @@ router.put('/:id/sensitive-verification', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/projects - Lưu dự án (Tạo mới hoặc Cập nhật) — mở rộng với GIS fields & Sensitive Verification
+// POST /api/projects — tạo/cập nhật dự án, gồm dữ liệu GIS và xác minh yếu tố nhạy cảm
 router.post('/', async (req, res) => {
   const userId = req.user.id;
   const { id, name, form_data, checklist_state, latitude, longitude, dia_chi_hien_thi, quan_huyen, phuong_xa } = req.body;
@@ -473,6 +474,13 @@ router.post('/', async (req, res) => {
         evidenceRef: enrichedFormData.sensitiveDetails?.evidenceRef || enrichedFormData.sensitiveEvidenceRef || null,
       });
 
+      await syncProjectDefaultObligations({
+        db,
+        projectRow: project,
+        evaluatedResult,
+        userId,
+      }).catch((err) => logger.warn('Không thể tự động khởi tạo nghĩa vụ mặc định cho dự án:', err.message));
+
       await logAudit(userId, ACTIONS.CREATE_PROJECT, req, { id: project.id, name: project.name });
       await logQuery(userId, 'classification', enrichedFormData, evaluatedResult);
 
@@ -488,7 +496,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// DELETE /api/projects/:id - Xóa dự án của user hiện tại
+// DELETE /api/projects/:id — xóa dự án của người dùng hiện tại
 router.delete('/:id', async (req, res) => {
   const userId = req.user.id;
   const projectId = req.params.id;

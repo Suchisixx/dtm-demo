@@ -78,8 +78,8 @@ test('QV-01 & QV-06 & QV-07: Thieu luu luong hoac thieu/chua xac nhan nguon tiep
   const db = createMockQcvnDb();
   await seedQcvnCatalog(db, { qcvnData: QCVN_DATA });
 
-  // QV-01: Nuoc thai CN thieu flowRate -> khong mac dinh 100 hay F2
-  for (const flowRate of [null, undefined, 0, '', -5]) {
+  // QV-01: Nước thải công nghiệp thiếu flowRate; không tự gán 100 hoặc F2.
+  for (const flowRate of [null, undefined, 0, '', -5, Infinity, -Infinity]) {
     const res = await selectApplicableQcvnWithDb(
       { sourceType: 'nuoc_thai_cn', receivingWaterClass: 'B', receivingWaterConfirmed: true, flowRate },
       { db }
@@ -89,16 +89,16 @@ test('QV-01 & QV-06 & QV-07: Thieu luu luong hoac thieu/chua xac nhan nguon tiep
     assert.equal(res.qcvnId, null);
   }
 
-  // QV-06: Thieu cot nguon tiep nhan -> khong tu chon B
+  // QV-06: Thiếu cột nguồn tiếp nhận thì không tự chọn cột B.
   const noCol = await selectApplicableQcvnWithDb(
-    { sourceType: 'nuoc_thai_cn', receivingWaterClass: null, flowRate: 100 },
+    { sourceType: 'nuoc_thai_cn', receivingWaterClass: null, receivingWaterConfirmed: true, flowRate: 100 },
     { db }
   );
   assert.equal(noCol.status, 'NEEDS_REVIEW');
   assert.equal(noCol.reason, 'MISSING_RECEIVING_WATER_CLASS');
   assert.equal(noCol.qcvnId, null);
 
-  // QV-07: Co cot nhung receivingWaterConfirmed = false -> NEEDS_REVIEW
+  // QV-07: Có cột nhưng receivingWaterConfirmed = false thì cần rà soát.
   const unconfirmed = await selectApplicableQcvnWithDb(
     { sourceType: 'nuoc_thai_cn', receivingWaterClass: 'A', receivingWaterConfirmed: false, flowRate: 100 },
     { db }
@@ -107,7 +107,16 @@ test('QV-01 & QV-06 & QV-07: Thieu luu luong hoac thieu/chua xac nhan nguon tiep
   assert.equal(unconfirmed.reason, 'MISSING_RECEIVING_SOURCE');
   assert.equal(unconfirmed.qcvnId, null);
 
-  // Danh gia mau nuoc thai ma quen truyen receivingWaterConfirmed: true -> phai fail-closed
+  // Để trống xác nhận không được xem là đã xác nhận.
+  const confirmationOmitted = await selectApplicableQcvnWithDb(
+    { sourceType: 'nuoc_thai_cn', receivingWaterClass: 'A', flowRate: 100 },
+    { db }
+  );
+  assert.equal(confirmationOmitted.status, 'NEEDS_REVIEW');
+  assert.equal(confirmationOmitted.reason, 'MISSING_RECEIVING_SOURCE');
+  assert.equal(confirmationOmitted.qcvnId, null);
+
+  // Đánh giá mẫu nước thải thiếu receivingWaterConfirmed: true phải fail-closed.
   const evalUnconfirmed = await evaluateQcvnSampleWithDb(
     { qcvnId: 'qcvn40_a_low', measuredValues: { pH: 7.0 } },
     { db }
@@ -150,7 +159,7 @@ test('QV-08 & QV-09: Seed QCVN giu metadata day du, khong ghi de VERIFIED, va DB
   const s1 = await seedQcvnCatalog(db, { qcvnData: QCVN_DATA });
   assert.equal(s1.inserted, Object.keys(QCVN_DATA).length);
 
-  // Duyet QCVN 08 Mức A va dat lai 1 nguong BOD5 trong DB
+  // Duyệt QCVN 08 mức A và đặt lại một ngưỡng BOD5 trong DB.
   const q8 = db.state.qcvns.find(r => r.id === 'qcvn08_a');
   q8.verification_status = 'VERIFIED';
   q8.verified_by = 'reviewer_qcvn';
@@ -161,7 +170,7 @@ test('QV-08 & QV-09: Seed QCVN giu metadata day du, khong ghi de VERIFIED, va DB
   const bodParam = q8.tham_so.find(p => p.key === 'BOD5');
   bodParam.gioi_han = 4;
 
-  // Seed lai voi force: true van phai giu nguyen ban ghi VERIFIED
+  // Chạy seed lại với force: true vẫn phải giữ nguyên bản ghi VERIFIED.
   const s2 = await seedQcvnCatalog(db, { qcvnData: QCVN_DATA, force: true });
   assert.ok(s2.skippedVerified >= 1);
   assert.equal(q8.tham_so.find(p => p.key === 'BOD5').gioi_han, 4);
@@ -173,7 +182,7 @@ test('QV-08 & QV-09: Seed QCVN giu metadata day du, khong ghi de VERIFIED, va DB
   assert.equal(loaded.catalog.qcvn08_a.verificationStatus, 'VERIFIED');
   assert.equal(loaded.catalog.qcvn08_a.ruleVersion, '2026.5-verified');
 
-  // Ban ghi DRAFT bi loai bo khoi runtime catalog
+  // Bản ghi DRAFT bị loại khỏi danh mục runtime.
   db.state.qcvns.push({
     id: 'qcvn_draft_new',
     ten: 'Draft QCVN',
@@ -184,7 +193,7 @@ test('QV-08 & QV-09: Seed QCVN giu metadata day du, khong ghi de VERIFIED, va DB
   const loadedWithDraft = await loadQcvnCatalog({ db });
   assert.equal(loadedWithDraft.catalog.qcvn_draft_new, undefined);
 
-  // Cap nhat nguong COD trong DB -> FAIL ngay lap tuc
+  // Cập nhật ngưỡng COD trong DB thì mẫu vượt ngưỡng ngay.
   const allParams = {};
   q8.tham_so.forEach(p => {
     if (p.nhom) return;
@@ -202,7 +211,7 @@ test('QV-08 & QV-09: Seed QCVN giu metadata day du, khong ghi de VERIFIED, va DB
   assert.equal(passRes.trang_thai_tong_quat, 'dat');
   assert.equal(passRes.isOfficialConclusion, true);
 
-  // Sua gioi han BOD5 xuong 0.1 trong DB -> vuot nguong ngay khong can sua code
+  // Hạ giới hạn BOD5 xuống 0,1 trong DB thì kết quả vượt ngưỡng mà không cần sửa mã nguồn.
   bodParam.gioi_han = 0.1;
   const failRes = await evaluateQcvnSampleWithDb({
     qcvnId: 'qcvn08_a',
@@ -248,7 +257,7 @@ test('QV-11 & QV-17 & Q-10 Range GPMT: Thieu chi tieu bat buoc, sai chu ky CO 8h
     },
   };
 
-  // QV-11: Thieu COD bat buoc -> INCOMPLETE / chua_du_thong_so
+  // QV-11: Thiếu COD bắt buộc thì trả INCOMPLETE / chua_du_thong_so.
   const incompleteRes = evaluateQcvnSample({
     qcvnId: 'qcvn_test_verified',
     measuredValues: { pH: 7.2 },
@@ -260,7 +269,7 @@ test('QV-11 & QV-17 & Q-10 Range GPMT: Thieu chi tieu bat buoc, sai chu ky CO 8h
   assert.equal(incompleteRes.trang_thai_tong_quat, 'chua_du_thong_so');
   assert.equal(incompleteRes.summary.missingRequired, 1);
 
-  // QV-17: CO 8h nhung nhap chu ky 24h -> NEEDS_REVIEW / period_mismatch
+  // QV-17: CO chu kỳ 8 giờ nhưng nhập 24 giờ thì trả NEEDS_REVIEW / period_mismatch.
   const mismatchRes = evaluateQcvnSample({
     qcvnId: 'qcvn_air_verified',
     measuredValues: { CO: 5000 },
@@ -273,8 +282,8 @@ test('QV-11 & QV-17 & Q-10 Range GPMT: Thieu chi tieu bat buoc, sai chu ky CO 8h
   assert.equal(mismatchRes.summary.periodMismatch, 1);
   assert.equal(mismatchRes.evaluatedParams[0].status, 'period_mismatch');
 
-  // Q-10 Range GPMT bug fix:
-  // 1) Scalar permitLimit tren thong so range (pH = 6.1, permitLimit = 6.5) KHONG DUOC tra permitCompliant: true
+  // Q-10: Kiểm tra giới hạn khoảng trong GPMT.
+  // 1) Không coi permitLimit đơn 6,5 là đạt khi pH có giới hạn khoảng và kết quả là 6,1.
   const scalarRangeRes = evaluateQcvnSample({
     qcvnId: 'qcvn_test_verified',
     measuredValues: { pH: 6.1, COD: 30 },
@@ -287,7 +296,7 @@ test('QV-11 & QV-17 & Q-10 Range GPMT: Thieu chi tieu bat buoc, sai chu ky CO 8h
   assert.equal(scalarRangeRes.overallStatus, 'NEEDS_REVIEW');
   assert.equal(scalarRangeRes.trang_thai_tong_quat, 'can_ra_soat');
 
-  // 2) Range format hop le "6.5-8.5": pH = 6.1 phai FAIL (vi pham GPMT) con pH = 7.2 phai PASS
+  // 2) Với khoảng "6.5-8.5", pH 6,1 không đạt giấy phép còn pH 7,2 đạt.
   const validRangeFail = evaluateQcvnSample({
     qcvnId: 'qcvn_test_verified',
     measuredValues: { pH: 6.1, COD: 30 },
@@ -325,7 +334,7 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
     getIndustryQcvnMapping,
   } = require('../services/qcvn-service');
 
-  // Mock DB supporting qcvns, projects, and upsert/verify operations
+  // DB giả lập hỗ trợ QCVN, dự án và thao tác thêm/cập nhật/xác minh.
   const state = { qcvns: [] };
   const mockDb = {
     async query(sql, params = []) {
@@ -418,19 +427,19 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
   await ensureQcvnSchema(mockDb);
   await seedQcvnCatalog(mockDb, { qcvnData: QCVN_DATA });
 
-  // Verify industry mapping covers all industry codes
+  // Xác nhận ánh xạ ngành nghề bao phủ toàn bộ mã ngành.
   assert.equal(getIndustryQcvnMapping('thep').sourceType, 'nuoc_thai_cn');
   assert.equal(getIndustryQcvnMapping('khai_thac_ks').sourceType, 'nuoc_thai_cn');
   assert.equal(getIndustryQcvnMapping('do_thi').isUrbanArea, true);
 
-  // Verify qcvn40_a_low as Admin
+  // Quản trị viên xác minh quy tắc qcvn40_a_low.
   await verifyAndPublishQcvn(mockDb, {
     id: 'qcvn40_a_low',
     sourceDocument: 'QCVN 40:2025/BTNMT',
     verifiedBy: 'admin',
   });
 
-  // Server QCVN select for 'thep' new facility
+  // Máy chủ chọn QCVN cho cơ sở thép mới.
   const selOk = await selectQcvnForProjectWithDb({
     nganh: 'thep',
     receivingWaterClass: 'A',
@@ -442,7 +451,7 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
   assert.equal(selOk.sourceType, 'nuoc_thai_cn');
   assert.equal(selOk.qcvnId, 'qcvn40_a_low');
 
-  // Missing flow rate fails closed
+  // Thiếu lưu lượng phải trả kết quả cần rà soát.
   const selMissingFlow = await selectQcvnForProjectWithDb({
     nganh: 'thep',
     receivingWaterClass: 'A',
@@ -452,7 +461,7 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
   assert.equal(selMissingFlow.status, 'NEEDS_REVIEW');
   assert.equal(selMissingFlow.reason, 'MISSING_FLOW_RATE');
 
-  // Existing facility in transitional window without qcvn40_2011_* must fail closed
+  // Cơ sở hiện hữu trong giai đoạn chuyển tiếp thiếu qcvn40_2011_* phải cần rà soát.
   const selTransMissing = await selectQcvnForProjectWithDb({
     nganh: 'thep',
     receivingWaterClass: 'B',
@@ -464,7 +473,7 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
   assert.equal(selTransMissing.status, 'NEEDS_REVIEW');
   assert.equal(selTransMissing.reason, 'TRANSITION_TABLE_NOT_AVAILABLE');
 
-  // Admin inserts & verifies QCVN 40:2011 Cột B -> now resolves qcvn40_2011_b
+  // Sau khi quản trị viên thêm và xác minh, hệ thống chọn qcvn40_2011_b.
   await upsertTransitionalQcvn(mockDb, {
     id: 'qcvn40_2011_b',
     ten: 'QCVN 40:2011/BTNMT Cột B',

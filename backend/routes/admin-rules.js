@@ -1,5 +1,5 @@
 // backend/routes/admin-rules.js
-// Admin Review Center: Kiểm duyệt rule_candidates từ Crawler, xử lý law_rule_impacts,
+// Trung tâm kiểm duyệt: duyệt đề xuất quy tắc từ crawler, xử lý tác động văn bản,
 // và xác minh/ban hành VERIFIED cho danh mục Ngành nghề, Ngưỡng phân loại & QCVN (gồm bảng chuyển tiếp 2011/2008).
 
 const express = require('express');
@@ -19,11 +19,14 @@ const {
   verifyAndPublishQcvn,
   upsertTransitionalQcvn,
   verifyAndPublishIndustryRules,
+  listThresholdRules,
+  updateThresholdRule,
+  verifyThresholdRule,
 } = require('../services/rule-repository');
 
 router.use(requireAdmin);
 
-// GET /api/admin/rules/impacts - Danh sách rule chịu tác động từ văn bản thay đổi/hết hiệu lực
+// GET /api/admin/rules/impacts — danh sách quy tắc bị ảnh hưởng bởi văn bản thay đổi/hết hiệu lực
 router.get('/impacts', async (req, res) => {
   try {
     const status = req.query.status && req.query.status !== 'ALL' ? req.query.status : null;
@@ -35,7 +38,7 @@ router.get('/impacts', async (req, res) => {
   }
 });
 
-// POST /api/admin/rules/impacts/:id/resolve - Đánh dấu đã rà soát/xử lý tác động văn bản
+// POST /api/admin/rules/impacts/:id/resolve — đánh dấu tác động văn bản đã được xử lý
 router.post('/impacts/:id/resolve', async (req, res) => {
   try {
     const { resolutionNote = null, status = 'RESOLVED' } = req.body || {};
@@ -55,7 +58,7 @@ router.post('/impacts/:id/resolve', async (req, res) => {
   }
 });
 
-// GET /api/admin/rules/candidates - Danh sách rule_candidates do crawler trích xuất (PENDING_REVIEW)
+// GET /api/admin/rules/candidates — danh sách đề xuất crawler trích xuất đang chờ duyệt
 router.get('/candidates', async (req, res) => {
   try {
     const status = req.query.status && req.query.status !== 'ALL' ? req.query.status : null;
@@ -67,7 +70,7 @@ router.get('/candidates', async (req, res) => {
   }
 });
 
-// POST /api/admin/rules/candidates/:id/approve - Duyệt candidate đưa vào rule runtime đã công bố
+// POST /api/admin/rules/candidates/:id/approve — duyệt đề xuất để đưa vào quy tắc runtime đã công bố
 router.post('/candidates/:id/approve', async (req, res) => {
   const { reviewNote = null, sourceDocument = null, proposedData = null } = req.body || {};
   const reviewerName = req.user.username || req.user.fullName || `admin#${req.user.id}`;
@@ -116,7 +119,7 @@ router.post('/candidates/:id/approve', async (req, res) => {
   }
 });
 
-// POST /api/admin/rules/candidates/:id/reject - Từ chối đề xuất rule từ crawler
+// POST /api/admin/rules/candidates/:id/reject — từ chối đề xuất quy tắc từ crawler
 router.post('/candidates/:id/reject', async (req, res) => {
   try {
     const { reviewNote = null } = req.body || {};
@@ -134,7 +137,7 @@ router.post('/candidates/:id/reject', async (req, res) => {
   }
 });
 
-// GET /api/admin/rules/catalog - Xem toàn bộ danh mục ngành nghề, ngưỡng & QCVN kèm trạng thái kiểm định
+// GET /api/admin/rules/catalog — xem danh mục ngành nghề, ngưỡng, QCVN và trạng thái kiểm định
 router.get('/catalog', async (req, res) => {
   try {
     const data = await getRuleManagementCatalog({ db });
@@ -145,7 +148,7 @@ router.get('/catalog', async (req, res) => {
   }
 });
 
-// PUT /api/admin/rules/qcvns/:id/verify - Admin ký duyệt QCVN lên VERIFIED kèm chứng từ công báo
+// PUT /api/admin/rules/qcvns/:id/verify — quản trị viên xác minh QCVN kèm chứng từ công báo
 router.put('/qcvns/:id/verify', async (req, res) => {
   try {
     const body = req.body || {};
@@ -170,7 +173,7 @@ router.put('/qcvns/:id/verify', async (req, res) => {
   }
 });
 
-// POST /api/admin/rules/qcvns/transitional/upsert - Admin nhập & ký duyệt bảng chuyển tiếp QCVN 40:2011 / 14:2008 từ tài liệu gốc
+// POST /api/admin/rules/qcvns/transitional/upsert — nhập và xác minh bảng QCVN chuyển tiếp từ tài liệu gốc
 router.post('/qcvns/transitional/upsert', async (req, res) => {
   try {
     const body = req.body || {};
@@ -194,7 +197,7 @@ router.post('/qcvns/transitional/upsert', async (req, res) => {
   }
 });
 
-// PUT /api/admin/rules/industries/:code/verify - Admin ký duyệt ngành nghề & ngưỡng phân loại lên VERIFIED
+// PUT /api/admin/rules/industries/:code/verify — xác minh ngành nghề và ngưỡng phân loại
 router.put('/industries/:code/verify', async (req, res) => {
   try {
     const body = req.body || {};
@@ -217,6 +220,85 @@ router.put('/industries/:code/verify', async (req, res) => {
     }
     logger.error('Lỗi xác minh ngành nghề:', error);
     return res.status(500).json({ error: 'Không thể ký xác minh ngành nghề!' });
+  }
+});
+
+// GET /api/admin/rules/thresholds — danh sách ngưỡng phân loại, có lọc theo trạng thái
+router.get('/thresholds', async (req, res) => {
+  try {
+    const status = req.query.status || null;
+    const thresholds = await listThresholdRules({ status, db });
+    return res.json({ thresholds });
+  } catch (error) {
+    logger.error('Lỗi lấy danh sách ngưỡng phân loại:', error);
+    return res.status(500).json({ error: 'Không thể tải danh sách ngưỡng phân loại!' });
+  }
+});
+
+// PUT /api/admin/rules/thresholds/:id — sửa ngưỡng và tự hạ cấp trạng thái xác minh pháp lý
+router.put('/thresholds/:id', async (req, res) => {
+  try {
+    const patch = req.body || {};
+    const asDraft = Boolean(req.body?.asDraft);
+    const rule = await updateThresholdRule(req.params.id, patch, {
+      asDraft,
+      user: req.user,
+      db,
+    });
+    await logAudit(req.user.id, ACTIONS.UPDATE_RULE || 'UPDATE_RULE', req, {
+      id: rule.id,
+      industry_code: rule.industry_code,
+      verification_status: rule.verification_status,
+      asDraft,
+    });
+    return res.json({
+      message: rule.verification_status === 'VERIFIED'
+        ? 'Đã cập nhật quy tắc!'
+        : 'Đã lưu chỉnh sửa quy tắc (trạng thái cần xác minh pháp lý)!',
+      rule,
+    });
+  } catch (error) {
+    if (error.message === 'RULE_NOT_FOUND') {
+      return res.status(404).json({ error: 'Không tìm thấy quy tắc ngưỡng!' });
+    }
+    logger.error('Lỗi cập nhật ngưỡng phân loại:', error);
+    return res.status(500).json({ error: 'Không thể cập nhật quy tắc ngưỡng!' });
+  }
+});
+
+// POST /api/admin/rules/thresholds/:id/verify — xác minh ngưỡng; bắt buộc có legal_ref và effective_from
+router.post('/thresholds/:id/verify', async (req, res) => {
+  try {
+    const { legalRef, effectiveFrom } = req.body || {};
+    const verifier = req.user.username || req.user.fullName || `admin#${req.user.id}`;
+    const rule = await verifyThresholdRule(req.params.id, {
+      verifiedBy: verifier,
+      legalRef,
+      effectiveFrom,
+      db,
+    });
+    await logAudit(req.user.id, ACTIONS.VERIFY_RULE_CATALOG, req, {
+      targetType: 'THRESHOLD',
+      id: rule.id,
+      industry_code: rule.industry_code,
+      legalRef: rule.legal_ref,
+      effectiveFrom: rule.effective_from,
+    });
+    return res.json({
+      message: `Đã xác minh và phê duyệt quy tắc #${rule.id} (VERIFIED)!`,
+      rule,
+    });
+  } catch (error) {
+    if (error.message === 'RULE_NOT_FOUND') {
+      return res.status(404).json({ error: 'Không tìm thấy quy tắc ngưỡng!' });
+    }
+    if (error.message === 'LEGAL_REF_AND_EFFECTIVE_DATE_REQUIRED') {
+      return res.status(400).json({
+        error: 'Bắt buộc nhập căn cứ pháp lý (legalRef) và ngày bắt đầu hiệu lực (effectiveFrom) để phê duyệt!',
+      });
+    }
+    logger.error('Lỗi xác minh ngưỡng phân loại:', error);
+    return res.status(500).json({ error: 'Không thể xác minh/phê duyệt quy tắc ngưỡng!' });
   }
 });
 

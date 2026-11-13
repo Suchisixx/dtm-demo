@@ -1,26 +1,31 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { getCapacityLabel } from '../services/classification-rules.js'
 import { useAdministrativeDivisions, loadDivisions } from '../composables/useAdministrativeDivisions.js'
+import { useClassificationCatalog } from '../composables/useClassificationCatalog.js'
 import SearchableSelect from './SearchableSelect.vue'
+import SavedProjectsDrawer from './classify/SavedProjectsDrawer.vue'
 import {
   DEFAULT_LAT,
   DEFAULT_LNG,
-  CARTO_VOYAGER_URL,
-  CARTO_ATTRIBUTION,
-  OSM_LANDUSE_URL,
-  OSM_ATTRIBUTION,
-  ESRI_IMAGERY_URL,
   OVERPASS_URL,
   LANDUSE_STYLES,
   EMBEDDED_GIS_LAYERS,
   NOMINATIM_URL,
-  API,
-  PROVINCE_COORDINATES,
   NHOM_COLORS,
+  API,
+  REMINDER_ALERT_META,
+  REMINDER_RECURRENCE_OPTIONS,
   projectQcvnSamples,
-  projectSensitiveVerification
+  projectSensitiveVerification,
+  projectRemindersSync,
+  reminderComplete,
+  reminderById
 } from '../utils/constants.js'
+import {
+  createBaseTileLayer,
+  createAdminBoundaryWmsLayer,
+  fetchAndRenderAdminBoundary
+} from '../utils/map-layers.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 import {
@@ -38,7 +43,7 @@ const props = defineProps({
 })
 const emit = defineEmits(['project-loaded', 'view-qcvn-sample', 'view-law'])
 
-// Form State
+// Trạng thái biểu mẫu
 const projectId = ref(null)
 const name = ref('')
 const nganh = ref('')
@@ -51,13 +56,10 @@ const evaluationDate = ref(new Date().toISOString().slice(0, 10))
 const latitude = ref(DEFAULT_LAT)
 const longitude = ref(DEFAULT_LNG)
 
-// Runtime Catalog Metadata từ API/PostgreSQL (A-01, A-02, A-05)
-const industriesCatalog = ref({})
-const metadataRuleSource = ref('LOADING')
-const metadataFallbackReason = ref('')
+// Metadata danh mục runtime lấy từ API/PostgreSQL
 const isLoadingSavedProject = ref(false)
 
-// GIS State
+// Trạng thái bản đồ GIS
 const diaChiHienThi = ref('')
 const quanHuyen = ref('')
 const phuongXa = ref('')
@@ -67,7 +69,9 @@ const isSearchingAddress = ref(false)
 const locationConfirmed = ref(false)
 const classificationSnapshot = ref(null)
 const activeBaseMap = ref('voyager') // 'voyager' | 'landuse' | 'satellite'
+const showAdminBoundary = ref(true)
 const showLanduseOverlay = ref(true)
+let adminBoundaryWmsLayer = null
 const showImpactBuffer = ref(true)
 const isLoadingLanduse = ref(false)
 const landuseZonesCount = ref(0)
@@ -80,52 +84,38 @@ let searchTimeout = null
 let spatialTimeout = null
 let overpassTimeout = null
 
-// Cascading dropdown state sau sáp nhập (Tỉnh/TP -> Phường/Xã trực tiếp)
+// Trạng thái danh sách chọn nối tiếp sau sáp nhập (Tỉnh/TP → Phường/Xã)
 const { divisions, isLoaded: divisionsLoaded } = useAdministrativeDivisions()
 const selectedProvince = ref(null)
 const selectedWard = ref(null)
+
+// Vị trí gốc do người dùng xác định để phát hiện ghim bản đồ vượt ranh giới
+const initialLocation = ref({
+  province: '',
+  provinceCode: null,
+  ward: '',
+  wardCode: null,
+  district: '',
+  lat: null,
+  lng: null
+})
+const locationMismatchWarning = ref(null)
+const administrativeLookupMessage = ref('')
+let boundaryRequestSequence = 0
+let locationRequestSequence = 0
+let reverseGeocodeSequence = 0
 
 const wardList = computed(() => {
   if (!selectedProvince.value || !divisions.value.length) return []
   const prov = divisions.value.find(p => String(p.code) === String(selectedProvince.value))
   if (!prov) return []
 
-  // Đếm số lần xuất hiện của tên phường/xã trong Tỉnh/TP để phát hiện trùng lặp
-  const nameCounts = new Map()
-  for (const dist of (prov.districts || [])) {
-    for (const ward of (dist.wards || [])) {
-      if (ward && ward.name) {
-        nameCounts.set(ward.name, (nameCounts.get(ward.name) || 0) + 1)
-      }
-    }
-  }
-
-  const list = []
-  const seenCodes = new Set()
-  for (const dist of (prov.districts || [])) {
-    for (const ward of (dist.wards || [])) {
-      if (ward && ward.name) {
-        const code = String(ward.code || `${ward.name}_${dist.code || dist.name}`)
-        if (!seenCodes.has(code)) {
-          seenCodes.add(code)
-          const isDupe = (nameCounts.get(ward.name) || 0) > 1
-          // Nếu trùng tên (như Phường 1, Phường 2... ở các quận khác nhau), hiển thị kèm tên Quận/Huyện để phân biệt rõ ràng
-          const displayName = isDupe && dist.name ? `${ward.name} (${dist.name})` : ward.name
-          list.push({
-            code: code,
-            name: displayName,
-            wardName: ward.name,
-            districtName: dist.name || '',
-            subText: ward.subText || '',
-            alias: ward.alias || '',
-            lat: ward.lat,
-            lng: ward.lng
-          })
-        }
-      }
-    }
-  }
-  return list.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+  return (prov.wards || []).map(unit => ({
+    ...unit,
+    wardName: unit.name,
+    districtName: '',
+    subText: '',
+  })).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
 })
 
 const activeScopeLabel = computed(() => {
@@ -135,7 +125,7 @@ const activeScopeLabel = computed(() => {
   return parts.length > 0 ? parts.join(', ') : 'Toàn quốc'
 })
 
-// Special flags (Đầy đủ 8 yếu tố nhạy cảm Điều 25 Luật BVMT 2020 + 6 cờ nghiệp vụ)
+// Các cờ khai báo: tám yếu tố nhạy cảm theo Điều 25 Luật BVMT 2020 và sáu cờ nghiệp vụ
 const rung = ref(false)
 const lua = ref(false)
 const bg = ref(false)
@@ -162,13 +152,59 @@ const adminSensitiveNote = ref('')
 const adminSensitiveEvidence = ref('')
 const isUpdatingSensitiveVerification = ref(false)
 const sensitiveVerificationMessage = ref('')
+const showAdminSensitivePanel = ref(false)
 
 // Thu gọn chi tiết kỹ thuật / nâng cao để giao diện đơn giản, dễ hiểu
-const showAdvancedEvalDate = ref(false)
 const showSensitiveDetails = ref(false)
 const showTechnicalMeta = ref(false)
-const showDebugCodes = ref(false)
 const showOfflinePreliminary = ref(false)
+const showUnverifiedNotice = ref(false)
+const showNangNhomNotice = ref(false)
+const showClassificationRationale = ref(false)
+
+const displayRationale = computed(() => {
+  if (!result.value) return null
+  if (result.value.classificationRationale) return result.value.classificationRationale
+  const indName = selectedIndustryObj.value?.name || nganh.value || 'Chưa xác định'
+  const unit = selectedIndustryObj.value?.unit || ''
+  const capNum = Number(capacity.value || 0)
+  const capText = `${capNum.toLocaleString('vi-VN')}${unit ? ` ${unit}` : ''}`
+  const procText = result.value.hi?.label || result.value.hs || 'Chưa xác định'
+  return {
+    industryName: indName,
+    processStageLabel: processStage.value || null,
+    inputCapacity: capNum,
+    unit,
+    thresholdText: result.value.phuluc && result.value.phuluc !== '—' ? result.value.phuluc : 'Đối chiếu theo quy mô đầu vào',
+    capacityScale: null,
+    projectGroup: result.value.nhom,
+    procedureLabel: procText,
+    authorityLabel: result.value.coQuan,
+    adjustments: (result.value.nangNhom || []).map(n => `${n.text}${n.ref ? ` (${n.ref})` : ''}`),
+    legalRefs: [result.value.phuluc, result.value.ref].filter(r => r && r !== '—'),
+    summaryText: `Ngành "${indName}" · Quy mô ${capText} → ${result.value.nhom || 'Chưa xác định'} · ${procText}`
+  }
+})
+
+const expandedSensitiveNotices = ref(new Set())
+const toggleSensitiveNotice = (idx) => {
+  if (expandedSensitiveNotices.value.has(idx)) {
+    expandedSensitiveNotices.value.delete(idx)
+  } else {
+    expandedSensitiveNotices.value.add(idx)
+  }
+}
+const isSensitiveNoticeExpanded = (idx) => expandedSensitiveNotices.value.has(idx)
+
+const expandedInfoNotices = ref(new Set())
+const toggleInfoNotice = (idx) => {
+  if (expandedInfoNotices.value.has(idx)) {
+    expandedInfoNotices.value.delete(idx)
+  } else {
+    expandedInfoNotices.value.add(idx)
+  }
+}
+const isInfoNoticeExpanded = (idx) => expandedInfoNotices.value.has(idx)
 
 const hasAnySensitiveDeclaration = computed(() => Boolean(
   rung.value || lua.value || bg.value || bao_ton.value || di_san.value || ven_bien.value || nguon_nc.value || dat_ngap.value
@@ -211,10 +247,12 @@ const flagRefsMap = {
   kcn
 }
 
-// Saved projects state
+// Trạng thái dự án đã lưu
 const projects = ref([])
 const currentPage = ref(1)
 const totalPages = ref(1)
+const isLoadingProjects = ref(false)
+const projectsLoadError = ref('')
 
 // Lịch sử quan trắc QCVN
 const qcvnHistory = ref([])
@@ -240,11 +278,11 @@ const handleViewQcvnSample = (sampleId) => {
   emit('view-qcvn-sample', sampleId)
 }
 
-// Result state
+// Trạng thái kết quả
 const result = ref(null)
 const checklistState = ref({})
 
-// Leaflet Map & Layer Groups
+// Bản đồ Leaflet và các nhóm lớp bản đồ
 let mapInstance = null
 let markerInstance = null
 let baseTileLayer = null
@@ -345,16 +383,32 @@ const estimatedImpactRadius = computed(() => {
 })
 
 const fetchProjects = async (page = 1) => {
+  isLoadingProjects.value = true
+  projectsLoadError.value = ''
   try {
     const res = await fetch(`${API.PROJECTS}?page=${page}&limit=5`)
-    if (res.status === 401) return
-    const data = await res.json()
-    projects.value = data.projects || []
+    if (res.status === 401) {
+      projectsLoadError.value = 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem hồ sơ đã lưu.'
+      return
+    }
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || `Máy chủ trả về mã HTTP ${res.status}.`)
+    projects.value = Array.isArray(data.projects) ? data.projects : []
     totalPages.value = data.pagination?.totalPages || 1
     currentPage.value = page
   } catch (err) {
+    projectsLoadError.value = err instanceof TypeError
+      ? 'Không kết nối được máy chủ API. Hãy kiểm tra backend đang chạy tại cổng 3000.'
+      : `Không tải được hồ sơ đã lưu: ${err.message || 'Lỗi máy chủ'}`
     logger.error('Lỗi khi fetch projects:', err)
+  } finally {
+    isLoadingProjects.value = false
   }
+}
+
+const openProjectsDrawer = () => {
+  showProjectsDrawer.value = true
+  fetchProjects(1)
 }
 
 const fetchStaticGisLayers = async () => {
@@ -387,33 +441,42 @@ const applyBaseMapLayer = (mode) => {
     satelliteLabelsLayer = null
   }
 
-  if (mode === 'voyager') {
-    // Bản đồ Đường phố & Địa danh tiếng Việt hiện đại (Google Maps Road Vietnam - Free, No API Key)
-    baseTileLayer = window.L.tileLayer(CARTO_VOYAGER_URL, {
-      maxZoom: 20,
-      subdomains: ['0', '1', '2', '3'],
-      attribution: CARTO_ATTRIBUTION
-    }).addTo(mapInstance)
-  } else if (mode === 'satellite') {
-    // Ảnh Vệ tinh tích hợp sẵn nhãn đường phố & địa danh tiếng Việt (Google Hybrid - Free, No API Key)
-    baseTileLayer = window.L.tileLayer(ESRI_IMAGERY_URL, {
-      maxZoom: 20,
-      subdomains: ['0', '1', '2', '3'],
-      attribution: '&copy; Google Satellite Hybrid'
-    }).addTo(mapInstance)
-  } else {
-    // 'landuse' — Bản đồ Phân vùng Quy hoạch & Sử dụng đất (HOT OSM Landuse - Khu công nghiệp, Khu dân cư, Nông lâm nghiệp)
-    baseTileLayer = window.L.tileLayer(OSM_LANDUSE_URL, {
-      maxZoom: 19,
-      subdomains: ['a', 'b', 'c'],
-      attribution: OSM_ATTRIBUTION
-    }).addTo(mapInstance)
+  baseTileLayer = createBaseTileLayer(window.L, mode, mapInstance, (fallbackLayer) => {
+    baseTileLayer = fallbackLayer
+  })
 
+  if (mode === 'landuse') {
     // Khi bật chế độ Phân vùng, tự động bật lớp đa giác Khu đất và tải dữ liệu phân vùng
     if (!showLanduseOverlay.value) {
       showLanduseOverlay.value = true
     }
     loadLanduseZonesInView()
+  }
+}
+
+const syncAdminWmsLayer = () => {
+  if (!mapInstance || !window.L) return
+  if (showAdminBoundary.value) {
+    if (!adminBoundaryWmsLayer) {
+      adminBoundaryWmsLayer = createAdminBoundaryWmsLayer(window.L)
+    }
+    if (adminBoundaryWmsLayer && !mapInstance.hasLayer(adminBoundaryWmsLayer)) {
+      adminBoundaryWmsLayer.addTo(mapInstance)
+    }
+  } else {
+    if (adminBoundaryWmsLayer && mapInstance.hasLayer(adminBoundaryWmsLayer)) {
+      mapInstance.removeLayer(adminBoundaryWmsLayer)
+    }
+    if (boundaryLayerGroup) boundaryLayerGroup.clearLayers()
+  }
+}
+
+const toggleAdminBoundary = () => {
+  showAdminBoundary.value = !showAdminBoundary.value
+  syncAdminWmsLayer()
+  if (showAdminBoundary.value) {
+    const code = selectedWard.value || selectedProvince.value
+    if (code) showAdministrativeBoundary(code, selectedWard.value ? 14 : 10)
   }
 }
 
@@ -475,6 +538,7 @@ const initMap = () => {
     applyBaseMapLayer(activeBaseMap.value)
 
     boundaryLayerGroup = window.L.layerGroup().addTo(mapInstance)
+    syncAdminWmsLayer()
     landuseLayerGroup = window.L.layerGroup().addTo(mapInstance)
     candidateLayerGroup = window.L.layerGroup().addTo(mapInstance)
 
@@ -558,7 +622,7 @@ const onManualCoordChange = () => {
 
 const locateUserGps = () => {
   if (!navigator.geolocation) {
-    alert('Trình duyệt của bạn không hỗ trợ định vị GPS.')
+    showFormNotice('Trình duyệt của bạn không hỗ trợ định vị GPS.', 'warning')
     return
   }
   navigator.geolocation.getCurrentPosition(
@@ -570,13 +634,13 @@ const locateUserGps = () => {
       }
     },
     () => {
-      alert('Không thể truy cập vị trí hiện tại. Vui lòng kiểm tra quyền truy cập vị trí của trình duyệt.')
+      showFormNotice('Không thể truy cập vị trí hiện tại. Vui lòng kiểm tra quyền truy cập vị trí của trình duyệt.', 'warning')
     }
   )
 }
 
 /**
- * Gọi API Backend kiểm tra khoảng cách không gian (Biên giới, Bờ biển, Khu bảo tồn, Nguồn nước, KCN...)
+ * Gọi API máy chủ để kiểm tra khoảng cách tới biên giới, bờ biển, khu bảo tồn, nguồn nước, KCN...
  */
 const runSpatialCheck = async (lat, lng) => {
   try {
@@ -794,65 +858,184 @@ const updateFallbackAddress = (lat, lng) => {
 }
 
 /**
- * Đồng bộ ngược Tỉnh/TP và Phường/Xã về SearchableSelect khi chấm bản đồ hoặc chọn kết quả tìm kiếm
+ * Tính khoảng cách địa lý theo công thức Haversine, đơn vị km
  */
-const syncAdminSelectorsFromAddress = (address = {}) => {
-  const rawState = address.state || address.city || address.province || ''
-  const rawWard = address.suburb || address.quarter || address.village || address.town || address.Ward || address.ward || address.neighbourhood || address.hamlet || ''
+const haversineDistKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
 
-  if (rawState) {
-    const matchedProvValue = findMatchingProvince(rawState)
-    if (matchedProvValue) {
-      tinh.value = matchedProvValue
-    }
-    const cleanState = normalizeString(rawState).replace('tinh ', '').replace('thanh pho ', '').replace('tp. ', '')
-    const foundDiv = (divisions.value || []).find(p => {
-      const cleanDiv = normalizeString(p.name).replace('tinh ', '').replace('thanh pho ', '').replace('tp. ', '')
-      return cleanDiv.includes(cleanState) || cleanState.includes(cleanDiv)
-    })
-    if (foundDiv) {
-      selectedProvince.value = foundDiv.code
-      if (!tinh.value) {
-        tinh.value = findMatchingProvince(foundDiv.name) || foundDiv.name
-      }
-    }
-  }
+/**
+ * Chuẩn hóa tên đơn vị hành chính để so sánh không dấu và bỏ tiền tố
+ */
+const normalizeAdminName = (str) => {
+  if (!str) return ''
+  return normalizeString(str)
+    .replace(/^(thanh pho|tinh|tp\.|tp)\s+/i, '')
+    .replace(/^(quan|huyen|thi xa|thanh pho)\s+/i, '')
+    .replace(/^(phuong|xa|thi tran)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
-  if (rawWard) {
-    phuongXa.value = rawWard
-    nextTick(() => {
-      const cleanW = normalizeString(rawWard).replace(/^(phuong|xa|thi tran)\s+/, '')
-      const matchedW = wardList.value.find(w => {
-        const targetName = w.wardName || w.name
-        const cw = normalizeString(targetName).replace(/^(phuong|xa|thi tran)\s+/, '')
-        const aliasClean = normalizeString(w.alias || '')
-        return cw === cleanW || cw.includes(cleanW) || cleanW.includes(cw) || (aliasClean && aliasClean.includes(cleanW))
-      })
-      if (matchedW) {
-        selectedWard.value = matchedW.code
-        phuongXa.value = matchedW.wardName || matchedW.name
-        if (matchedW.districtName) {
-          quanHuyen.value = matchedW.districtName
-        }
-      } else {
-        selectedWard.value = rawWard
+const checkMarkerBoundaryDiscrepancy = async (lat, lng) => {
+  const requestId = ++locationRequestSequence
+  try {
+    const response = await fetch(`${API.CLASSIFY_ADMIN_LOCATE}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`)
+    if (!response.ok) throw new Error(`HTTP_${response.status}`)
+    const { result } = await response.json()
+    if (requestId !== locationRequestSequence) return null
+    if (!result) {
+      administrativeLookupMessage.value = 'Chưa xác định được phường/xã tại vị trí ghim.'
+      return null
+    }
+    administrativeLookupMessage.value = ''
+    const detected = {
+      province: result.province.name,
+      provinceCode: result.province.code,
+      ward: result.unit.name,
+      wardCode: result.unit.code,
+      district: '', lat, lng,
+    }
+    if (!initialLocation.value || (!initialLocation.value.provinceCode && !initialLocation.value.wardCode)) {
+      if (detected.wardCode && showAdminBoundary.value) {
+        showAdministrativeBoundary(detected.wardCode, 14)
       }
-    })
+      return detected
+    }
+    const mismatch = (initialLocation.value.provinceCode && String(initialLocation.value.provinceCode) !== String(detected.provinceCode)) ||
+      (initialLocation.value.wardCode && String(initialLocation.value.wardCode) !== String(detected.wardCode))
+    if (mismatch) {
+      locationMismatchWarning.value = {
+        title: 'Vị trí ghim đang nằm ngoài đơn vị hành chính đã chọn',
+        initial: { ...initialLocation.value, province: initialLocation.value.province || 'Chưa xác định', ward: initialLocation.value.ward || '(Chưa chọn phường/xã)' },
+        newLocation: detected,
+      }
+    } else locationMismatchWarning.value = null
+    return detected
+  } catch (error) {
+    if (requestId === locationRequestSequence) administrativeLookupMessage.value = 'Không thể xác minh phường/xã từ dịch vụ bản đồ; hệ thống giữ nguyên tọa độ ghim.'
+    logger.warn('Không thể tra cứu đơn vị hành chính từ tọa độ:', error)
+    return null
   }
 }
 
+/**
+ * Cập nhật vị trí hồ sơ và các dropdowns theo vị trí mới của marker
+ */
+const applyNewMarkerLocation = () => {
+  if (!locationMismatchWarning.value) return
+  const { newLocation } = locationMismatchWarning.value
+
+  if (newLocation.province) {
+    tinh.value = newLocation.province
+    if (newLocation.provinceCode) {
+      selectedProvince.value = newLocation.provinceCode
+    } else {
+      const cleanP = normalizeAdminName(newLocation.province)
+      const p = (divisions.value || []).find(d => normalizeAdminName(d.name) === cleanP)
+      if (p) selectedProvince.value = p.code
+    }
+  }
+
+  nextTick(() => {
+    if (newLocation.ward) {
+      phuongXa.value = newLocation.ward
+      if (newLocation.district) {
+        quanHuyen.value = newLocation.district
+      }
+      if (newLocation.wardCode) {
+        selectedWard.value = newLocation.wardCode
+      } else {
+        const cleanW = normalizeAdminName(newLocation.ward)
+        const matched = wardList.value.find(w => normalizeAdminName(w.wardName || w.name) === cleanW)
+        if (matched) {
+          selectedWard.value = matched.code
+          phuongXa.value = matched.wardName || matched.name
+          if (matched.districtName) quanHuyen.value = matched.districtName
+        } else {
+          selectedWard.value = newLocation.ward
+        }
+      }
+    }
+
+    initialLocation.value = {
+      province: tinh.value || newLocation.province,
+      provinceCode: selectedProvince.value,
+      ward: phuongXa.value || newLocation.ward,
+      wardCode: selectedWard.value,
+      district: quanHuyen.value || newLocation.district,
+      lat: newLocation.lat,
+      lng: newLocation.lng
+    }
+
+    diaChiHienThi.value = quanHuyen.value
+      ? `${phuongXa.value}, ${quanHuyen.value}, ${tinh.value}`
+      : `${phuongXa.value}, ${tinh.value}`
+
+    locationMismatchWarning.value = null
+    if (selectedWard.value && showAdminBoundary.value) {
+      showAdministrativeBoundary(selectedWard.value, 14)
+    } else if (selectedProvince.value && showAdminBoundary.value) {
+      showAdministrativeBoundary(selectedProvince.value, 10)
+    }
+  })
+}
+
+/**
+ * Đưa marker và bản đồ quay lại vị trí ban đầu
+ */
+const revertToInitialLocation = () => {
+  if (!initialLocation.value || initialLocation.value.lat == null) {
+    locationMismatchWarning.value = null
+    return
+  }
+  const origLat = initialLocation.value.lat
+  const origLng = initialLocation.value.lng
+
+  latitude.value = origLat
+  longitude.value = origLng
+
+  if (markerInstance) {
+    markerInstance.setLatLng([origLat, origLng])
+  }
+  if (mapInstance) {
+    mapInstance.panTo([origLat, origLng])
+  }
+  updateImpactCircle()
+  runSpatialCheck(origLat, origLng)
+
+  locationMismatchWarning.value = null
+}
+
 const reverseGeocode = async (lat, lng) => {
+  const requestId = ++reverseGeocodeSequence
   try {
+    const located = await checkMarkerBoundaryDiscrepancy(lat, lng)
+    if (requestId !== reverseGeocodeSequence) return
+    if (located && !initialLocation.value?.provinceCode && !initialLocation.value?.wardCode) {
+      selectedProvince.value = located.provinceCode
+      selectedWard.value = located.wardCode
+      tinh.value = located.province
+      phuongXa.value = located.ward
+      quanHuyen.value = ''
+      initialLocation.value = {
+        province: located.province, provinceCode: located.provinceCode,
+        ward: located.ward, wardCode: located.wardCode, district: '', lat, lng,
+      }
+    }
     const res = await fetch(`${NOMINATIM_URL}/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=vi`)
     if (res.ok) {
       const data = await res.json()
+      if (requestId !== reverseGeocodeSequence) return
       const address = data.address || {}
-      const state = address.state || address.city || address.province || ''
-      const wardName = address.quarter || address.village || address.suburb || address.town || address.hamlet || address.neighbourhood || address.ward || ''
       const road = address.industrial || address.commercial || address.amenity || address.building || address.road || address.pedestrian || address.street || ''
-
-      syncAdminSelectorsFromAddress(address)
-      locationConfirmed.value = true
 
       // Tự động nhận diện nếu reverse geocode trúng Khu công nghiệp
       if (address.industrial || (data.display_name && normalizeString(data.display_name).includes('khu cong nghiep'))) {
@@ -864,22 +1047,23 @@ const reverseGeocode = async (lat, lng) => {
 
       const parts = []
       if (road) parts.push(road)
-      if (wardName || phuongXa.value) parts.push(wardName || phuongXa.value)
-      if (state || tinh.value) parts.push(state || tinh.value)
+      if (located?.ward || phuongXa.value) parts.push(located?.ward || phuongXa.value)
+      if (located?.province || tinh.value) parts.push(located?.province || tinh.value)
 
       if (parts.length > 0) {
         diaChiHienThi.value = parts.join(', ')
-      } else if (data.display_name) {
-        diaChiHienThi.value = data.display_name
       } else {
-        updateFallbackAddress(lat, lng)
+        diaChiHienThi.value = `Tọa độ: ${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`
       }
     } else {
-      updateFallbackAddress(lat, lng)
+      diaChiHienThi.value = located
+        ? `${located.ward}, ${located.province}`
+        : `Tọa độ: ${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`
     }
   } catch (err) {
+    if (requestId !== reverseGeocodeSequence) return
     logger.error('Lỗi reverse geocoding:', err)
-    updateFallbackAddress(lat, lng)
+    diaChiHienThi.value = `Tọa độ: ${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`
   }
 }
 
@@ -898,72 +1082,16 @@ const findMatchingProvince = (provName) => {
   return null
 }
 
-const capacityLabel = computed(() => {
-  return getCapacityLabel(nganh.value, industriesCatalog.value)
-})
-
-const currentIndustryMeta = computed(() => {
-  return industriesCatalog.value[nganh.value] || null
-})
-
-const availableProcessStages = computed(() => {
-  return currentIndustryMeta.value?.processStages || []
-})
-
-const groupedIndustryOptions = computed(() => {
-  const entries = Object.entries(industriesCatalog.value || {})
-  const groupOrder = [
-    'Công nghiệp chế biến & Chế tạo',
-    'Khai thác Khoáng sản & Năng lượng',
-    'Hạ tầng Kỹ thuật, Giao thông & Môi trường',
-    'Y tế, Du lịch & Nông — Lâm — Thủy sản',
-    'Ngành nghề khác',
-  ]
-  const buckets = new Map()
-  for (const [code, ind] of entries) {
-    const label = ind.groupLabel || 'Ngành nghề khác'
-    if (!buckets.has(label)) buckets.set(label, [])
-    buckets.get(label).push({ code, name: ind.name || code, ...ind })
-  }
-  const ordered = []
-  for (const g of groupOrder) {
-    if (buckets.has(g)) {
-      ordered.push({ groupLabel: g, items: buckets.get(g) })
-      buckets.delete(g)
-    }
-  }
-  for (const [g, items] of buckets.entries()) {
-    ordered.push({ groupLabel: g, items })
-  }
-  return ordered
-})
-
-watch(nganh, () => {
-  if (isLoadingSavedProject.value) return
-  const validKeys = new Set((availableProcessStages.value || []).map(s => s.key))
-  if (!validKeys.has(processStage.value)) {
-    processStage.value = ''
-  }
-})
-
-const fetchClassificationMetadata = async () => {
-  try {
-    const res = await fetch(API.CLASSIFY_METADATA)
-    if (res.ok) {
-      const data = await res.json()
-      industriesCatalog.value = data.industries || {}
-      metadataRuleSource.value = data.ruleSource || 'FALLBACK_UNVERIFIED'
-      metadataFallbackReason.value = data.fallbackReason || ''
-    } else {
-      metadataRuleSource.value = 'FALLBACK_UNVERIFIED'
-      metadataFallbackReason.value = `HTTP_${res.status}`
-    }
-  } catch (err) {
-    logger.error('Lỗi tải danh mục ngành nghề từ API:', err)
-    metadataRuleSource.value = 'FALLBACK_UNVERIFIED'
-    metadataFallbackReason.value = err.message || 'NETWORK_ERROR'
-  }
-}
+const {
+  industriesCatalog,
+  metadataRuleSource,
+  metadataFallbackReason,
+  capacityLabel,
+  availableProcessStages,
+  groupedIndustryOptions,
+  industrySelectOptions,
+  fetchClassificationMetadata
+} = useClassificationCatalog({ industry: nganh, processStage, isLoadingSavedProject })
 
 const buildClassifyFormData = () => {
   const parsedCap = (capacity.value === '' || capacity.value === null || capacity.value === undefined)
@@ -1009,17 +1137,18 @@ const buildClassifyFormData = () => {
 
 const handleClassify = async (shouldSave = true) => {
   if (shouldSave) {
-    if (!name.value || !name.value.trim()) { alert('Vui lòng nhập tên dự án!'); return }
-    if (!nganh.value) { alert('Vui lòng chọn loại hình dự án!'); return }
+    formNotice.value = null
+    if (!name.value || !name.value.trim()) { showFormNotice('Vui lòng nhập tên dự án!'); return }
+    if (!nganh.value) { showFormNotice('Vui lòng chọn loại hình dự án!'); return }
     if (availableProcessStages.value.length > 0 && !processStage.value) {
-      alert('Ngành nghề này bắt buộc phải chọn công đoạn sản xuất hoặc loại nhiên liệu áp dụng!')
+      showFormNotice('Ngành nghề này bắt buộc phải chọn công đoạn sản xuất hoặc loại nhiên liệu áp dụng!')
       return
     }
     const parsedCap = (capacity.value === '' || capacity.value === null || capacity.value === undefined)
       ? NaN
       : Number(capacity.value)
-    if (Number.isNaN(parsedCap) || parsedCap < 0) { alert('Vui lòng nhập quy mô / công suất hợp lệ (>= 0)!'); return }
-    if (!tinh.value && !selectedProvince.value) { alert('Vui lòng chọn Tỉnh / Thành phố hoặc chấm vị trí trên bản đồ!'); return }
+    if (Number.isNaN(parsedCap) || parsedCap < 0) { showFormNotice('Vui lòng nhập quy mô / công suất hợp lệ (>= 0)!'); return }
+    if (!tinh.value && !selectedProvince.value) { showFormNotice('Vui lòng chọn Tỉnh / Thành phố hoặc chấm vị trí trên bản đồ!'); return }
   } else {
     if (!nganh.value) return
   }
@@ -1096,9 +1225,15 @@ const saveProjectToServer = async (formData) => {
         classificationSnapshot.value = data.project.classification_result
       }
       fetchProjects(currentPage.value)
+      fetchProjectReminders(data.project.id)
+      showFormNotice(`Đã lưu dự án "${data.project.name || name.value}" thành công.`, 'success')
+    } else {
+      const errData = await res.json().catch(() => ({}))
+      showFormNotice(errData.error || 'Không thể lưu dự án vào cơ sở dữ liệu.', 'error')
     }
   } catch (err) {
     logger.error('Lỗi lưu dự án:', err)
+    showFormNotice('Lỗi kết nối khi lưu dự án.', 'error')
   }
 }
 
@@ -1121,7 +1256,7 @@ const fetchProjectSensitiveVerification = async (projId) => {
 
 const submitAdminSensitiveVerification = async (verificationStatus) => {
   if (!projectId.value) {
-    alert('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm.')
+    showFormNotice('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm.', 'warning')
     return
   }
   isUpdatingSensitiveVerification.value = true
@@ -1209,12 +1344,61 @@ const selectProject = (project, extraSensitiveVerification = null) => {
   locationConfirmed.value = !!(project.latitude || fd.latitude)
 
   const resolveProvince = () => {
-    if (tinh.value) {
-      const prov = (divisions.value || []).find(p => p.name.includes(tinh.value) || tinh.value.includes(p.name))
-      if (prov) {
-        selectedProvince.value = prov.code
-      }
+    if (!tinh.value) return
+    const oldName = normalizeAdminName(tinh.value)
+    const prov = (divisions.value || []).find(p => normalizeAdminName(p.name) === oldName ||
+      (p.alias || '').split(/[,;]|\s+và\s+/i).some(alias => normalizeAdminName(alias) === oldName))
+    if (!prov) return
+
+    selectedProvince.value = prov.code
+    tinh.value = prov.name
+    initialLocation.value.provinceCode = prov.code
+    initialLocation.value.province = prov.name
+
+    let matchedWard = null
+    if (phuongXa.value) {
+      const oldWard = normalizeAdminName(phuongXa.value)
+      matchedWard = (prov.wards || []).find(unit => normalizeAdminName(unit.name) === oldWard ||
+        (unit.alias || '').split(/[,;]+/).some(alias => normalizeAdminName(alias) === oldWard))
     }
+
+    nextTick(() => {
+      if (matchedWard) {
+        selectedWard.value = matchedWard.code
+        phuongXa.value = matchedWard.name
+        initialLocation.value.wardCode = matchedWard.code
+        initialLocation.value.ward = matchedWard.name
+      }
+      if (mapInstance && showAdminBoundary.value) {
+        const boundaryCode = matchedWard?.code || prov.code
+        if (boundaryCode) {
+          showAdministrativeBoundary(boundaryCode, matchedWard ? 14 : 10).then((bounds) => {
+            if (bounds && (!project.latitude && !fd.latitude)) {
+              moveMarkerToBoundaryCenterIfOutside(bounds)
+            }
+          })
+        }
+      }
+    })
+  }
+
+  checklistState.value = project.checklist_state || {}
+
+  initialLocation.value = {
+    province: tinh.value || '',
+    provinceCode: selectedProvince.value || null,
+    ward: phuongXa.value || '',
+    wardCode: selectedWard.value || null,
+    district: quanHuyen.value || '',
+    lat: latitude.value,
+    lng: longitude.value
+  }
+  locationMismatchWarning.value = null
+
+  if (mapInstance && markerInstance) {
+    const latLng = [latitude.value, longitude.value]
+    mapInstance.setView(latLng, 14)
+    markerInstance.setLatLng(latLng)
   }
 
   if (!divisions.value.length) {
@@ -1223,21 +1407,10 @@ const selectProject = (project, extraSensitiveVerification = null) => {
     resolveProvince()
   }
 
-  if (phuongXa.value) {
-    selectedWard.value = phuongXa.value
-  }
-
-  checklistState.value = project.checklist_state || {}
-
-  if (mapInstance && markerInstance) {
-    const latLng = [latitude.value, longitude.value]
-    mapInstance.setView(latLng, 14)
-    markerInstance.setLatLng(latLng)
-  }
-
   handleClassify(false)
   runSpatialCheck(latitude.value, longitude.value)
   fetchQcvnHistory(project.id)
+  fetchProjectReminders(project.id)
   nextTick(() => {
     isLoadingSavedProject.value = false
   })
@@ -1245,6 +1418,9 @@ const selectProject = (project, extraSensitiveVerification = null) => {
 
 const createNewProject = () => {
   projectId.value = null
+  projectReminders.value = []
+  showAddReminderForm.value = false
+  reminderMsg.value = ''
   name.value = ''
   nganh.value = ''
   processStage.value = ''
@@ -1273,6 +1449,17 @@ const createNewProject = () => {
   forestConversionAreaHa.value = 0
   sensitiveEvidenceRef.value = ''
   serverSensitiveVerification.value = null
+
+  initialLocation.value = {
+    province: '',
+    provinceCode: null,
+    ward: '',
+    wardCode: null,
+    district: '',
+    lat: null,
+    lng: null
+  }
+  locationMismatchWarning.value = null
   adminSensitiveEvidence.value = ''
   adminSensitiveNote.value = ''
   sensitiveVerificationMessage.value = ''
@@ -1317,6 +1504,7 @@ const handleDeleteProject = async (id) => {
         createNewProject()
       }
       fetchProjects(currentPage.value)
+      fetchProjectReminders(data.project.id)
     }
   } catch (err) {
     logger.error('Lỗi khi xóa dự án:', err)
@@ -1333,7 +1521,7 @@ const toggleChecklistItem = (itemIndex) => {
 
 const exportOfficialReport = () => {
   if (!result.value || !result.value.canExportOfficialReport) {
-    alert('Không thể xuất báo cáo kết luận chính thức khi quy định chưa hoàn tất xác minh pháp lý hoặc dữ liệu đầu vào chưa đầy đủ.')
+    showFormNotice('Không thể xuất báo cáo kết luận chính thức khi quy định chưa hoàn tất xác minh pháp lý hoặc dữ liệu đầu vào chưa đầy đủ.', 'warning')
     return
   }
   window.print()
@@ -1361,6 +1549,123 @@ const totalDocsCount = computed(() => {
   if (!result.value || !result.value.cl) return 0
   return (result.value.cl.bat_buoc?.length || 0) + (result.value.cl.bo_sung?.length || 0)
 })
+
+const projectReminders = ref([])
+const loadingReminders = ref(false)
+const showAddReminderForm = ref(false)
+const reminderMsg = ref('')
+const reminderSubmitting = ref(false)
+const reminderForm = ref({
+  tieu_de: '',
+  han_nop: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+  chu_ky: 'hang_nam',
+  so_ngay_nhac_truoc: 30,
+  can_cu_phap_ly: ''
+})
+
+const getReminderBadgeMeta = (level) => {
+  return REMINDER_ALERT_META[level] || REMINDER_ALERT_META.trong_han
+}
+
+const fetchProjectReminders = async (pid) => {
+  if (!pid) {
+    projectReminders.value = []
+    return
+  }
+  loadingReminders.value = true
+  try {
+    const res = await fetch(`${API.REMINDERS}?project_id=${encodeURIComponent(pid)}`)
+    if (!res.ok) return
+    const data = await res.json()
+    projectReminders.value = data.items || []
+  } catch (err) {
+    logger.error('Lỗi tải lịch nhắc hạn dự án:', err)
+  } finally {
+    loadingReminders.value = false
+  }
+}
+
+const syncDefaultReminders = async () => {
+  if (!projectId.value) return
+  reminderSubmitting.value = true
+  reminderMsg.value = ''
+  try {
+    const res = await fetch(projectRemindersSync(projectId.value), { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể khởi tạo nghĩa vụ mặc định')
+    reminderMsg.value = data.message || 'Đã cập nhật lịch nghĩa vụ.'
+    await fetchProjectReminders(projectId.value)
+  } catch (err) {
+    reminderMsg.value = err.message || 'Lỗi khởi tạo nghĩa vụ mặc định.'
+  } finally {
+    reminderSubmitting.value = false
+  }
+}
+
+const submitNewReminder = async () => {
+  if (!projectId.value) return
+  reminderSubmitting.value = true
+  reminderMsg.value = ''
+  try {
+    const res = await fetch(API.REMINDERS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_id: projectId.value,
+        ...reminderForm.value
+      })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể thêm mốc nhắc hạn')
+    reminderMsg.value = data.message || 'Đã thêm mốc nhắc hạn mới.'
+    showAddReminderForm.value = false
+    reminderForm.value.tieu_de = ''
+    reminderForm.value.can_cu_phap_ly = ''
+    await fetchProjectReminders(projectId.value)
+  } catch (err) {
+    reminderMsg.value = err.message || 'Lỗi khi lưu mốc nhắc hạn.'
+  } finally {
+    reminderSubmitting.value = false
+  }
+}
+
+const completeProjectReminder = async (item) => {
+  if (!item?.id) return
+  reminderSubmitting.value = true
+  reminderMsg.value = ''
+  try {
+    const res = await fetch(reminderComplete(item.id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tao_ky_tiep_theo: true })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể cập nhật nghĩa vụ')
+    reminderMsg.value = data.message || 'Đã hoàn thành nghĩa vụ.'
+    await fetchProjectReminders(projectId.value)
+  } catch (err) {
+    reminderMsg.value = err.message || 'Lỗi cập nhật trạng thái.'
+  } finally {
+    reminderSubmitting.value = false
+  }
+}
+
+const deleteProjectReminder = async (item) => {
+  if (!item?.id) return
+  reminderSubmitting.value = true
+  reminderMsg.value = ''
+  try {
+    const res = await fetch(reminderById(item.id), { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể xóa mốc nhắc hạn')
+    reminderMsg.value = data.message || 'Đã xóa mốc nhắc hạn.'
+    await fetchProjectReminders(projectId.value)
+  } catch (err) {
+    reminderMsg.value = err.message || 'Lỗi khi xóa mốc nhắc hạn.'
+  } finally {
+    reminderSubmitting.value = false
+  }
+}
 
 const getAddressCategoryLabel = (item) => {
   const cls = item.class || item.category || ''
@@ -1435,7 +1740,7 @@ const searchAddress = () => {
         nominatimList = await res.json()
       }
 
-      // Fallback nếu truy vấn ghép Phường/Xã quá chặt không ra kết quả -> tìm trong phạm vi Tỉnh/TP
+  // Nếu truy vấn ghép Phường/Xã quá chặt không có kết quả, tìm lại trong phạm vi Tỉnh/TP
       if (nominatimList.length === 0 && wardName && provName) {
         const cleanProv = provName.replace(/^(Thành phố|Tỉnh)\s+/i, '')
         const fallbackQuery = `${rawKeyword}, ${cleanProv}, Việt Nam`
@@ -1536,11 +1841,7 @@ const selectAddressResult = (item) => {
   const lng = parseFloat(item.lon)
   addressResults.value = []
   addressSearch.value = item.display_name
-  diaChiHienThi.value = item.display_name
-
-  if (item.address) {
-    syncAdminSelectorsFromAddress(item.address)
-  }
+  diaChiHienThi.value = ''
 
   if (item.isLocalKcn || item.type === 'industrial' || normalizeString(item.display_name).includes('khu cong nghiep')) {
     kcn.value = true
@@ -1568,96 +1869,69 @@ const selectAddressResult = (item) => {
     boundaryLayerGroup.addLayer(polyLayer)
   }
 
-  setCoordinatesAndAnalyze(lat, lng, false)
+  setCoordinatesAndAnalyze(lat, lng, true)
+
+  initialLocation.value = {
+    province: tinh.value || '',
+    provinceCode: selectedProvince.value || null,
+    ward: phuongXa.value || '',
+    wardCode: selectedWard.value || null,
+    district: quanHuyen.value || '',
+    lat,
+    lng
+  }
+  locationMismatchWarning.value = null
 
   if (mapInstance) {
     mapInstance.flyTo([lat, lng], 15, { duration: 0.9 })
   }
 }
 
-/**
- * Vẽ ranh giới hành chính (Polygon / BoundingBox) khi người dùng chọn Tỉnh/TP hoặc Phường/Xã
- */
-const highlightAdministrativeBoundary = async (queryCandidates, targetZoom = 14) => {
-  const candidates = Array.isArray(queryCandidates) ? queryCandidates : [queryCandidates]
+const showAdministrativeBoundary = async (code, maxZoom = 14) => {
+  const requestId = ++boundaryRequestSequence
+  administrativeLookupMessage.value = ''
   try {
-    for (const queryText of candidates) {
-      if (!queryText) continue
-      const q = encodeURIComponent(`${queryText}, Việt Nam`)
-      const res = await fetch(
-        `${NOMINATIM_URL}/search?q=${q}&format=jsonv2&countrycodes=vn&polygon_geojson=1&polygon_threshold=0.0005&limit=5&accept-language=vi`
-      )
-      if (!res.ok) continue
-      const list = await res.json()
-      if (!list || list.length === 0) continue
-
-      // Ưu tiên kết quả có Polygon/MultiPolygon thực sự, nếu không có thì lấy kết quả đầu tiên
-      const best = list.find(it => it.geojson && (it.geojson.type === 'Polygon' || it.geojson.type === 'MultiPolygon')) || list[0]
-      const lat = parseFloat(best.lat)
-      const lng = parseFloat(best.lon)
-
-      let bboxSouth = lat - 0.018
-      let bboxNorth = lat + 0.018
-      let bboxWest = lng - 0.018
-      let bboxEast = lng + 0.018
-
-      if (best.boundingbox && best.boundingbox.length === 4) {
-        const [s, n, w, e] = best.boundingbox.map(parseFloat)
-        // Tránh trường hợp boundingbox của một điểm node (south == north)
-        if (Math.abs(n - s) > 0.002 && Math.abs(e - w) > 0.002) {
-          bboxSouth = s
-          bboxNorth = n
-          bboxWest = w
-          bboxEast = e
-        }
-      }
-      currentViewbox.value = [bboxWest, bboxNorth, bboxEast, bboxSouth]
-
-      setCoordinatesAndAnalyze(lat, lng, false)
-
-      if (boundaryLayerGroup && window.L) {
-        boundaryLayerGroup.clearLayers()
-        if (best.geojson && (best.geojson.type === 'Polygon' || best.geojson.type === 'MultiPolygon')) {
-          const layer = window.L.geoJSON(best.geojson, {
-            style: {
-              color: '#286B4F',
-              weight: 2.4,
-              dashArray: '6, 4',
-              fillColor: '#286B4F',
-              fillOpacity: 0.08
-            }
-          })
-          boundaryLayerGroup.addLayer(layer)
-          if (mapInstance) {
-            mapInstance.fitBounds(layer.getBounds(), { padding: [24, 24], maxZoom: targetZoom })
-          }
-          return
-        } else {
-          // Vẽ khung khoanh vùng Bounding Box nếu địa phương chưa có Polygon chi tiết trên OSM
-          const boundsRect = window.L.rectangle([[bboxSouth, bboxWest], [bboxNorth, bboxEast]], {
-            color: '#286B4F',
-            weight: 2,
-            dashArray: '6, 4',
-            fillColor: '#286B4F',
-            fillOpacity: 0.06,
-            interactive: false
-          })
-          boundaryLayerGroup.addLayer(boundsRect)
-        }
-      }
-
-      if (mapInstance) {
-        mapInstance.flyTo([lat, lng], targetZoom, { duration: 0.9 })
-      }
-      return
+    const rendered = await fetchAndRenderAdminBoundary(window.L, mapInstance, boundaryLayerGroup, code, {
+      fitBounds: true,
+      maxZoom,
+      color: '#15803d',
+      fillColor: '#16a34a',
+      weight: 3,
+      fillOpacity: 0.12
+    })
+    if (requestId !== boundaryRequestSequence || !rendered) return null
+    const bounds = rendered.bounds
+    currentViewbox.value = [bounds.getWest(), bounds.getNorth(), bounds.getEast(), bounds.getSouth()]
+    return bounds
+  } catch (error) {
+    if (requestId === boundaryRequestSequence) {
+      boundaryLayerGroup?.clearLayers()
+      administrativeLookupMessage.value = `Không tải được ranh giới đơn vị hành chính${error.message ? ` (${error.message})` : ''}. Tọa độ ghim được giữ nguyên.`
+      logger.warn('Lỗi tải ranh giới hành chính:', error)
     }
-  } catch (err) {
-    logger.warn('Lỗi tải ranh giới hành chính:', err)
+    return null
   }
+}
 
-  if (mapInstance && latitude.value && longitude.value) {
-    mapInstance.flyTo([latitude.value, longitude.value], targetZoom, { duration: 0.9 })
+const moveMarkerToBoundaryCenterIfOutside = (bounds) => {
+  if (!bounds || !bounds.isValid()) return
+  const currentLatLng = window.L ? window.L.latLng(latitude.value, longitude.value) : null
+  if (currentLatLng && bounds.contains(currentLatLng)) return
+  const center = bounds.getCenter()
+  const lat = Number(center.lat.toFixed(6))
+  const lng = Number(center.lng.toFixed(6))
+  latitude.value = lat
+  longitude.value = lng
+  if (markerInstance) {
+    markerInstance.setLatLng([lat, lng])
   }
+  updateImpactCircle()
+  if (initialLocation.value) {
+    initialLocation.value.lat = lat
+    initialLocation.value.lng = lng
+  }
+  locationMismatchWarning.value = null
+  runSpatialCheck(lat, lng)
 }
 
 const onProvinceSelect = () => {
@@ -1665,28 +1939,29 @@ const onProvinceSelect = () => {
   phuongXa.value = ''
   quanHuyen.value = ''
   currentViewbox.value = null
+  ++boundaryRequestSequence
   if (boundaryLayerGroup) boundaryLayerGroup.clearLayers()
 
   if (!selectedProvince.value) return
 
   const prov = (divisions.value || []).find(p => String(p.code) === String(selectedProvince.value) || p.name === selectedProvince.value)
   if (prov) {
-    const matched = findMatchingProvince(prov.name)
-    tinh.value = matched || prov.name
+    tinh.value = prov.name
     diaChiHienThi.value = prov.name
 
-    const paddedCode = String(prov.code).padStart(2, '0')
-    const coords = PROVINCE_COORDINATES[paddedCode] || PROVINCE_COORDINATES[String(prov.code)]
-
-    if (coords) {
-      const [lat, lng] = coords
-      setCoordinatesAndAnalyze(lat, lng, false)
-      if (mapInstance) {
-        mapInstance.flyTo([lat, lng], 11, { duration: 0.9 })
-      }
+    initialLocation.value = {
+      province: prov.name,
+      provinceCode: prov.code,
+      ward: '',
+      wardCode: null,
+      district: '',
+      lat: latitude.value,
+      lng: longitude.value
     }
-    const cleanProv = prov.name.replace(/^(Thành phố|Tỉnh)\s+/i, '')
-    highlightAdministrativeBoundary([prov.name, cleanProv], 11)
+    locationMismatchWarning.value = null
+    showAdministrativeBoundary(prov.code, 10).then((bounds) => {
+      if (bounds) moveMarkerToBoundaryCenterIfOutside(bounds)
+    })
   }
 }
 
@@ -1699,35 +1974,47 @@ const onWardSelect = (selectedOpt) => {
     quanHuyen.value = ward.districtName || ''
     const prov = (divisions.value || []).find(p => String(p.code) === String(selectedProvince.value))
     const provName = prov ? prov.name : tinh.value
-    const cleanProv = provName.replace(/^(Thành phố|Tỉnh)\s+/i, '')
-    const cleanWard = rawWardName.replace(/^(Phường|Xã|Thị trấn)\s+/i, '')
-    const cleanDist = (ward.districtName || '').replace(/^(Quận|Huyện|Thị xã|Thành phố)\s+/i, '')
+    diaChiHienThi.value = `${rawWardName}, ${provName}`
 
-    diaChiHienThi.value = ward.districtName 
-      ? `${rawWardName}, ${ward.districtName}, ${provName}`
-      : `${rawWardName}, ${provName}`
-    locationConfirmed.value = true
-
-    if (ward.lat && ward.lng) {
-      setCoordinatesAndAnalyze(ward.lat, ward.lng, false)
-      if (mapInstance) {
-        mapInstance.flyTo([ward.lat, ward.lng], 14, { duration: 0.8 })
-      }
+    initialLocation.value = {
+      province: provName,
+      provinceCode: selectedProvince.value,
+      ward: rawWardName,
+      wardCode: ward.code || null,
+      district: ward.districtName || '',
+      lat: latitude.value,
+      lng: longitude.value
     }
+    locationMismatchWarning.value = null
 
-    const searchQueries = []
-    if (ward.districtName) {
-      searchQueries.push(`${rawWardName}, ${ward.districtName}, ${provName}`)
-      searchQueries.push(`${cleanWard}, ${cleanDist}, ${cleanProv}`)
-    }
-    searchQueries.push(`${rawWardName}, ${provName}`)
-    searchQueries.push(`${cleanWard}, ${cleanProv}`)
-
-    // Khoanh vùng ranh giới Phường/Xã và tự động tải các phân khu KCN / Dân cư bên trong Phường/Xã
-    highlightAdministrativeBoundary(searchQueries, 14).then(() => {
-      if (showLanduseOverlay.value) {
-        setTimeout(() => loadLanduseZonesInView(), 650)
+    showAdministrativeBoundary(ward.code, 14).then(async bounds => {
+      if (bounds) {
+        moveMarkerToBoundaryCenterIfOutside(bounds)
+        if (showLanduseOverlay.value) {
+          setTimeout(() => loadLanduseZonesInView(), 650)
+        }
+        return
       }
+      // Dự phòng nếu dịch vụ ranh giới không phản hồi: tìm tọa độ trung tâm phường/xã qua Nominatim
+      try {
+        const q = encodeURIComponent(`${rawWardName}, ${provName}, Vietnam`)
+        const res = await fetch(`${NOMINATIM_URL}?q=${q}&format=json&limit=1&countrycodes=vn`)
+        const hits = await res.json()
+        if (Array.isArray(hits) && hits[0]?.lat && hits[0]?.lon) {
+          const lat = Number(parseFloat(hits[0].lat).toFixed(6))
+          const lng = Number(parseFloat(hits[0].lon).toFixed(6))
+          latitude.value = lat
+          longitude.value = lng
+          if (markerInstance) markerInstance.setLatLng([lat, lng])
+          if (mapInstance) mapInstance.flyTo([lat, lng], 14, { duration: 0.9 })
+          updateImpactCircle()
+          if (initialLocation.value) {
+            initialLocation.value.lat = lat
+            initialLocation.value.lng = lng
+          }
+          runSpatialCheck(lat, lng)
+        }
+      } catch (_) {}
     })
   }
 }
@@ -1750,6 +2037,15 @@ watch(() => props.loadProjectId, async (newId) => {
 }, { immediate: true })
 
 const showProjectsDrawer = ref(false)
+const formNotice = ref(null)
+let formNoticeTimer = null
+const showFormNotice = (message, type = 'error') => {
+  formNotice.value = { type, message }
+  if (formNoticeTimer) clearTimeout(formNoticeTimer)
+  formNoticeTimer = setTimeout(() => {
+    formNotice.value = null
+  }, 6000)
+}
 
 onMounted(async () => {
   await fetchClassificationMetadata()
@@ -1771,7 +2067,7 @@ onUnmounted(() => {
 
 <template>
   <div id="classify" class="page container fade-up">
-    <!-- PAGE HEADER -->
+    <!-- Tiêu đề trang -->
     <div class="page-header">
       <div>
         <h2 class="section-head">Phân loại Dự án &amp; Xác định Hồ sơ Môi trường</h2>
@@ -1781,7 +2077,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- TOP WORKSPACE PROJECT BAR -->
+    <!-- Thanh chọn dự án ở đầu vùng làm việc -->
     <div class="workspace-bar">
       <div class="workspace-bar-left">
         <span style="font-size:12.5px;color:var(--text3);font-weight:500">Hồ sơ đang làm việc:</span>
@@ -1792,20 +2088,24 @@ onUnmounted(() => {
       </div>
 
       <div class="workspace-bar-actions">
+        <button type="button" class="btn-secondary btn-sm" @click="handleClassify(true)" title="Phân loại và lưu hồ sơ dự án hiện tại">
+          <i class="ti ti-device-floppy"></i>
+          <span>{{ projectId ? 'Cập nhật dự án' : 'Lưu dự án' }}</span>
+        </button>
         <button type="button" class="btn-secondary btn-sm" @click="createNewProject">
           <i class="ti ti-plus"></i>
           <span>Tạo dự án mới</span>
         </button>
-        <button type="button" class="btn-primary btn-sm" @click="showProjectsDrawer = true">
+        <button type="button" class="btn-primary btn-sm" @click="openProjectsDrawer">
           <i class="ti ti-folders"></i>
           <span>Dự án đã lưu ({{ projects.length }})</span>
         </button>
       </div>
     </div>
 
-    <!-- 2-COLUMN CLASSIFY STUDIO -->
+    <!-- Khu vực phân loại chia hai cột -->
     <div class="classify-studio-grid">
-      <!-- LEFT COLUMN: INPUT FORM -->
+      <!-- Cột trái: biểu mẫu đầu vào -->
       <div class="form-section">
         <div class="form-block-title">
           <i class="ti ti-building-factory-2"></i>
@@ -1819,17 +2119,16 @@ onUnmounted(() => {
 
         <div class="form-group">
           <label class="form-label">Loại hình sản xuất / kinh doanh *</label>
-          <select v-model="nganh">
-            <option value="">Chọn ngành nghề dự án ({{ Object.keys(industriesCatalog).length }} nhóm ngành từ CSDL)...</option>
-            <option v-if="nganh && !industriesCatalog[nganh]" :value="nganh">
-              [Mã cũ không tồn tại trong danh mục hợp lệ: {{ nganh }}]
-            </option>
-            <optgroup v-for="grp in groupedIndustryOptions" :key="grp.groupLabel" :label="grp.groupLabel">
-              <option v-for="ind in grp.items" :key="ind.code" :value="ind.code">
-                {{ ind.name }}
-              </option>
-            </optgroup>
-          </select>
+          <SearchableSelect
+            v-model="nganh"
+            :options="industrySelectOptions"
+            :groups="groupedIndustryOptions"
+            placeholder="Tìm kiếm hoặc chọn loại hình sản xuất / kinh doanh..."
+            searchPlaceholder="🔍 Gõ tên ngành (VD: chế biến gỗ, may mặc, bia...)"
+          />
+          <div v-if="nganh && !industriesCatalog[nganh]" style="font-size:12px;color:var(--warn);margin-top:4px">
+            [Mã cũ không tồn tại trong danh mục hợp lệ: {{ nganh }}]
+          </div>
           <div v-if="metadataRuleSource === 'FALLBACK_UNVERIFIED'" style="font-size:11.5px;color:var(--warn);margin-top:4px" :title="metadataFallbackReason || ''">
             <i class="ti ti-alert-triangle"></i> Đang dùng danh mục dự phòng do chưa kết nối được cơ sở dữ liệu quy chuẩn. Kết luận sẽ ở trạng thái Cần rà soát.
           </div>
@@ -1853,28 +2152,6 @@ onUnmounted(() => {
           <input type="number" v-model="capacity" min="0" step="any" placeholder="Nhập quy mô công suất..." />
         </div>
 
-        <div class="form-group">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="font-size:12px;color:var(--text2)">
-              <i class="ti ti-calendar-event" style="color:var(--accent)"></i>
-              Áp dụng quy định ngày: <strong>{{ evaluationDate }}</strong>
-            </span>
-            <button type="button"
-                    class="btn-ghost btn-sm"
-                    style="padding:3px 8px;font-size:11.5px;color:var(--accent)"
-                    @click="showAdvancedEvalDate = !showAdvancedEvalDate">
-              <span>{{ showAdvancedEvalDate ? 'Thu gọn ▴' : 'Đổi ngày áp dụng ▾' }}</span>
-            </button>
-          </div>
-          <div v-show="showAdvancedEvalDate" style="margin-top:6px;padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
-            <label class="form-label" style="font-size:12px">Thời điểm đánh giá / nộp hồ sơ (tùy chọn hồ sơ lịch sử)</label>
-            <input type="date" v-model="evaluationDate" />
-            <div style="font-size:11.5px;color:var(--text3);margin-top:4px">
-              Hệ thống tự đối chiếu thẩm quyền theo ngày bạn chọn (trước ngày 01/07/2025 hay hiện hành). Mặc định dùng ngày hôm nay.
-            </div>
-          </div>
-        </div>
-
         <div class="form-block-title" style="margin-top:18px">
           <i class="ti ti-droplet-half-2"></i>
           <span>2. Quy mô phát thải</span>
@@ -1891,7 +2168,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- COMPACT MODERN GIS STUDIO -->
+        <!-- Khu vực bản đồ GIS -->
         <div class="form-block-title" style="margin-top:20px;margin-bottom:6px;border-bottom:none;padding-bottom:0">
           <i class="ti ti-map-2"></i>
           <span>3. Định vị Không gian &amp; Phân vùng Đất (GIS)</span>
@@ -1917,6 +2194,7 @@ onUnmounted(() => {
               search-placeholder="Gõ tìm Tỉnh / Thành phố..."
               @change="onProvinceSelect"
             />
+            <div v-if="administrativeLookupMessage" class="admin-lookup-message" role="status">{{ administrativeLookupMessage }}</div>
           </div>
 
           <!-- Hàng 2: Chọn Phường / Xã (1 dòng riêng, 100% bề ngang, hiển thị trọn vẹn tên không bị khuất) -->
@@ -1986,9 +2264,95 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- CẢNH BÁO LỆCH RANH GIỚI VỊ TRÍ HỒ SƠ VỚI ĐIỂM CẮM MỐC (GIS) -->
+          <div v-if="locationMismatchWarning" class="location-mismatch-banner">
+            <div class="mismatch-banner-header">
+              <div class="mismatch-header-left">
+                <i class="ti ti-alert-triangle mismatch-icon"></i>
+                <div class="mismatch-title-wrap">
+                  <strong class="mismatch-title">{{ locationMismatchWarning.title }}</strong>
+                  <span class="mismatch-subtitle">Điểm cắm mốc trên bản đồ hiện đang nằm ngoài địa giới hành chính bạn đã chọn</span>
+                </div>
+              </div>
+              <button type="button" class="mismatch-close-btn" @click="locationMismatchWarning = null" title="Đóng thông báo">
+                <i class="ti ti-x"></i>
+              </button>
+            </div>
+
+            <div class="mismatch-body-rows">
+              <!-- Hàng 1: Vị trí cũ (Xác định ban đầu) -->
+              <div class="mismatch-row-card initial-box">
+                <div class="mismatch-row-header">
+                  <span class="mismatch-box-tag">
+                    <i class="ti ti-map-pin"></i> 1. Vị trí cũ (Xác định ban đầu):
+                  </span>
+                </div>
+                <div class="mismatch-row-content">
+                  <div class="mismatch-item">
+                    <span class="m-label">Thành phố / Tỉnh:</span>
+                    <strong class="m-val">{{ locationMismatchWarning.initial.province || 'Chưa chọn' }}</strong>
+                  </div>
+                  <div class="mismatch-item">
+                    <span class="m-label">Phường / Xã:</span>
+                    <strong class="m-val">{{ locationMismatchWarning.initial.ward || '(Chưa chọn)' }}</strong>
+                  </div>
+                  <div v-if="locationMismatchWarning.initial.district" class="mismatch-item">
+                    <span class="m-label">Quận / Huyện:</span>
+                    <span class="m-val-sub">{{ locationMismatchWarning.initial.district }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Hàng 2: Vị trí mới (của điểm cắm mốc) -->
+              <div class="mismatch-row-card new-box">
+                <div class="mismatch-row-header">
+                  <span class="mismatch-box-tag new-tag">
+                    <i class="ti ti-current-location"></i> 2. Vị trí mới của điểm cắm mốc:
+                  </span>
+                </div>
+                <div class="mismatch-row-content">
+                  <div class="mismatch-item">
+                    <span class="m-label">Thành phố / Tỉnh:</span>
+                    <strong class="m-val text-accent">{{ locationMismatchWarning.newLocation.province || 'Đang xác định' }}</strong>
+                  </div>
+                  <div class="mismatch-item">
+                    <span class="m-label">Phường / Xã:</span>
+                    <strong class="m-val text-accent">{{ locationMismatchWarning.newLocation.ward || 'Khu vực lân cận' }}</strong>
+                  </div>
+                  <div v-if="locationMismatchWarning.newLocation.district" class="mismatch-item">
+                    <span class="m-label">Quận / Huyện:</span>
+                    <span class="m-val-sub">{{ locationMismatchWarning.newLocation.district }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hành động lựa chọn -->
+            <div class="mismatch-actions">
+              <button
+                type="button"
+                class="btn-mismatch-apply"
+                @click="applyNewMarkerLocation"
+                title="Cập nhật lại Tỉnh/TP và Phường/Xã trên hồ sơ theo đúng vị trí mới của điểm cắm mốc"
+              >
+                <i class="ti ti-check"></i>
+                <span>Cập nhật theo vị trí mới</span>
+              </button>
+              <button
+                type="button"
+                class="btn-mismatch-revert"
+                @click="revertToInitialLocation"
+                title="Đưa điểm cắm mốc trên bản đồ quay trở lại vị trí ban đầu"
+              >
+                <i class="ti ti-arrow-back-up"></i>
+                <span>Quay lại vị trí ban đầu</span>
+              </button>
+            </div>
+          </div>
+
           <!-- Hàng 3: Khung Bản đồ chuyên nghiệp & Thanh công cụ phẳng -->
           <div class="mini-map-wrapper">
-            <!-- Toolbar phẳng phía trên bản đồ -->
+            <!-- Thanh công cụ phẳng phía trên bản đồ -->
             <div class="mini-map-toolbar">
               <!-- Nhóm 1: Tab chế độ bản đồ -->
               <div class="map-mode-tabs">
@@ -2026,6 +2390,16 @@ onUnmounted(() => {
                 <button
                   type="button"
                   class="map-toggle-btn"
+                  :class="{ active: showAdminBoundary }"
+                  @click="toggleAdminBoundary"
+                  title="Bật/tắt ranh giới hành chính Tỉnh và Phường/Xã"
+                >
+                  <i class="ti ti-border-outer"></i>
+                  <span>Ranh giới P/X</span>
+                </button>
+                <button
+                  type="button"
+                  class="map-toggle-btn"
                   :class="{ active: showLanduseOverlay }"
                   @click="toggleLanduseOverlay"
                   title="Bật/tắt các đa giác KCN và phân vùng đất"
@@ -2054,10 +2428,11 @@ onUnmounted(() => {
               <span class="legend-chip"><i class="dot" style="background:#D97706"></i> Thương mại</span>
               <span class="legend-chip"><i class="dot" style="background:#286B4F"></i> Rừng/Nông nghiệp</span>
               <span class="legend-chip"><i class="dot" style="background:#D65B5B"></i> Vùng bảo tồn</span>
+              <span class="legend-chip"><i class="dot" style="background:#15803d"></i> Ranh giới Phường/Xã</span>
             </div>
           </div>
 
-          <!-- Thông báo khi người dùng click chọn một Phân khu đất trên bản đồ -->
+          <!-- Thông báo khi người dùng bấm chọn một phân khu đất trên bản đồ -->
           <div v-if="selectedZoneInfo" class="selected-zone-banner">
             <i class="ti ti-map-pin-check" style="color:var(--accent);font-size:16px"></i>
             <div style="flex:1">
@@ -2085,16 +2460,16 @@ onUnmounted(() => {
           <!-- Hàng 5: Tọa độ trắc địa (2 cột cân đối) -->
           <div class="form-grid-2" style="gap:12px;margin-bottom:12px">
             <div>
-              <label class="form-label" style="font-size:12px;color:var(--text2)">Vĩ độ (Latitude)</label>
+              <label class="form-label" style="font-size:12px;color:var(--text2)">Vĩ độ</label>
               <input type="number" step="0.000001" v-model.number="latitude" @change="onManualCoordChange" />
             </div>
             <div>
-              <label class="form-label" style="font-size:12px;color:var(--text2)">Kinh độ (Longitude)</label>
+              <label class="form-label" style="font-size:12px;color:var(--text2)">Kinh độ</label>
               <input type="number" step="0.000001" v-model.number="longitude" @change="onManualCoordChange" />
             </div>
           </div>
 
-          <!-- Hàng 6: Hộp Phân tích Không gian Tự động (Spatial Intelligence) -->
+          <!-- Hàng 6: hộp phân tích không gian tự động -->
           <div v-if="spatialData" class="spatial-intel-box">
             <div class="spatial-intel-header">
               <div class="spatial-intel-title">
@@ -2138,7 +2513,7 @@ onUnmounted(() => {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
             <label class="form-label" style="margin-bottom:0">Yếu tố nhạy cảm môi trường (Điều 25 Luật BVMT 2020)</label>
             <span v-if="autoDetectedFlags.length" style="font-size:11px;color:var(--accent);font-weight:600">
-              <i class="ti ti-sparkles"></i> Tự động nhận diện từ tọa độ GIS
+              <i class="ti ti-crosshair"></i> Tự động nhận diện từ tọa độ GIS
             </span>
           </div>
           <div class="check-grid">
@@ -2238,13 +2613,41 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <button type="button" class="btn-classify" style="width:100%;margin-top:6px" @click="handleClassify(true)">
-          <i class="ti ti-calculator"></i>
-          <span>Phân loại &amp; Xác định hồ sơ</span>
-        </button>
+        <div
+          v-if="formNotice"
+          role="alert"
+          :style="{
+            marginTop: '6px',
+            marginBottom: '6px',
+            padding: '10px 12px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            background: formNotice.type === 'success' ? '#dcfce7' : formNotice.type === 'warning' ? '#fef3c7' : '#fee2e2',
+            color: formNotice.type === 'success' ? '#166534' : formNotice.type === 'warning' ? '#92400e' : '#991b1b',
+            border: formNotice.type === 'success' ? '1px solid #86efac' : formNotice.type === 'warning' ? '1px solid #fcd34d' : '1px solid #fca5a5'
+          }"
+        >
+          <span><i class="ti" :class="formNotice.type === 'success' ? 'ti-circle-check' : 'ti-alert-circle'" style="margin-right:6px"></i>{{ formNotice.message }}</span>
+          <button type="button" @click="formNotice = null" style="background:none;border:none;cursor:pointer;color:inherit;font-weight:700;padding:0 4px" aria-label="Đóng thông báo">×</button>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">
+          <button type="button" class="btn-classify" style="flex:1;min-width:200px;margin-top:0" @click="handleClassify(true)">
+            <i class="ti ti-calculator"></i>
+            <span>Phân loại &amp; Lưu dự án</span>
+          </button>
+          <button type="button" class="btn-secondary" style="white-space:nowrap" @click="handleClassify(true)" title="Lưu hồ sơ dự án hiện tại vào danh sách">
+            <i class="ti ti-device-floppy"></i>
+            <span>{{ projectId ? 'Cập nhật dự án' : 'Lưu dự án' }}</span>
+          </button>
+        </div>
       </div>
 
-      <!-- RIGHT COLUMN: CLASSIFICATION RESULT -->
+      <!-- Cột phải: kết quả phân loại -->
       <div class="result-area" id="result-area">
         <div v-if="!result" class="result-empty-card">
           <div class="kpi-icon" style="width:48px;height:48px;font-size:24px;margin:0 auto 14px">
@@ -2257,40 +2660,41 @@ onUnmounted(() => {
         </div>
 
         <div v-else class="fade-up">
-          <!-- Legal Verification & Completeness Gate Banner -->
+          <!-- Cảnh báo xác minh pháp lý và độ đầy đủ dữ liệu -->
           <div v-if="!result.isOfficialConclusion"
-               style="margin-bottom:14px;padding:14px 16px;border-radius:var(--radius);border:1px solid #F59E0B;background:#FFFBEB;color:#92400E">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font-weight:700;font-size:13.5px">
-              <span>
-                <i class="ti ti-shield-exclamation"></i>
-                {{ getConclusionStatusMeta(result.conclusionStatus).title }}
-              </span>
-              <span class="chip" style="background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font-size:11px">
-                {{ getRuleSourceLabel(result.ruleSource) }}
-              </span>
+               style="margin-bottom:14px;padding:12px 14px;border-radius:var(--radius);border:1px solid #FCD34D;background:#FFFBEB;color:#92400E">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px;font-weight:650;font-size:13.5px">
+                <i class="ti ti-shield-exclamation" style="font-size:16px"></i>
+                <span>{{ getConclusionStatusMeta(result.conclusionStatus).title }}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="chip" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;font-size:11px">
+                  {{ getRuleSourceLabel(result.ruleSource) }}
+                </span>
+                <button type="button"
+                        class="btn-ghost btn-sm"
+                        style="padding:2px 8px;font-size:11.5px;color:#92400E;display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(217,119,6,0.3);border-radius:4px"
+                        @click="showUnverifiedNotice = !showUnverifiedNotice">
+                  <span>{{ showUnverifiedNotice ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+                </button>
+              </div>
             </div>
-            <ul v-if="formattedUnverifiedReasons.length" style="margin:8px 0 0 18px;padding:0;font-size:12px;line-height:1.5">
-              <li v-for="(reason, idx) in formattedUnverifiedReasons" :key="'uv-' + idx">{{ reason }}</li>
-            </ul>
-            <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:11.5px">
-              <span style="font-style:italic">
-                * Chức năng xuất báo cáo kết luận chính thức đang tạm khóa cho tới khi đủ dữ liệu và hoàn tất xác minh quy định.
-              </span>
-              <button type="button"
-                      class="btn-ghost btn-sm"
-                      style="padding:2px 6px;font-size:11px;color:#92400E"
-                      @click="showDebugCodes = !showDebugCodes">
-                {{ showDebugCodes ? 'Ẩn mã kỹ thuật ▴' : 'Xem mã kỹ thuật ▾' }}
-              </button>
-            </div>
-            <div v-if="showDebugCodes" style="margin-top:6px;padding:6px 8px;border-radius:6px;background:#FEF3C7;font-family:monospace;font-size:11px;color:#78350F">
-              status={{ result.conclusionStatus }} · ruleSource={{ result.ruleSource }} · version={{ result.ruleVersion || '—' }}
-              <template v-if="result.errorCode"> · errorCode={{ result.errorCode }}</template>
-              <template v-if="result.fallbackReason"> · fallback={{ result.fallbackReason }}</template>
+
+            <!-- Nội dung lưu ý mở rộng khi bấm -->
+            <div v-show="showUnverifiedNotice" style="margin-top:10px;padding-top:10px;border-top:1px dashed #FCD34D">
+              <ul v-if="formattedUnverifiedReasons.length" style="margin:0 0 8px 18px;padding:0;font-size:12px;line-height:1.55">
+                <li v-for="(reason, idx) in formattedUnverifiedReasons" :key="'uv-' + idx">{{ reason }}</li>
+              </ul>
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font-size:11.5px">
+                <span style="font-style:italic;color:#78350F">
+                  * Chức năng xuất báo cáo kết luận chính thức đang tạm khóa cho tới khi đủ dữ liệu và hoàn tất xác minh quy định.
+                </span>
+              </div>
             </div>
           </div>
 
-          <!-- Executive Summary Card -->
+          <!-- Thẻ tóm tắt kết quả -->
           <div class="result-hero">
             <div class="result-main" style="justify-content:space-between;gap:12px;flex-wrap:wrap">
               <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0">
@@ -2393,6 +2797,69 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- Giải trình căn cứ xác định hồ sơ (Ngành, Quy mô & Luật áp dụng), thu gọn mặc định -->
+            <div v-if="!isFallbackOrIncompleteResult && displayRationale"
+                 style="margin-top:10px;padding:10px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
+              <div
+                style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer"
+                @click="showClassificationRationale = !showClassificationRationale"
+              >
+                <div style="font-size:12.5px;color:var(--text);display:flex;align-items:center;gap:6px;flex:1;min-width:220px">
+                  <i class="ti ti-scale-outline" style="color:var(--accent)"></i>
+                  <span><strong>Căn cứ phân loại:</strong> {{ displayRationale.summaryText }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  style="padding:3px 10px;font-size:11.5px;white-space:nowrap"
+                  @click.stop="showClassificationRationale = !showClassificationRationale"
+                >
+                  {{ showClassificationRationale ? 'Thu gọn ▴' : 'Xem căn cứ chi tiết ▾' }}
+                </button>
+              </div>
+
+              <div v-if="showClassificationRationale" style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:12.5px;color:var(--text2);display:flex;flex-direction:column;gap:8px">
+                <div>
+                  <strong style="color:var(--text)">1. Thông số đầu vào đã đối chiếu:</strong>
+                  <ul style="margin:4px 0 0 18px;padding:0;line-height:1.55">
+                    <li><strong>Loại hình ngành nghề:</strong> {{ displayRationale.industryName }}</li>
+                    <li v-if="displayRationale.processStageLabel"><strong>Công đoạn / Nhiên liệu:</strong> {{ displayRationale.processStageLabel }}</li>
+                    <li>
+                      <strong>Quy mô / Công suất nhập:</strong>
+                      {{ Number(displayRationale.inputCapacity || 0).toLocaleString('vi-VN') }} {{ displayRationale.unit }}
+                      <span v-if="displayRationale.thresholdText" style="color:var(--text3)"> — Khớp khung quy định: {{ displayRationale.thresholdText }}</span>
+                    </li>
+                    <li v-if="displayRationale.capacityScale"><strong>Phân mức công suất:</strong> {{ displayRationale.capacityScale }}</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <strong style="color:var(--text)">2. Kết quả xác định từ đầu vào:</strong>
+                  <div style="margin-top:4px;line-height:1.55">
+                    • Thuộc <strong>{{ displayRationale.projectGroup || 'Chưa xác định' }}</strong>
+                    → Hồ sơ yêu cầu: <strong>{{ displayRationale.procedureLabel || 'Chưa xác định' }}</strong>
+                    <span v-if="displayRationale.authorityLabel"> · Thẩm quyền giải quyết: <strong>{{ displayRationale.authorityLabel }}</strong></span>
+                  </div>
+                  <div v-for="(adj, aIdx) in (displayRationale.adjustments || [])" :key="'adj-' + aIdx" style="margin-top:3px;color:#b45309">
+                    • Điều chỉnh nâng nhóm: {{ adj }}
+                  </div>
+                </div>
+
+                <div v-if="displayRationale.legalRefs && displayRationale.legalRefs.length">
+                  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+                    <strong style="color:var(--text)">3. Luật, Nghị định &amp; Quy định áp dụng:</strong>
+                    <button v-if="result.ref_law_id" type="button" class="btn-secondary btn-sm" style="padding:2px 8px;font-size:11.5px" @click="emit('view-law', result.ref_law_id)">
+                      <i class="ti ti-book-2"></i>
+                      <span>Mở văn bản luật</span>
+                    </button>
+                  </div>
+                  <ul style="margin:4px 0 0 18px;padding:0;line-height:1.55">
+                    <li v-for="(lr, lIdx) in displayRationale.legalRefs" :key="'lr-' + lIdx">{{ lr }}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
             <!-- Tham khảo ngoại tuyến tách riêng khi mất kết nối DB để tránh mâu thuẫn với ô Chưa xác định -->
             <div v-if="result.ruleSource !== 'DATABASE' && !result.errorCode && result.preliminary"
                  style="margin-top:10px;padding:10px 14px;background:#F8FAFC;border:1px dashed var(--border);border-radius:var(--radius)">
@@ -2437,35 +2904,51 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- Admin Panel Xác minh vùng nhạy cảm (chỉ hiển thị khi dự án có yếu tố nhạy cảm cần duyệt) -->
+            <!-- Admin Panel Xác minh vùng nhạy cảm (thu gọn mặc định, bấm để mở rộng khi cần thẩm định) -->
             <div v-if="shouldShowAdminSensitivePanel"
                  class="no-print"
-                 style="margin-top:12px;padding:12px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
-              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+                 style="margin-top:12px;padding:10px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
+              <div
+                style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;cursor:pointer"
+                @click="showAdminSensitivePanel = !showAdminSensitivePanel"
+              >
                 <strong style="font-size:12.5px;color:var(--text)">
                   <i class="ti ti-shield-check" style="color:var(--accent)"></i>
                   Kiểm duyệt vùng nhạy cảm (Quản trị viên)
                 </strong>
-                <span style="font-size:11.5px;color:var(--text2)">
-                  Trạng thái hiện tại: <strong>{{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</strong>
-                </span>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="font-size:11.5px;color:var(--text2)">
+                    Trạng thái hiện tại: <strong>{{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    style="padding:3px 10px;font-size:11.5px"
+                    @click.stop="showAdminSensitivePanel = !showAdminSensitivePanel"
+                  >
+                    {{ showAdminSensitivePanel ? 'Thu gọn ▴' : 'Mở rộng ▾' }}
+                  </button>
+                </div>
               </div>
-              <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
-                <input type="text" v-model="adminSensitiveEvidence" placeholder="Số văn bản / Chứng cứ ranh giới..." />
-                <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của quản trị viên..." />
-              </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <button type="button" class="btn-primary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('VERIFIED')">
-                  <i class="ti ti-check"></i>
-                  <span>Xác nhận hợp lệ</span>
-                </button>
-                <button type="button" class="btn-secondary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('REJECTED')">
-                  <i class="ti ti-x"></i>
-                  <span>Từ chối xác nhận</span>
-                </button>
-                <span v-if="sensitiveVerificationMessage" style="font-size:12px;color:var(--accent);font-weight:500">
-                  {{ sensitiveVerificationMessage }}
-                </span>
+
+              <div v-if="showAdminSensitivePanel" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+                <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
+                  <input type="text" v-model="adminSensitiveEvidence" placeholder="Số văn bản / Chứng cứ ranh giới..." />
+                  <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của quản trị viên..." />
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                  <button type="button" class="btn-primary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('VERIFIED')">
+                    <i class="ti ti-check"></i>
+                    <span>Xác nhận hợp lệ</span>
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('REJECTED')">
+                    <i class="ti ti-x"></i>
+                    <span>Từ chối xác nhận</span>
+                  </button>
+                  <span v-if="sensitiveVerificationMessage" style="font-size:12px;color:var(--accent);font-weight:500">
+                    {{ sensitiveVerificationMessage }}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2490,35 +2973,61 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Warnings adjusted Group -->
-          <div v-if="result.nangNhom.length" class="upgrade-box">
-            <div class="upgrade-title">
-              <i class="ti ti-alert-triangle"></i>
-              <span>Điều chỉnh nâng nhóm / chuyển đổi hồ sơ tự động</span>
+          <!-- Nhóm cảnh báo đã điều chỉnh, có thể thu gọn -->
+          <div v-if="result.nangNhom.length" class="upgrade-box" style="padding:10px 14px;border-radius:var(--radius);margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px">
+              <div class="upgrade-title" style="margin-bottom:0">
+                <i class="ti ti-alert-triangle"></i>
+                <span>Điều chỉnh nâng nhóm / chuyển đổi hồ sơ ({{ result.nangNhom.length }} mục)</span>
+              </div>
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:2px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px"
+                      @click="showNangNhomNotice = !showNangNhomNotice">
+                <span>{{ showNangNhomNotice ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+              </button>
             </div>
-            <div v-for="n in result.nangNhom" :key="n.text" class="upgrade-item">
-              • {{ n.text }} <span style="font-size:11.5px;color:var(--text3)">({{ n.ref }})</span>
+            <div v-show="showNangNhomNotice" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div v-for="n in result.nangNhom" :key="n.text" class="upgrade-item">
+                • {{ n.text }} <span style="font-size:11.5px;color:var(--text3)">({{ n.ref }})</span>
+              </div>
             </div>
           </div>
 
-          <!-- Sensitive Areas warnings -->
-          <div v-for="c in result.cauNhom" :key="c.text" :class="c.type === 'warn' ? 'upgrade-box' : 'phanlky-box'">
-            <div :class="c.type === 'warn' ? 'upgrade-title' : 'phanlky-title'">
-              <i class="ti" :class="c.type === 'warn' ? 'ti-alert-circle' : 'ti-info-circle'"></i>
-              <span>Lưu ý pháp lý &amp; Yếu tố nhạy cảm</span>
+          <!-- Cảnh báo vùng nhạy cảm, có thể thu gọn -->
+          <div v-for="(c, cIdx) in result.cauNhom" :key="c.text" :class="c.type === 'warn' ? 'upgrade-box' : 'phanlky-box'" style="padding:10px 14px;border-radius:var(--radius);margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px">
+              <div :class="c.type === 'warn' ? 'upgrade-title' : 'phanlky-title'" style="margin-bottom:0">
+                <i class="ti" :class="c.type === 'warn' ? 'ti-alert-circle' : 'ti-info-circle'"></i>
+                <span>Lưu ý pháp lý &amp; Yếu tố nhạy cảm</span>
+              </div>
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:2px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px"
+                      @click="toggleSensitiveNotice(cIdx)">
+                <span>{{ isSensitiveNoticeExpanded(cIdx) ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+              </button>
             </div>
-            <div :class="c.type === 'warn' ? 'upgrade-item' : 'phanlky-text'">
+            <div v-show="isSensitiveNoticeExpanded(cIdx)" :class="c.type === 'warn' ? 'upgrade-item' : 'phanlky-text'" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
               {{ c.text }} <span style="font-size:11.5px;color:var(--text3)">({{ c.ref }})</span>
             </div>
           </div>
 
-          <!-- Info Extra -->
-          <div v-for="i in result.infoExtra" :key="i.text" class="phanlky-box">
-            <div class="phanlky-title">
-              <i class="ti ti-bulb"></i>
-              <span>Hướng dẫn nghiệp vụ</span>
+          <!-- Thông tin bổ sung, có thể thu gọn -->
+          <div v-for="(i, iIdx) in result.infoExtra" :key="i.text" class="phanlky-box" style="padding:10px 14px;border-radius:var(--radius);margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:10px">
+              <div class="phanlky-title" style="margin-bottom:0">
+                <i class="ti ti-bulb"></i>
+                <span>Hướng dẫn nghiệp vụ</span>
+              </div>
+              <button type="button"
+                      class="btn-ghost btn-sm"
+                      style="padding:2px 8px;font-size:11.5px;display:inline-flex;align-items:center;gap:4px"
+                      @click="toggleInfoNotice(iIdx)">
+                <span>{{ isInfoNoticeExpanded(iIdx) ? 'Thu gọn ▴' : 'Coi mục lưu ý ▾' }}</span>
+              </button>
             </div>
-            <div class="phanlky-text">
+            <div v-show="isInfoNoticeExpanded(iIdx)" class="phanlky-text" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
               {{ i.text }} <span style="font-size:11.5px;color:var(--text3)">({{ i.ref }})</span>
             </div>
           </div>
@@ -2540,7 +3049,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Law Applied List -->
+          <!-- Danh sách văn bản được áp dụng -->
           <div class="law-ref-block">
             <div class="law-ref-title">
               <i class="ti ti-book" style="color:var(--accent)"></i>
@@ -2558,7 +3067,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Document checklist -->
+          <!-- Danh sách hồ sơ cần chuẩn bị -->
           <div class="checklist-block" v-if="result.cl">
             <div class="checklist-title">
               <i class="ti ti-checklist" style="color:var(--accent)"></i>
@@ -2626,63 +3135,329 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- SLIDE-OVER DRAWER: SAVED PROJECTS -->
-    <div v-if="showProjectsDrawer" class="drawer-overlay" @click.self="showProjectsDrawer = false">
-      <div class="drawer-panel drawer-sm">
-        <div class="drawer-header">
-          <div class="drawer-title">
-            <i class="ti ti-folders" style="color:var(--accent)"></i>
-            <span>Danh sách Dự án đã lưu ({{ projects.length }})</span>
-          </div>
-          <button type="button" class="drawer-close-btn" @click="showProjectsDrawer = false">
-            <i class="ti ti-x"></i>
-          </button>
-        </div>
+          <!-- Lịch nhắc hạn & Nghĩa vụ định kỳ -->
+          <div v-if="projectId" class="card" style="margin-top:16px;margin-bottom:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+              <div class="card-title" style="margin-bottom:0">
+                <i class="ti ti-calendar-event"></i>
+                <span>Lịch nhắc hạn &amp; Nghĩa vụ định kỳ</span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="button" class="btn-secondary btn-sm" :disabled="reminderSubmitting" @click="syncDefaultReminders">
+                  <i class="ti ti-wand"></i>
+                  <span>Tạo lịch theo hồ sơ</span>
+                </button>
+                <button type="button" class="btn-secondary btn-sm" @click="showAddReminderForm = !showAddReminderForm">
+                  <i class="ti" :class="showAddReminderForm ? 'ti-x' : 'ti-plus'"></i>
+                  <span>{{ showAddReminderForm ? 'Đóng' : 'Thêm mốc hạn' }}</span>
+                </button>
+              </div>
+            </div>
 
-        <div class="drawer-body">
-          <button type="button" class="btn-primary" style="width:100%;margin-bottom:16px"
-                  @click="createNewProject(); showProjectsDrawer = false">
-            <i class="ti ti-plus"></i>
-            <span>Khởi tạo dự án mới</span>
-          </button>
+            <div v-if="reminderMsg" style="margin-bottom:10px;padding:8px 12px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);font-size:12.5px;color:var(--text2)">
+              {{ reminderMsg }}
+            </div>
 
-          <div v-if="projects.length === 0" style="text-align:center;padding:36px 16px;color:var(--text3);font-size:13px">
-            Chưa có dự án nào được lưu trong tài khoản.
-          </div>
-
-          <div v-else style="display:flex;flex-direction:column;gap:8px">
-            <div v-for="p in projects" :key="p.id" class="project-item">
-              <button type="button" class="project-btn" :class="{ active: projectId === p.id }"
-                      @click="selectProject(p); showProjectsDrawer = false">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <i class="ti ti-folder" style="color:var(--accent)"></i>
-                  <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.name }}</span>
+            <div v-if="showAddReminderForm" style="padding:12px;margin-bottom:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg)">
+              <div class="form-grid-2" style="gap:10px">
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Tiêu đề nghĩa vụ</label>
+                  <input v-model="reminderForm.tieu_de" type="text" placeholder="Ví dụ: Nộp báo cáo công tác BVMT năm 2026" />
                 </div>
-              </button>
-              <button type="button" class="btn-delete-project" @click="handleDeleteProject(p.id)" title="Xóa dự án">
-                <i class="ti ti-trash"></i>
-              </button>
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Ngày đến hạn</label>
+                  <input v-model="reminderForm.han_nop" type="date" />
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Chu kỳ lặp</label>
+                  <select v-model="reminderForm.chu_ky">
+                    <option v-for="opt in REMINDER_RECURRENCE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nhắc trước (ngày)</label>
+                  <input v-model.number="reminderForm.so_ngay_nhac_truoc" type="number" min="0" max="365" />
+                </div>
+              </div>
+              <div style="margin-top:10px">
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Căn cứ pháp lý (tùy chọn)</label>
+                <input v-model="reminderForm.can_cu_phap_ly" type="text" placeholder="Ví dụ: Điều 66, Thông tư 02/2022/TT-BTNMT" />
+              </div>
+              <div style="margin-top:10px;display:flex;justify-content:flex-end">
+                <button type="button" class="btn-primary btn-sm" :disabled="reminderSubmitting || !reminderForm.tieu_de" @click="submitNewReminder">
+                  <i class="ti ti-device-floppy"></i>
+                  <span>Lưu mốc nhắc hạn</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="loadingReminders" style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">
+              Đang tải lịch nhắc hạn...
+            </div>
+            <div v-else-if="projectReminders.length === 0" style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">
+              Chưa có mốc nhắc hạn nào cho dự án này. Bấm "Tạo lịch theo hồ sơ" để tự động khởi tạo.
+            </div>
+            <div v-else style="display:flex;flex-direction:column;gap:8px">
+              <div v-for="rem in projectReminders" :key="rem.id"
+                   style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+                <div style="flex:1;min-width:200px">
+                  <div style="font-weight:600;font-size:13.5px;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span>{{ rem.tieu_de }}</span>
+                    <span class="chip chip-gray" style="height:20px;font-size:11px;padding:0 7px">{{ rem.nhan_chu_ky }}</span>
+                  </div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:3px">
+                    Hạn nộp: <strong style="color:var(--text2)">{{ new Date(rem.han_nop).toLocaleDateString('vi-VN') }}</strong>
+                    <span v-if="rem.can_cu_phap_ly"> · {{ rem.can_cu_phap_ly }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span class="chip" :style="{
+                    background: getReminderBadgeMeta(rem.muc_canh_bao).badgeBg,
+                    color: getReminderBadgeMeta(rem.muc_canh_bao).badgeColor,
+                    border: '1px solid ' + getReminderBadgeMeta(rem.muc_canh_bao).badgeBorder,
+                    fontWeight: 600
+                  }">
+                    {{ rem.nhan_trang_thai }}
+                  </span>
+                  <button v-if="rem.trang_thai === 'chua_hoan_thanh'" type="button" class="btn-secondary btn-sm"
+                          :disabled="reminderSubmitting" @click="completeProjectReminder(rem)">
+                    <i class="ti ti-check"></i>
+                    <span>Hoàn thành</span>
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm" :disabled="reminderSubmitting" @click="deleteProjectReminder(rem)" title="Xóa mốc nhắc hạn">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div v-if="totalPages > 1" class="pagination-container">
-            <button type="button" class="pagination-btn" :disabled="currentPage === 1" @click="fetchProjects(currentPage - 1)">&lt;</button>
-            <button v-for="page in totalPages" :key="page" type="button" class="pagination-btn" :class="{ active: page === currentPage }" @click="fetchProjects(page)">
-              {{ page }}
-            </button>
-            <button type="button" class="pagination-btn" :disabled="currentPage === totalPages" @click="fetchProjects(currentPage + 1)">&gt;</button>
-          </div>
         </div>
       </div>
     </div>
+
+    <SavedProjectsDrawer
+      :visible="showProjectsDrawer"
+      :projects="projects"
+      :loading="isLoadingProjects"
+      :error-message="projectsLoadError"
+      :selected-project-id="projectId"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      @close="showProjectsDrawer = false"
+      @create="createNewProject(); showProjectsDrawer = false"
+      @select="selectProject($event); showProjectsDrawer = false"
+      @remove="handleDeleteProject"
+      @change-page="fetchProjects"
+    />
   </div>
 </template>
 
 <style scoped>
+.location-mismatch-banner {
+  background: #FFFBEB;
+  border: 1px solid #FCD34D;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.08);
+  animation: fadeInDown 0.25s ease-out;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mismatch-banner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mismatch-header-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.mismatch-icon {
+  font-size: 20px;
+  color: #D97706;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.mismatch-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mismatch-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #92400E;
+}
+
+.mismatch-subtitle {
+  font-size: 12px;
+  color: #B45309;
+}
+
+.mismatch-close-btn {
+  background: transparent;
+  border: none;
+  color: #B45309;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+
+.mismatch-close-btn:hover {
+  background: rgba(217, 119, 6, 0.15);
+}
+
+.mismatch-body-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mismatch-row-card {
+  background: #FFFFFF;
+  border: 1px solid #FDE68A;
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mismatch-row-card.new-box {
+  border-color: #93C5FD;
+  background: #F0F9FF;
+}
+
+.mismatch-row-header {
+  display: flex;
+  align-items: center;
+}
+
+.mismatch-row-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+
+.mismatch-box-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: #78350F;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mismatch-box-tag.new-tag {
+  color: #1E40AF;
+}
+
+.mismatch-loc-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mismatch-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.m-label {
+  color: #64748B;
+  font-size: 11.5px;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.m-val {
+  color: #0F172A;
+  font-weight: 600;
+}
+
+.m-val.text-accent {
+  color: #2563EB;
+}
+
+.m-val-sub {
+  color: #475569;
+  font-size: 12px;
+}
+
+.mismatch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-mismatch-apply {
+  background: #2563EB;
+  color: #FFFFFF;
+  border: 1px solid #1D4ED8;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-mismatch-apply:hover {
+  background: #1D4ED8;
+}
+
+.btn-mismatch-revert {
+  background: #FFFFFF;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-mismatch-revert:hover {
+  background: #F8FAFC;
+  color: #0F172A;
+  border-color: #94A3B8;
+}
+
 .gis-studio-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -3152,5 +3927,11 @@ onUnmounted(() => {
   border: 2px solid #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   cursor: pointer;
+}
+.admin-lookup-message {
+  margin-top: 6px;
+  color: #9a5b13;
+  font-size: 12px;
+  line-height: 1.4;
 }
 </style>

@@ -1,10 +1,11 @@
 // backend/services/qcvn-service.js
-// Service đối chiếu QCVN phía Backend: nạp catalog từ PostgreSQL qua rule-repository
-// và thực thi đánh giá dùng chung với frontend thông qua qcvn-evaluator.
+// Dịch vụ đối chiếu QCVN phía máy chủ: nạp danh mục từ PostgreSQL qua kho quy tắc
+// và dùng chung hàm đánh giá với giao diện thông qua qcvn-evaluator.
 
 const defaultDb = require('../config/db');
 const { loadQcvnCatalog } = require('./rule-repository');
 const { resolveIndustryCode } = require('./classification-service');
+const { RuleDataUnavailableError, isStaticFallbackAllowed } = require('./runtime-policy');
 const {
   QCVN_STATUS_TO_DB,
   parsePermitLimit,
@@ -72,7 +73,7 @@ function getFallbackQcvnFixture() {
 }
 
 /**
- * Nạp catalog QCVN từ DB. Nếu DB lỗi hoặc rỗng, dùng fallback kèm cờ FALLBACK_UNVERIFIED.
+ * Nạp danh mục QCVN từ cơ sở dữ liệu. Nếu lỗi hoặc rỗng, dùng dữ liệu dự phòng kèm cờ FALLBACK_UNVERIFIED.
  */
 async function getRuntimeQcvnCatalog({ db = defaultDb } = {}) {
   const loaded = await loadQcvnCatalog({ db });
@@ -82,6 +83,10 @@ async function getRuntimeQcvnCatalog({ db = defaultDb } = {}) {
       ruleSource: 'DATABASE',
       fallbackReason: null,
     };
+  }
+
+  if (!isStaticFallbackAllowed()) {
+    throw new RuleDataUnavailableError(`Không thể nạp danh mục QCVN từ PostgreSQL: ${loaded.error || 'DB_LOAD_FAILED'}`);
   }
 
   const fallback = getFallbackQcvnFixture();
@@ -138,8 +143,8 @@ function getIndustryQcvnMapping(industryCode) {
 }
 
 /**
- * Xác định QCVN áp dụng hoàn toàn trên server từ projectId hoặc ngữ cảnh nguồn thải.
- * Trả cả kết quả lựa chọn fail-closed + metadata catalog + ruleSource.
+ * Xác định QCVN hoàn toàn ở máy chủ từ projectId hoặc ngữ cảnh nguồn thải.
+ * Trả kết quả theo nguyên tắc fail-closed, kèm metadata danh mục và ruleSource.
  */
 async function selectQcvnForProjectWithDb(options = {}, { db = defaultDb } = {}) {
   const {

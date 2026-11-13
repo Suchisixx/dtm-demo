@@ -3,14 +3,14 @@ const db = require('../config/db');
 const logger = require('./logger');
 const { syncCrawlerEvents } = require('../services/crawler-sync-service');
 
-// Biến khóa chống chạy chồng chéo tiến trình Crawler (Mutex Lock)
+// Khóa không cho nhiều phiên thu thập dữ liệu chạy chồng nhau
 let isCrawlerRunning = false;
 
 function getCrawlerRunningState() {
   return isCrawlerRunning;
 }
 
-// Helper tải trang có giới hạn thời gian (Timeout) và User-Agent định danh chuẩn
+// Hàm hỗ trợ tải trang có giới hạn thời gian và chuỗi User-Agent nhận diện
 async function fetchWithTimeout(url, timeoutMs = 15000) {
   return fetch(url, {
     headers: {
@@ -20,7 +20,7 @@ async function fetchWithTimeout(url, timeoutMs = 15000) {
   });
 }
 
-// Helper to normalize slug into a standard database ID
+// Chuẩn hóa slug thành mã văn bản dùng trong cơ sở dữ liệu
 function getLawIdFromSlug(slug) {
   let id = slug.toLowerCase()
     .replace(/^nghi-dinh-/, 'nd_')
@@ -32,12 +32,12 @@ function getLawIdFromSlug(slug) {
     .replace(/^nghi-quyet-/, 'nq_')
     .replace(/-/g, '_');
 
-  // Chuẩn hóa loại bỏ hậu tố thừa để ánh xạ về canonical ID chuẩn
+  // Loại bỏ hậu tố thừa để ánh xạ về mã định danh chuẩn
   id = id.replace(/_(nd_cp|tt_btnmt|tt_bnnmt|qh15|tt_bnnptnt)$/, '');
   return id;
 }
 
-// Helper to normalize the document type
+// Chuẩn hóa loại văn bản
 function getLawTypeFromSlug(slug) {
   if (slug.startsWith('nghi-dinh-')) return 'nd';
   if (slug.startsWith('thong-tu-')) return 'tt';
@@ -59,12 +59,12 @@ function cleanProvisionText(raw, docTitle = '', provisionTitle = '') {
   text = text.replace(/CopyOn this page\s*/gi, '');
   text = text.replace(/On this page\s*/gi, '');
 
-  // 2. Loại bỏ các thanh điều hướng Previous/Next và Last updated ở cuối trang
+  // 2. Loại bỏ thanh điều hướng Trước/Sau và ngày cập nhật ở cuối trang
   text = text.replace(/Previous[\s\S]*?Next[\s\S]*?(Last updated.*ago)?$/i, '');
   text = text.replace(/Previous\s*.*Next\s*.*$/i, '');
   text = text.replace(/Last updated\s+[0-9]+\s+[a-z\s]+ago\s*$/i, '');
 
-  // 3. Loại bỏ breadcrumbs dính liền tiêu đề ở đầu trang
+  // 3. Loại bỏ đường dẫn điều hướng dính liền tiêu đề ở đầu trang
   const docBase = docTitle.replace(/\s*—.*$/, '').replace(/\s*[0-9]{4}.*$/, '').trim();
   if (docBase && text.startsWith(docBase)) {
     text = text.slice(docBase.length).trim();
@@ -89,7 +89,7 @@ function cleanProvisionText(raw, docTitle = '', provisionTitle = '') {
   return text;
 }
 
-// 1. Fetch sitemap and extract page URLs and their last modified dates
+// 1. Tải sơ đồ trang và lấy địa chỉ trang cùng ngày sửa đổi gần nhất
 async function fetchAndParseSitemap() {
   logger.info('Đang tải sitemap từ luatmoitruong.vn...');
   const response = await fetchWithTimeout('https://www.luatmoitruong.vn/sitemap-pages.xml', 15000);
@@ -118,11 +118,11 @@ async function fetchAndParseSitemap() {
   return entries;
 }
 
-// 2. Crawl a document page and check validity before parsing subpages
+// 2. Thu thập trang văn bản và kiểm tra hiệu lực trước khi phân tích các trang con
 async function crawlDocument(mainUrl, subpageUrls = []) {
   logger.info(`Đang kiểm tra trang gốc: ${mainUrl}`);
 
-  // A. Fetch main page for meta info
+  // A. Tải trang chính để lấy thông tin mô tả
   const mainRes = await fetchWithTimeout(mainUrl, 15000);
   if (!mainRes.ok) {
     throw new Error(`Lỗi khi tải trang gốc ${mainUrl}. HTTP ${mainRes.status}`);
@@ -162,7 +162,7 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
   let so = docTitle;
   let year = new Date().getFullYear();
 
-  // Extract number from title, e.g. "48/2026/NĐ-CP"
+  // Lấy số hiệu từ tiêu đề, ví dụ "48/2026/NĐ-CP"
   const soRegex = /([0-9]+(?:\.[0-9]+)?\/[0-9]{4}\/[A-Za-z0-9Đđ\u00C0-\u1EF9\/-]+)/i;
   const soMatch = docTitle.match(soRegex);
   if (id === 'luat_tai_nguyen_nuoc' || docTitle.includes('Tài nguyên nước')) {
@@ -174,7 +174,7 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
   } else if (soMatch) {
     so = soMatch[0].trim();
   } else {
-    // Fallback: try parsing slug
+    // Nếu không có số hiệu, thử phân tích slug
     const slugSo = slug.replace(/^(luat|nghi-dinh|thong-tu|quyet-dinh|qcvn|van-ban-hop-nhat|nghi-quyet)-/, '');
     const cleanSlugSo = slugSo.replace(/-/g, '/').toUpperCase();
     if (cleanSlugSo) {
@@ -182,13 +182,13 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
     }
   }
 
-  // Extract year
+  // Lấy năm ban hành
   const yearMatch = docTitle.match(/\b(20[0-9]{2}|19[0-9]{2})\b/);
   if (yearMatch) {
     year = parseInt(yearMatch[1], 10);
   }
 
-  // B. Crawl subpages to compile clauses (only for valid documents)
+  // B. Thu thập trang con để ghép các điều khoản, chỉ áp dụng với văn bản hợp lệ
   // Sử dụng { numeric: true } để sắp xếp tự nhiên: dieu-1, dieu-2, ..., dieu-10
   const clauses = [];
   const sortedSubpages = [...subpageUrls].sort((a, b) =>
@@ -203,7 +203,7 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
       const subHtml = await subRes.text();
       const $sub = cheerio.load(subHtml);
 
-      // Loại bỏ các thành phần rác: breadcrumbs, pager, llms notice, table-of-contents
+      // Loại bỏ nội dung phụ: đường dẫn điều hướng, phân trang, thông báo máy đọc, mục lục
       $sub('.llms-txt, .vp-doc-footer, .pager, .pager-container, nav, .table-of-contents, .outline, footer, .breadcrumb').remove();
 
       const subTitle = $sub('h1').first().text().trim() || $sub('title').text().split('|')[0].trim();
@@ -247,7 +247,7 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
   };
 }
 
-// 3. Main runner with fast DB lookup to skip existing unchanged documents
+// 3. Tác vụ chính, tra cứu nhanh trong cơ sở dữ liệu để bỏ qua văn bản không đổi
 async function runCrawler(updatedByUserId = null) {
   if (isCrawlerRunning) {
     throw new Error('CRAWLER_BUSY');
@@ -259,7 +259,7 @@ async function runCrawler(updatedByUserId = null) {
   try {
     logger.info('--- Bắt đầu quy trình kiểm tra cập nhật văn bản (Tối ưu hóa tốc độ & Hiệu lực) ---');
 
-    // A. Load existing laws from DB into Map for instant memory lookup
+    // A. Nạp văn bản hiện có từ cơ sở dữ liệu vào Map để tra cứu nhanh trong bộ nhớ
     const existingLawsRes = await db.query(
       'SELECT id, status, hieuluc, sort_date, last_crawled_mod FROM laws'
     );
@@ -269,7 +269,7 @@ async function runCrawler(updatedByUserId = null) {
 
     const urls = await fetchAndParseSitemap();
 
-    // B. Filter parent document URLs vs subpages
+    // B. Phân biệt địa chỉ văn bản chính với địa chỉ các trang con
     const mainDocs = [];
     const subPages = {};
     let totalSubPagesCount = 0;
@@ -295,7 +295,7 @@ async function runCrawler(updatedByUserId = null) {
           totalSubPagesCount++;
         }
       } catch (err) {
-        // Ignore invalid URLs
+        // Bỏ qua địa chỉ không hợp lệ
       }
     }
 
@@ -308,7 +308,7 @@ async function runCrawler(updatedByUserId = null) {
     let skippedExpiredCount = 0;
     const crawlEvents = [];
 
-    // C. Fast Process loop
+    // C. Vòng lặp xử lý nhanh
     for (const doc of mainDocs) {
       try {
         const urlObj = new URL(doc.loc);
@@ -327,7 +327,7 @@ async function runCrawler(updatedByUserId = null) {
             existingRecord.last_crawled_mod = doc.lastmod;
           }
 
-          // Nếu lastmod trên sitemap khớp với DB cache -> Bỏ qua nhanh (FAST PATH)
+          // Nếu ngày sửa đổi trên sơ đồ trang trùng bộ nhớ đệm DB, bỏ qua bước tải nội dung
           if (doc.lastmod && existingRecord.last_crawled_mod === doc.lastmod) {
             skippedExistingCount++;
             continue;
@@ -374,7 +374,7 @@ async function runCrawler(updatedByUserId = null) {
           : `${docData.year}-01-01`;
 
         if (!existsInDb) {
-          // Insert new valid document (kèm sort_date chuẩn)
+          // Thêm văn bản hợp lệ mới, kèm ngày sắp xếp đã chuẩn hóa
           await db.query(
             `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, link, last_crawled_mod)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
@@ -417,7 +417,7 @@ async function runCrawler(updatedByUserId = null) {
           });
           logger.info(`✔ Đã tạo mới văn bản: ${docData.ten}`);
         } else {
-          // Bảo toàn ngày hiệu lực cụ thể và sort_date đã được Admin chuẩn hóa trước đó
+          // Giữ nguyên ngày hiệu lực và ngày sắp xếp đã được quản trị viên chuẩn hóa
           const preservedHieuluc =
             existingRecord.hieuluc && existingRecord.hieuluc !== 'Đang có hiệu lực'
               ? existingRecord.hieuluc

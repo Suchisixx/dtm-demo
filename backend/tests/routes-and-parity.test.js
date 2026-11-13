@@ -6,6 +6,7 @@ const path = require('node:path');
 const db = require('../config/db');
 const { IND_DB, INDUSTRY_META } = require('../services/classification-service');
 const { QCVN_DATA } = require('../../frontend/src/data/qcvn-db.js');
+const projectVerificationRepository = require('../services/project-verification-repository');
 const {
   seedClassificationCatalog,
   seedQcvnCatalog,
@@ -40,10 +41,25 @@ function getRouteHandler(router, method, routePath) {
   return stack[stack.length - 1].handle;
 }
 
+test('Repository façade giữ nguyên API sau khi tách kho xác minh dự án và GIS', () => {
+  const repository = require('../services/rule-repository');
+  for (const name of [
+    'ensureSensitiveVerificationSchema',
+    'getProjectSensitiveVerification',
+    'upsertProjectSensitiveDeclaration',
+    'reviewProjectSensitiveVerification',
+    'ensureGisSchema',
+    'seedGisLayers',
+    'loadGisLayers',
+  ]) {
+    assert.equal(repository[name], projectVerificationRepository[name], `${name} vẫn được xuất qua kho dữ liệu cũ`);
+  }
+});
+
 test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, GET /api/qcvns, GET /api/dashboard/stats', async () => {
   const originalQuery = db.query.bind(db);
 
-  // Tao DB gia lap cho ca industries, classification_thresholds, qcvns, projects, qcvn_samples, dashboard
+  // Tạo DB giả lập cho danh mục ngành, ngưỡng, QCVN, dự án, mẫu quan trắc và bảng điều khiển.
   const mem = {
     laws: [{ id: 'luat_bvmt_2020' }, { id: 'nd_08_2022' }],
     industries: [],
@@ -57,7 +73,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     failQcvnSelect: false,
   };
 
-  // Seed in-memory tables thong qua dung helper cua du an
+  // Seed các bảng trong bộ nhớ bằng hàm hỗ trợ của dự án.
   const memQuery = async (sql, params = []) => {
     const q = sql.trim().replace(/\s+/g, ' ');
     if (/^ALTER TABLE/i.test(q)) return { rows: [], rowCount: 0 };
@@ -77,7 +93,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     if (q.includes('FROM classification_thresholds WHERE industry_code = $1')) {
       return { rows: mem.classification_thresholds.filter(r => r.industry_code === params[0] && (r.process_stage || '') === (params[1] || '')), rowCount: 0 };
     }
-    if (q.startsWith('INSERT INTO legal_appendices')) {
+    if (q.startsWith('INSERT INTO legal_appendices') || q.startsWith('INSERT INTO phu_luc_phap_ly')) {
       mem.legal_appendices.push({ id: params[0] });
       return { rows: [], rowCount: 1 };
     }
@@ -169,7 +185,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     const qcvnsRouter = require('../routes/qcvns');
     const dashboardRouter = require('../routes/dashboard');
 
-    // 1. POST /api/projects phai bo qua req.body.classification_result gia mao
+    // 1. POST /api/projects phải bỏ qua req.body.classification_result giả mạo.
     const createProjectHandler = getRouteHandler(projectsRouter, 'post', '/');
     const projRes = createExpressMockRes();
     await createProjectHandler({
@@ -195,7 +211,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     assert.equal(savedClass.isOfficialConclusion, false);
     assert.equal(savedClass.conclusionStatus, 'NEEDS_LEGAL_VERIFICATION');
 
-    // 2. GET /api/qcvns giu nguyen metadata va bao loi 503 + FALLBACK_UNVERIFIED khi DB loi
+    // 2. GET /api/qcvns giữ metadata và trả lỗi 503 cùng FALLBACK_UNVERIFIED khi DB lỗi.
     const getQcvnsHandler = getRouteHandler(qcvnsRouter, 'get', '/');
     const qGetOk = createExpressMockRes();
     await getQcvnsHandler({}, qGetOk);
@@ -212,7 +228,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     assert.equal(qGetFail.body.ruleSource, 'FALLBACK_UNVERIFIED');
     mem.failQcvnSelect = false;
 
-    // 3. POST /api/qcvns/samples khong tin trang_thai_tong_quat: 'dat' tu client
+    // 3. POST /api/qcvns/samples không tin trang_thai_tong_quat: 'dat' do trình duyệt gửi.
     const saveSampleHandler = getRouteHandler(qcvnsRouter, 'post', '/samples');
     const sRes1 = createExpressMockRes();
     await saveSampleHandler({
@@ -246,7 +262,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
     }, sRes2);
     assert.equal(sRes2.body.sample.trang_thai_tong_quat, 'can_ra_soat');
 
-    // 4. Dashboard: chua_du_thong_so & can_ra_soat KHONG duoc tinh vao passSamples / dat / complianceRate
+    // 4. Bảng điều khiển không tính mẫu thiếu thông số/cần rà soát vào số mẫu đạt và tỷ lệ tuân thủ.
     const statsHandler = getRouteHandler(dashboardRouter, 'get', '/stats');
     const dashRes = createExpressMockRes();
     await statsHandler({ user: { id: 1, role: 'admin' }, query: {} }, dashRes);
@@ -262,22 +278,25 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
 
 test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua MAP_KEYWORDS & khong TRUNCATE', () => {
   const classifyVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/ClassifyTab.vue'), 'utf8');
+  const classificationCatalog = fs.readFileSync(path.join(__dirname, '../../frontend/src/composables/useClassificationCatalog.js'), 'utf8');
   const qcvnVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/QCVNTab.vue'), 'utf8');
+  const qcvnKeywords = fs.readFileSync(path.join(__dirname, '../../frontend/src/utils/qcvn-keywords.js'), 'utf8');
   const initDbJs = fs.readFileSync(path.join(__dirname, '../init-db.js'), 'utf8');
 
   assert.ok(!classifyVue.includes('<option value="dien_hat_nhan">'), 'Khong con option chet dien_hat_nhan');
   assert.ok(!classifyVue.includes('<option value="cang_song">'), 'Khong con option chet cang_song');
   assert.ok(!classifyVue.includes('<option value="san_bay">'), 'Khong con option lech san_bay');
   assert.ok(classifyVue.includes('processStage'), 'ClassifyTab phai ho tro processStage');
-  assert.ok(classifyVue.includes('CLASSIFY_METADATA'), 'ClassifyTab phai nap danh muc tu API metadata');
+  assert.ok(classifyVue.includes('useClassificationCatalog'), 'ClassifyTab phai su dung composable danh muc runtime');
+  assert.ok(classificationCatalog.includes('API.CLASSIFY_METADATA'), 'Composable phai nap danh muc tu API metadata');
 
   assert.ok(!qcvnVue.includes('nt > 0 ? nt : 100'), 'QCVNTab khong duoc gan mac dinh flowRate 100');
   assert.ok(!qcvnVue.includes("{ ...QCVN_DATA, ...dbData }"), 'QCVNTab khong duoc merge nong lam mat metadata DB');
-  assert.ok(qcvnVue.includes("'cr': 'Cr_tong'"), 'MAP_KEYWORDS phai anh xa Cr_tong');
-  assert.ok(qcvnVue.includes("'sunfua': 'Sulfide'"), 'MAP_KEYWORDS phai anh xa Sulfide');
+  assert.ok(qcvnKeywords.includes("'cr': 'Cr_tong'"), 'MAP_KEYWORDS phai anh xa Cr_tong');
+  assert.ok(qcvnKeywords.includes("'sunfua': 'Sulfide'"), 'MAP_KEYWORDS phai anh xa Sulfide');
   assert.ok(!initDbJs.includes('TRUNCATE TABLE'), 'init-db.js khong duoc chay TRUNCATE TABLE');
 
-  // Phase 2-3 Parity checks across MapTab, DashboardTab, ClassifyTab, QCVNTab, AdminTab
+  // Kiểm tra tính nhất quán giữa bản đồ, bảng điều khiển, phân loại, QCVN và quản trị.
   const mapVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/MapTab.vue'), 'utf8');
   const dashboardVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/DashboardTab.vue'), 'utf8');
   const adminVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/AdminTab.vue'), 'utf8');
@@ -306,13 +325,16 @@ test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua
   assert.ok(adminVue.includes('ADMIN_RULES_CANDIDATES'), 'AdminTab phai ho tro duyet rule_candidates');
   assert.ok(adminVue.includes('ADMIN_RULES_QCVN_TRANSITIONAL'), 'AdminTab phai ho tro nhap QCVN chuyen tiep');
 
-  // Frontend localization & log cleanup assertions
+  // Kiểm tra bản địa hóa giao diện và việc làm sạch nhật ký.
   assert.ok(!classifyVue.includes('(evaluationDate)'), 'ClassifyTab khong de lo bien (evaluationDate) tren template');
   assert.ok(!adminVue.includes('(OPEN)'), 'AdminTab khong de lo chuoi (OPEN) tren template');
   assert.ok(!adminVue.includes('(PENDING_REVIEW)'), 'AdminTab khong de lo chuoi (PENDING_REVIEW) tren template');
   assert.ok(!adminVue.includes('>Ký VERIFIED<'), 'AdminTab khong dung button Ký VERIFIED tieng Anh');
   assert.ok(!adminVue.includes('fail-closed'), 'AdminTab khong dung thuat ngu fail-closed tieng Anh');
-  assert.ok(adminVue.includes('Xem dữ liệu bóc tách chi tiết (JSON)'), 'AdminTab phai gap gon JSON candidate log');
+  assert.ok(!adminVue.includes('(VERIFIED)'), 'AdminTab khong de lo chuoi (VERIFIED) tren template');
+  assert.ok(!adminVue.includes('(DRAFT)'), 'AdminTab khong de lo chuoi (DRAFT) tren template');
+  assert.ok(!classifyVue.includes('Xem mã kỹ thuật'), 'ClassifyTab an nut Xem ma ky thuat khoi giao dien');
+  assert.ok(adminVue.includes('Xem dữ liệu bóc tách chi tiết'), 'AdminTab phai gap gon JSON candidate log');
 });
 
 test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /select+/evaluate+mismatch+IDOR, dashboard cap_xa & crawler PENDING_REVIEW', async () => {
@@ -372,6 +394,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     qcvn_samples: [
       { id: 1, user_id: 1, project_id: 101, name: 'Mau Thieu', type: 'nuoc_mat', sub_type: 'qcvn08_a', trang_thai_tong_quat: 'chua_du_thong_so', overall_status: 'INCOMPLETE', created_at: new Date().toISOString() },
       { id: 2, user_id: 1, project_id: 102, name: 'Mau Ra Soat', type: 'nuoc_thai_cn', sub_type: 'qcvn40_a_low', trang_thai_tong_quat: 'can_ra_soat', overall_status: 'NEEDS_REVIEW', created_at: new Date().toISOString() },
+      { id: 3, user_id: 1, project_id: 102, name: 'Mau Dat Cu', type: 'nuoc_thai_cn', sub_type: 'qcvn40_a_low', trang_thai_tong_quat: 'dat', overall_status: null, evaluation_details: null, evaluated_rule_version: null, evaluated_verification_status: null, created_at: new Date().toISOString() },
     ],
     laws: [
       { id: 'nd_08_2022', ten: 'Nghi dinh 08/2022', so: '08/2022/ND-CP', status: 'valid' },
@@ -399,7 +422,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
       if (/SELECT \* FROM industries/i.test(s) || /FROM industries ORDER BY/i.test(s)) {
         return { rows: mem.industries, rowCount: mem.industries.length };
       }
-      if (/INSERT INTO legal_appendices/i.test(s)) return { rows: [], rowCount: 0 };
+      if (/INSERT INTO (legal_appendices|phu_luc_phap_ly)/i.test(s)) return { rows: [], rowCount: 0 };
       if (/SELECT code, appendix_code/i.test(s) || /SELECT \* FROM legal_appendices/i.test(s)) {
         return { rows: [], rowCount: 0 };
       }
@@ -484,7 +507,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
         v.verification_note = params[3];
         return { rows: [v], rowCount: 1 };
       }
-      if (/INSERT INTO project_sensitive_verifications/i.test(s)) {
+      if (/INSERT INTO (project_sensitive_verifications|xac_minh_yeu_to_nhay_cam_du_an)/i.test(s)) {
         const v = {
           id: mem.sensitiveVerifications.length + 1,
           project_id: Number(params[0]),
@@ -559,7 +582,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     const qcvnsRouter = require('../routes/qcvns');
     const dashboardRouter = require('../routes/dashboard');
 
-    // 1. GET /api/projects/geo must not crash and must return 'Cần rà soát' for invalid nganh (no 'Nhóm II' fallback)
+    // 1. GET /api/projects/geo không được lỗi và phải trả 'Cần rà soát' nếu ngành không hợp lệ.
     const geoHandler = getRouteHandler(projectsRouter, 'get', '/geo');
     const geoRes = createExpressMockRes();
     await geoHandler({ user: { id: 1, role: 'admin' } }, geoRes);
@@ -568,7 +591,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     const badProj = geoRes.body.find(p => p.id === 101);
     assert.equal(badProj.nhom_du_an, 'Cần rà soát');
 
-    // 2. Sensitive verification route requires Admin (non-admin blocked) and succeeds for Admin
+    // 2. Tuyến xác minh yếu tố nhạy cảm chỉ cho quản trị viên thực hiện.
     const jwt = require('jsonwebtoken');
     const { JWT_SECRET, COOKIE_NAME } = require('../utils/constants');
     const staffToken = jwt.sign({ id: 2, role: 'staff', username: 'staff' }, JWT_SECRET);
@@ -593,7 +616,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     assert.equal(sensRes.statusCode, 200);
     assert.equal(sensRes.body.sensitiveVerification.verification_status, 'VERIFIED');
 
-    // 3. POST /api/qcvns/select & POST /api/qcvns/evaluate & mismatch gate
+    // 3. Kiểm tra chọn QCVN, đánh giá mẫu và cảnh báo khi lựa chọn không khớp.
     const selectHandler = getRouteHandler(qcvnsRouter, 'post', '/select');
     const selRes = createExpressMockRes();
     await selectHandler(
@@ -624,7 +647,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     assert.equal(mismatchRes.body.evaluation.reason, 'QCVN_SELECTION_MISMATCH');
     assert.equal(mismatchRes.body.evaluation.trang_thai_tong_quat, 'can_ra_soat');
 
-    // 4. POST /api/qcvns/samples blocks IDOR project_id for non-owner staff
+    // 4. API lưu mẫu chặn nhân viên truy cập project_id không thuộc quyền sở hữu.
     const postSampleHandler = getRouteHandler(qcvnsRouter, 'post', '/samples');
     const idorRes = createExpressMockRes();
     await postSampleHandler(
@@ -636,18 +659,18 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
     );
     assert.equal(idorRes.statusCode, 403);
 
-    // 5. GET /api/dashboard/stats includes cap_xa, needsReviewProjects & does not count chua_du_thong_so/can_ra_soat into passSamples
+    // 5. Thống kê có cấp xã và dự án cần rà soát; mẫu thiếu/cần rà soát không được tính là đạt.
     const dashHandler = getRouteHandler(dashboardRouter, 'get', '/stats');
     const dashRes = createExpressMockRes();
     await dashHandler({ user: { id: 1, role: 'admin' }, query: {} }, dashRes);
     assert.equal(dashRes.statusCode, 200);
     assert.equal(dashRes.body.kpis.passSamples, 0);
     assert.equal(dashRes.body.kpis.incompleteSamples, 1);
-    assert.equal(dashRes.body.kpis.needsReviewSamples, 1);
+    assert.equal(dashRes.body.kpis.needsReviewSamples, 2, 'Mau dat cu thieu metadata phai duoc tinh la can ra soat');
     assert.equal(dashRes.body.kpis.needsReviewProjects >= 1, true);
     assert.equal(typeof dashRes.body.distributions.byAuthority.cap_xa, 'number');
 
-    // 6. Crawler sync service detects impacts & extracts PENDING_REVIEW candidates only
+    // 6. Dịch vụ crawler nhận diện tác động và chỉ tạo đề xuất PENDING_REVIEW.
     const impacted = await detectImpactedRules({
       lawId: 'nd_08_2022',
       lawTitle: 'Nghi dinh 08/2022 QCVN 40:2025',
@@ -679,11 +702,11 @@ test('UX Simplification & Vietnamese Localization Parity + DB Bootstrap Export',
   const classifyVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/ClassifyTab.vue'), 'utf8');
   const qcvnVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/QCVNTab.vue'), 'utf8');
 
-  // 1. Server startup invokes non-destructive DB schema readiness
+  // 1. Máy chủ khởi động và kiểm tra schema DB theo cách không phá hủy dữ liệu.
   assert.equal(typeof ensureRuntimeDatabaseReady, 'function');
   assert.ok(serverJs.includes('ensureRuntimeDatabaseReady'), 'server.js phai goi ensureRuntimeDatabaseReady luc khoi dong');
 
-  // 2. Vietnamese label mappings & internal audit text sanitization
+  // 2. Ánh xạ nhãn tiếng Việt và làm sạch nội dung kiểm toán nội bộ.
   assert.equal(labels.getSensitiveStatusLabel('NOT_REQUIRED'), 'Không yêu cầu xác minh');
   assert.equal(labels.getRuleSourceLabel('DATABASE'), 'Dữ liệu quy chuẩn hệ thống');
   assert.equal(labels.getQcvnOverallStatusMeta('PASS_WITH_WARNING').tone, 'warn');
@@ -693,7 +716,7 @@ test('UX Simplification & Vietnamese Localization Parity + DB Bootstrap Export',
   const sanitizedDbErr = labels.formatReasonForEndUser('column "display_name" does not exist');
   assert.ok(!sanitizedDbErr.includes('display_name'));
 
-  // 3. UI templates avoid exposing raw enum badges & developer notes directly on primary labels
+  // 3. Giao diện không hiển thị mã trạng thái thô hoặc ghi chú lập trình trên nhãn chính.
   assert.ok(!classifyVue.includes('(NEEDS_REVIEW)'), 'ClassifyTab khong hien raw (NEEDS_REVIEW)');
   assert.ok(!classifyVue.includes('Xác nhận hợp lệ (VERIFIED)'), 'ClassifyTab nut Admin phai thuan Viet');
   assert.ok(classifyVue.includes('shouldShowAdminSensitivePanel'), 'ClassifyTab an khung Admin khi khong co yeu to nhay cam');
@@ -704,10 +727,166 @@ test('UX Simplification & Vietnamese Localization Parity + DB Bootstrap Export',
   assert.ok(!qcvnVue.includes('(PERIOD_MISMATCH —'), 'QCVNTab khong hien raw (PERIOD_MISMATCH)');
   assert.ok(!qcvnVue.includes('Catalog: {{'), 'QCVNTab chip catalog phai thuan Viet');
 
-  // 4. Engine output keeps auditNote on definition but strips README prefix from user-facing warnings
+  // 4. Kết quả giữ auditNote trong định nghĩa nhưng bỏ tiền tố README khỏi cảnh báo cho người dùng.
   const res = evaluateClassification({ nganh: 'thuc_pham', capacity: 13000, tinh: 'Cần Thơ' }, { ruleSource: 'FALLBACK_UNVERIFIED' });
   assert.equal(res.isOfficialConclusion, false);
   assert.equal(res.hs, null);
   assert.ok(res.unverifiedReasons.every(r => !r.includes('README')));
   assert.ok(res.cauNhom.every(c => !String(c.text || '').includes('README')));
+});
+
+test('Simplification Plan: Runtime DB Fail-Closed, Standardized Industries & Aliases, Minimal Rule Admin 3 States & QCVN Decoupling', async () => {
+  const { RuleDataUnavailableError, isStaticFallbackAllowed } = require('../services/runtime-policy');
+  const { evaluateClassificationWithDb, resolveIndustryCode } = require('../services/classification-service');
+  const { listThresholdRules, updateThresholdRule, verifyThresholdRule } = require('../services/rule-repository');
+
+  // 1. Chính sách runtime và cơ chế fail-closed trong môi trường production.
+  const prevAllow = process.env.ALLOW_STATIC_FALLBACK;
+  try {
+    process.env.ALLOW_STATIC_FALLBACK = 'false';
+    assert.equal(isStaticFallbackAllowed(), false);
+
+    const mockBrokenDb = {
+      query: async () => { throw new Error('DB_DOWN'); }
+    };
+    await assert.rejects(
+      async () => {
+        await evaluateClassificationWithDb({ nganh: 'che_bien_go', capacity: 1000 }, { db: mockBrokenDb });
+      },
+      (err) => err instanceof RuleDataUnavailableError && err.errorCode === 'RULE_DB_UNAVAILABLE'
+    );
+  } finally {
+    if (prevAllow === undefined) delete process.env.ALLOW_STATIC_FALLBACK;
+    else process.env.ALLOW_STATIC_FALLBACK = prevAllow;
+  }
+
+  // 2. Bí danh ngành nghề và cách phân giải mã ngành.
+  const mockCatalog = {
+    che_bien_go: {
+      code: 'che_bien_go',
+      name: 'Chế biến gỗ, dăm gỗ, ván nhân tạo (MDF, ván sàn)',
+      aliases: ['che bien go', 'go', 'dam go', 'van nhan tao']
+    }
+  };
+  assert.equal(resolveIndustryCode('che_bien_go', mockCatalog).resolvedCode, 'che_bien_go');
+  assert.equal(resolveIndustryCode('che bien go', mockCatalog).resolvedCode, 'che_bien_go');
+
+  // 3. Quản trị quy tắc tối giản với ba trạng thái và thu hồi xác minh khi chỉnh sửa.
+  const mockThresholds = [
+    {
+      id: 101,
+      industry_code: 'che_bien_go',
+      process_stage: '',
+      min_value: '5000',
+      max_value: null,
+      operator: '>=',
+      unit: 'm3/nam',
+      project_group: 'II',
+      legal_doc_required: 'GPMT',
+      tq: 'ubnd_tinh',
+      phu_luc: 'Phụ lục IV',
+      legal_ref: 'Nghị định 08/2022',
+      effective_from: '2022-01-10',
+      effective_to: null,
+      verification_status: 'VERIFIED',
+      approved_by: 'lead_auditor',
+      approved_at: new Date('2026-01-01'),
+    }
+  ];
+
+  const adminMockDb = {
+    query: async (sql, params = []) => {
+      const trimmed = sql.trim().replace(/\s+/g, ' ');
+      if (trimmed.includes('SELECT * FROM classification_thresholds WHERE id = $1')) {
+        const row = mockThresholds.find(t => t.id === Number(params[0]));
+        return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
+      }
+      if (trimmed.startsWith('SELECT ct.id, ct.industry_code')) {
+        return { rows: mockThresholds, rowCount: mockThresholds.length };
+      }
+      if (trimmed.startsWith('UPDATE classification_thresholds SET min_value')) {
+        const row = mockThresholds.find(t => t.id === Number(params[15]));
+        if (row) {
+          row.min_value = params[0];
+          row.max_value = params[1];
+          row.verification_status = params[12];
+          row.approved_by = params[13];
+          row.approved_at = params[14];
+        }
+        return { rows: [row], rowCount: 1 };
+      }
+      if (trimmed.startsWith('UPDATE classification_thresholds SET verification_status = \'VERIFIED\'')) {
+        const row = mockThresholds.find(t => t.id === Number(params[3]));
+        if (row) {
+          row.verification_status = 'VERIFIED';
+          row.approved_by = params[0];
+          row.legal_ref = params[1];
+          row.effective_from = params[2];
+        }
+        return { rows: [row], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    }
+  };
+
+  // 3a. Sửa quy tắc VERIFIED sẽ hạ về NEEDS_LEGAL_VERIFICATION và xóa thông tin phê duyệt.
+  const updated = await updateThresholdRule(101, { min_value: 6000 }, { db: adminMockDb });
+  assert.equal(updated.verification_status, 'NEEDS_LEGAL_VERIFICATION', 'Sua rule VERIFIED phai tu dong ha xuong NEEDS_LEGAL_VERIFICATION');
+  assert.equal(updated.approved_by, null, 'Sua rule VERIFIED phai xoa approved_by');
+  assert.equal(updated.approved_at, null, 'Sua rule VERIFIED phai xoa approved_at');
+
+  // 3b. Chặn xác minh nếu thiếu legal_ref hoặc effective_from theo nguyên tắc fail-closed.
+  await assert.rejects(
+    async () => {
+      await verifyThresholdRule(101, { verifiedBy: 'admin', legalRef: '', effectiveFrom: '', db: adminMockDb });
+    },
+    /LEGAL_REF_AND_EFFECTIVE_DATE_REQUIRED/
+  );
+
+  // 3c. Đủ căn cứ hợp lệ thì cho phép xác minh lên VERIFIED.
+  const verified = await verifyThresholdRule(101, {
+    verifiedBy: 'legal_lead',
+    legalRef: 'Nghị định 08/2022 Phụ lục IV mục 3',
+    effectiveFrom: '2026-01-29',
+    db: adminMockDb
+  });
+  assert.equal(verified.verification_status, 'VERIFIED');
+  assert.equal(verified.approved_by, 'legal_lead');
+
+  // 4. Kiểm tra hợp đồng mẫu dữ liệu và tính nhất quán giữa các tầng.
+  const classifyVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/ClassifyTab.vue'), 'utf8');
+  const qcvnVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/QCVNTab.vue'), 'utf8');
+  const adminVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/AdminTab.vue'), 'utf8');
+  const classRulesJs = fs.readFileSync(path.join(__dirname, '../../frontend/src/services/classification-rules.js'), 'utf8');
+
+  assert.ok(classifyVue.includes('industrySelectOptions'), 'ClassifyTab phai ho tro industrySelectOptions cho SearchableSelect');
+  assert.ok(!classRulesJs.includes('IND_DB'), 'classification-rules.js khong duoc import IND_DB');
+  assert.ok(qcvnVue.includes('Lưu ý pháp lý:'), 'QCVNTab phai co disclaimer banner');
+  assert.ok(!qcvnVue.includes('runtimeQcvnData.value = QCVN_DATA'), 'QCVNTab khong duoc fallback tinh ve QCVN_DATA');
+  assert.ok(adminVue.includes('Quản lý Ngưỡng Phân loại (Threshold Rules)'), 'AdminTab phai co Section quan ly nguong toi gian');
+  assert.ok(adminVue.includes('SHOW_ADVANCED_RULE_TOOLS'), 'AdminTab phai ho tro an/hien cong cu mo rong');
+});
+
+test('Vietnamese PostgreSQL schema map is complete and preserves legacy API identifiers', () => {
+  const { TABLES } = require('../services/vietnamese-schema');
+  assert.equal(Object.keys(TABLES).length, 19);
+  const physicalNames = new Set();
+  for (const [legacyName, spec] of Object.entries(TABLES)) {
+    assert.match(spec.table, /^[a-z][a-z0-9_]*$/);
+    assert.ok(!physicalNames.has(spec.table), `Physical table name collision: ${spec.table}`);
+    physicalNames.add(spec.table);
+    const hasLocalizedPrimaryKey = spec.columns.id === 'ma'
+      || spec.columns.code === 'ma_nganh'
+      || (legacyName === 'system_settings' && spec.columns.key === 'khoa');
+    assert.ok(hasLocalizedPrimaryKey, `${legacyName} must have a Vietnamese primary identifier`);
+    const names = Object.values(spec.columns);
+    assert.equal(new Set(names).size, names.length, `${legacyName} column name collision`);
+    for (const name of names) assert.match(name, /^[a-z][a-z0-9_]*$/);
+  }
+  assert.equal(TABLES.rules.table, 'quy_tac');
+  assert.equal(TABLES.laws.table, 'luat');
+  assert.equal(TABLES.users.table, 'nguoi_dung');
+  assert.equal(TABLES.laws.columns.year, 'nam');
+  assert.equal(TABLES.laws.columns.type, 'loai');
+  assert.equal(TABLES.laws.columns.mo_ta, 'mo_ta');
 });

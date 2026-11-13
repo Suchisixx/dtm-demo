@@ -403,7 +403,7 @@ export const IND_DB = {
     ],
   },
 
-  // ── 27. KHÁCH SẠN, KHU NGHỈ DƯỠNG (RESORT) ──
+  // ── 27. KHÁCH SẠN, KHU NGHỈ DƯỠNG ──
   khach_san: {
     lbl: 'Quy mô (buồng / phòng lưu trú)',
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',

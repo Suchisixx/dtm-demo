@@ -163,12 +163,33 @@ const handleViewLaw = (lawId) => {
   window.history.pushState({ page: 'laws' }, '', '/laws')
 }
 
+const urgentReminderCount = ref(0)
+
+const fetchUrgentReminderCount = async () => {
+  if (!currentUser.value) {
+    urgentReminderCount.value = 0
+    return
+  }
+  try {
+    const res = await fetch(API.REMINDERS)
+    if (!res.ok) return
+    const data = await res.json()
+    const s = data.summary || {}
+    urgentReminderCount.value = (s.qua_han || 0) + (s.sap_den_han || 0)
+  } catch {
+    // Không chặn giao diện nếu endpoint nhắc hạn chưa sẵn sàng
+  }
+}
+
 watch(currentUser, (newUser) => {
   if (!newUser) {
+    urgentReminderCount.value = 0
     if (activePage.value !== DEFAULT_PAGE) {
       activePage.value = DEFAULT_PAGE
       window.history.pushState({ page: DEFAULT_PAGE }, '', `/${DEFAULT_PAGE}`)
     }
+  } else {
+    fetchUrgentReminderCount()
   }
 })
 
@@ -187,10 +208,10 @@ onMounted(() => {
 
 <template>
   <div class="app-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
-    <!-- Mobile Backdrop -->
+    <!-- Lớp nền khi mở menu trên màn hình nhỏ -->
     <div class="sidebar-backdrop" :class="{ show: mobileMenuOpen }" @click="mobileMenuOpen = false"></div>
 
-    <!-- SIDEBAR -->
+    <!-- Thanh điều hướng bên -->
     <aside class="app-sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileMenuOpen }">
       <div class="sidebar-brand">
         <img src="/assets/logo/logo-bg.png" alt="ETC LegalHub" class="sidebar-logo" />
@@ -207,6 +228,11 @@ onMounted(() => {
            title="Bảng điều khiển &amp; Thống kê" @click.prevent="handlePageChange('dashboard')">
           <i class="ti ti-layout-dashboard"></i>
           <span class="sidebar-link-label">Bảng điều khiển</span>
+          <span v-if="currentUser && urgentReminderCount > 0 && !sidebarCollapsed"
+                style="margin-left:auto;background:#DC2626;color:#FFFFFF;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;line-height:1.4"
+                :title="`${urgentReminderCount} nghĩa vụ quá hạn hoặc sắp đến hạn`">
+            {{ urgentReminderCount }}
+          </span>
           <i v-if="!currentUser" class="ti ti-lock sidebar-lock-icon"></i>
         </a>
 
@@ -255,9 +281,9 @@ onMounted(() => {
       </div>
     </aside>
 
-    <!-- MAIN VIEWPORT -->
+    <!-- Vùng hiển thị chính -->
     <div class="app-main">
-      <!-- TOPBAR -->
+      <!-- Thanh tiêu đề trên -->
       <header class="app-topbar">
         <div class="topbar-left">
           <button type="button" class="mobile-menu-btn" @click="mobileMenuOpen = !mobileMenuOpen" aria-label="Menu">
@@ -296,7 +322,7 @@ onMounted(() => {
         </div>
       </header>
 
-      <!-- MAIN CONTENT -->
+      <!-- Nội dung chính -->
       <main class="app-content">
         <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
         <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
@@ -306,14 +332,14 @@ onMounted(() => {
         <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />
       </main>
 
-      <!-- FOOTER -->
+      <!-- Chân trang -->
       <footer class="app-footer">
         <span>&copy; 2026 ETC Environmental Consulting Hub. Hệ thống quản trị hồ sơ & đối chiếu quy chuẩn môi trường.</span>
         <span>Dữ liệu đồng bộ theo chuỗi Nghị định 08/2022/NĐ-CP & 48/2026/NĐ-CP</span>
       </footer>
     </div>
 
-    <!-- AUTH MODAL -->
+    <!-- Hộp thoại xác thực -->
     <AuthModal v-if="showLogin" @login-success="handleLoginSuccess" @close="showLogin = false" />
   </div>
 </template>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { API } from '../utils/constants.js'
+import { API, REMINDER_ALERT_META, reminderComplete } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 
@@ -37,7 +37,11 @@ const stats = ref({
     complianceRate: 100,
     totalLaws: 0,
     validLaws: 0,
-    amendedLaws: 0
+    amendedLaws: 0,
+    quaHanCount: 0,
+    sapDenHanCount: 0,
+    trongHanCount: 0,
+    daHoanThanhCount: 0
   },
   distributions: {
     byGroup: { 'Nhóm I': 0, 'Nhóm II': 0, 'Nhóm III': 0, 'Nhóm IV': 0, 'Cần rà soát': 0 },
@@ -64,9 +68,15 @@ const stats = ref({
     }
   },
   alertSamples: [],
+  upcomingDeadlines: [],
+  reminderSummary: { tong_so: 0, qua_han: 0, sap_den_han: 0, trong_han: 0, da_hoan_thanh: 0 },
   projectHealthList: [],
   staffList: []
 })
+
+const scanningDeadlines = ref(false)
+const completingDeadlineId = ref(null)
+const deadlineActionMsg = ref('')
 
 const healthFilter = ref('all')
 const searchQuery = ref('')
@@ -162,6 +172,7 @@ const filterCounts = computed(() => {
   return {
     all: list.length,
     alert: list.filter(p => p.latest_sample_status === 'vuot_nguong' || p.latest_sample_status === 'canh_bao').length,
+    deadline: list.filter(p => p.han_tuan_thu_gan_nhat && ['qua_han', 'sap_den_han'].includes(p.han_tuan_thu_gan_nhat.muc_canh_bao)).length,
     incomplete: list.filter(p => p.checklist_percent < 100).length,
     unmonitored: list.filter(p => p.sample_count === 0).length
   }
@@ -172,6 +183,8 @@ const filteredProjects = computed(() => {
 
   if (healthFilter.value === 'alert') {
     list = list.filter(p => p.latest_sample_status === 'vuot_nguong' || p.latest_sample_status === 'canh_bao')
+  } else if (healthFilter.value === 'deadline') {
+    list = list.filter(p => p.han_tuan_thu_gan_nhat && ['qua_han', 'sap_den_han'].includes(p.han_tuan_thu_gan_nhat.muc_canh_bao))
   } else if (healthFilter.value === 'incomplete') {
     list = list.filter(p => p.checklist_percent < 100)
   } else if (healthFilter.value === 'unmonitored') {
@@ -221,6 +234,48 @@ const getGroupColor = (nhom) => {
   return '#286B4F'
 }
 
+const getDeadlineBadgeMeta = (level) => {
+  return REMINDER_ALERT_META[level] || REMINDER_ALERT_META.trong_han
+}
+
+const runDeadlineScan = async () => {
+  scanningDeadlines.value = true
+  deadlineActionMsg.value = ''
+  try {
+    const res = await fetch(API.REMINDERS_SCAN, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể quét hạn tuân thủ')
+    const s = data.summary || {}
+    deadlineActionMsg.value = `Đã quét ${s.tong_quet || 0} nghĩa vụ: ${s.qua_han || 0} quá hạn, ${s.sap_den_han || 0} sắp đến hạn.`
+    await fetchDashboardStats()
+  } catch (err) {
+    deadlineActionMsg.value = err.message || 'Lỗi khi quét hạn tuân thủ.'
+  } finally {
+    scanningDeadlines.value = false
+  }
+}
+
+const markDeadlineCompleted = async (item) => {
+  if (!item?.id) return
+  completingDeadlineId.value = item.id
+  deadlineActionMsg.value = ''
+  try {
+    const res = await fetch(reminderComplete(item.id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tao_ky_tiep_theo: true })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Không thể cập nhật trạng thái nghĩa vụ')
+    deadlineActionMsg.value = data.message || 'Đã cập nhật trạng thái nghĩa vụ.'
+    await fetchDashboardStats()
+  } catch (err) {
+    deadlineActionMsg.value = err.message || 'Lỗi khi đánh dấu hoàn thành.'
+  } finally {
+    completingDeadlineId.value = null
+  }
+}
+
 const getDashboardSampleBadge = (status) => {
   switch (status) {
     case 'vuot_nguong':
@@ -247,7 +302,7 @@ const printDashboard = () => {
 
 <template>
   <div class="container fade-up">
-    <!-- PAGE HEADER -->
+    <!-- Tiêu đề trang -->
     <div class="page-header">
       <div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
@@ -267,7 +322,7 @@ const printDashboard = () => {
       </div>
 
       <div class="no-print" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div v-if="currentUser?.role === 'admin' && stats.staffList.length > 0" style="display:flex;align-items:center;gap:8px">
+        <div v-if="currentUser?.role === 'admin' && stats.staffList?.length > 0" style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12.5px;color:var(--text2);font-weight:500;white-space:nowrap">Chuyên viên:</span>
           <select v-model="selectedStaffId" @change="fetchDashboardStats" style="width:210px">
             <option value="all">Tất cả nhân sự ({{ stats.staffList.length }})</option>
@@ -288,7 +343,7 @@ const printDashboard = () => {
       </div>
     </div>
 
-    <!-- LOADING / ERROR -->
+    <!-- Trạng thái đang tải hoặc lỗi -->
     <div v-if="loading" class="card" style="text-align:center;padding:48px 20px;color:var(--text2)">
       <i class="ti ti-loader" style="font-size:24px;color:var(--accent);display:block;margin-bottom:8px"></i>
       <span>Đang tổng hợp dữ liệu dự án và mẫu quan trắc QCVN...</span>
@@ -302,9 +357,9 @@ const printDashboard = () => {
     </div>
 
     <template v-else>
-      <!-- ROW 1: 4 CORE KPI CARDS -->
+      <!-- Hàng 1: bốn chỉ số chính -->
       <div class="kpi-grid">
-        <!-- KPI 1: Tổng dự án -->
+        <!-- Chỉ số 1: tổng số dự án -->
         <div class="kpi-card">
           <div class="kpi-card-top">
             <span class="kpi-label">Tổng số dự án</span>
@@ -317,7 +372,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- KPI 2: Dự án Nhóm I & II -->
+        <!-- Chỉ số 2: dự án Nhóm I và II -->
         <div class="kpi-card">
           <div class="kpi-card-top">
             <span class="kpi-label">Dự án Nhóm I &amp; II</span>
@@ -332,7 +387,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- KPI 3: Tỷ lệ mẫu đạt QCVN -->
+        <!-- Chỉ số 3: tỷ lệ mẫu đạt QCVN -->
         <div class="kpi-card">
           <div class="kpi-card-top">
             <span class="kpi-label">Tỷ lệ mẫu đạt QCVN</span>
@@ -352,7 +407,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- KPI 4: Tiến độ hoàn thiện hồ sơ -->
+        <!-- Chỉ số 4: tiến độ hoàn thiện hồ sơ -->
         <div class="kpi-card">
           <div class="kpi-card-top">
             <span class="kpi-label">Tiến độ hoàn thiện hồ sơ</span>
@@ -365,9 +420,9 @@ const printDashboard = () => {
         </div>
       </div>
 
-      <!-- ROW 2: CHARTS & DISTRIBUTIONS -->
+      <!-- Hàng 2: biểu đồ và cơ cấu -->
       <div class="dash-two-col">
-        <!-- Left: Phân bố nhóm dự án & Loại hồ sơ -->
+        <!-- Bên trái: nhóm dự án và loại hồ sơ -->
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
             <div>
@@ -449,7 +504,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- Right: Kết quả quan trắc QCVN & Cảnh báo -->
+        <!-- Bên phải: kết quả quan trắc QCVN và cảnh báo -->
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
             <div>
@@ -526,9 +581,9 @@ const printDashboard = () => {
         </div>
       </div>
 
-      <!-- ROW 3: ENVIRONMENTAL LOAD & TOP RANKINGS -->
+      <!-- Hàng 3: tải lượng môi trường và các nhóm đứng đầu -->
       <div class="dash-three-col" style="margin-top:16px">
-        <!-- Col 1: Tải lượng phát thải & Yếu tố nhạy cảm -->
+        <!-- Cột 1: tải lượng phát thải và yếu tố nhạy cảm -->
         <div class="card" style="margin-bottom:0">
           <div class="card-title" style="margin-bottom:12px">
             <i class="ti ti-droplet-half-2"></i>
@@ -566,7 +621,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- Col 2: Top Ngành nghề -->
+        <!-- Cột 2: ngành nghề phổ biến -->
         <div class="card" style="margin-bottom:0">
           <div class="card-title" style="margin-bottom:12px">
             <i class="ti ti-building-factory"></i>
@@ -589,7 +644,7 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- Col 3: Top Địa phương -->
+        <!-- Cột 3: địa phương phổ biến -->
         <div class="card" style="margin-bottom:0">
           <div class="card-title" style="margin-bottom:12px">
             <i class="ti ti-map-pin"></i>
@@ -613,7 +668,85 @@ const printDashboard = () => {
         </div>
       </div>
 
-      <!-- ROW 4: PROJECT HEALTH & RECENT PROJECTS TABLE -->
+      <!-- Giám sát nhắc hạn tuân thủ môi trường -->
+      <div class="card" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+          <div>
+            <div class="card-title">
+              <i class="ti ti-calendar-event"></i>
+              <span>Giám sát Nhắc hạn Tuân thủ Môi trường</span>
+            </div>
+            <div style="font-size:12.5px;color:var(--text3);margin-top:2px">
+              Theo dõi hạn nộp báo cáo công tác BVMT định kỳ, quan trắc chất thải và gia hạn Giấy phép môi trường
+            </div>
+          </div>
+          <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="chip" style="background:#FEE2E2;color:#991B1B;border:1px solid #FECACA">
+              Quá hạn: <strong>{{ stats.kpis.quaHanCount || 0 }}</strong>
+            </span>
+            <span class="chip" style="background:#FEF3C7;color:#92400E;border:1px solid #FDE68A">
+              Sắp đến hạn: <strong>{{ stats.kpis.sapDenHanCount || 0 }}</strong>
+            </span>
+            <span class="chip" style="background:#DCFCE7;color:#166534;border:1px solid #BBF7D0">
+              Trong hạn: <strong>{{ stats.kpis.trongHanCount || 0 }}</strong>
+            </span>
+            <button type="button" class="btn-secondary btn-sm" :disabled="scanningDeadlines" @click="runDeadlineScan">
+              <i class="ti" :class="scanningDeadlines ? 'ti-loader-2 ti-spin' : 'ti-radar'"></i>
+              <span>{{ scanningDeadlines ? 'Đang quét...' : 'Quét hạn ngay' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="deadlineActionMsg" style="margin-bottom:12px;padding:8px 12px;border-radius:var(--radius-sm);background:var(--bg);border:1px solid var(--border);font-size:12.5px;color:var(--text2)">
+          {{ deadlineActionMsg }}
+        </div>
+
+        <div v-if="!stats.upcomingDeadlines || stats.upcomingDeadlines.length === 0"
+             style="padding:14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;color:var(--text2);display:flex;align-items:center;gap:8px">
+          <i class="ti ti-calendar-check" style="color:var(--success)"></i>
+          <span>Chưa có mốc nhắc hạn nào đang chờ xử lý. Mở một dự án để khởi tạo lịch nghĩa vụ mặc định theo hồ sơ.</span>
+        </div>
+
+        <div v-else style="display:flex;flex-direction:column;gap:8px">
+          <div v-for="ob in stats.upcomingDeadlines" :key="ob.id"
+               style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)">
+            <div style="min-width:220px;flex:1">
+              <div style="font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span>{{ ob.tieu_de }}</span>
+                <span class="chip chip-gray" style="height:20px;font-size:11px;padding:0 7px">{{ ob.nhan_chu_ky }}</span>
+              </div>
+              <div style="font-size:12px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span v-if="ob.project_name" style="color:var(--accent);font-weight:500;cursor:pointer" @click="emit('view-project', ob.project_id)">
+                  <i class="ti ti-folder"></i> {{ ob.project_name }}
+                </span>
+                <span>· Hạn nộp: <strong style="color:var(--text2)">{{ formatDate(ob.han_nop) }}</strong></span>
+                <span v-if="ob.can_cu_phap_ly">· {{ ob.can_cu_phap_ly }}</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class="chip" :style="{
+                background: getDeadlineBadgeMeta(ob.muc_canh_bao).badgeBg,
+                color: getDeadlineBadgeMeta(ob.muc_canh_bao).badgeColor,
+                border: '1px solid ' + getDeadlineBadgeMeta(ob.muc_canh_bao).badgeBorder,
+                fontWeight: 600
+              }">
+                {{ ob.nhan_trang_thai }}
+              </span>
+              <button type="button" class="btn-secondary btn-sm no-print"
+                      :disabled="completingDeadlineId === ob.id"
+                      @click="markDeadlineCompleted(ob)">
+                <i class="ti ti-check"></i>
+                <span>{{ completingDeadlineId === ob.id ? 'Đang lưu...' : 'Hoàn thành' }}</span>
+              </button>
+              <button type="button" class="btn-secondary btn-sm no-print" @click="emit('view-project', ob.project_id)">
+                <span>Hồ sơ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hàng 4: tình trạng hồ sơ và danh sách dự án gần đây -->
       <div class="card" style="margin-top:16px;padding:0;overflow:hidden">
         <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">
           <div>
@@ -635,13 +768,16 @@ const printDashboard = () => {
           </div>
         </div>
 
-        <!-- Filter tabs -->
+        <!-- Bộ lọc -->
         <div class="no-print" style="padding:10px 22px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
           <button type="button" class="filter-btn" :class="{ on: healthFilter === 'all' }" @click="setHealthFilter('all')">
             Tất cả dự án ({{ filterCounts.all }})
           </button>
           <button type="button" class="filter-btn" :class="{ on: healthFilter === 'alert' }" @click="setHealthFilter('alert')">
             <i class="ti ti-alert-triangle"></i> Cần chú ý / Vượt QCVN ({{ filterCounts.alert }})
+          </button>
+          <button type="button" class="filter-btn" :class="{ on: healthFilter === 'deadline' }" @click="setHealthFilter('deadline')">
+            <i class="ti ti-calendar-exclamation"></i> Quá hạn / Sắp đến hạn ({{ filterCounts.deadline }})
           </button>
           <button type="button" class="filter-btn" :class="{ on: healthFilter === 'incomplete' }" @click="setHealthFilter('incomplete')">
             <i class="ti ti-clock"></i> Hồ sơ chưa hoàn tất ({{ filterCounts.incomplete }})
@@ -660,12 +796,13 @@ const printDashboard = () => {
                 <th>Tải lượng xả thải</th>
                 <th style="width:170px">Tiến độ Hồ sơ</th>
                 <th>Quan trắc QCVN</th>
+                <th>Hạn tuân thủ</th>
                 <th class="no-print" style="text-align:right;width:120px">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="paginatedProjects.length === 0">
-                <td colspan="6" style="text-align:center;padding:36px 16px;color:var(--text3)">
+                <td colspan="7" style="text-align:center;padding:36px 16px;color:var(--text3)">
                   Không tìm thấy dự án nào khớp với bộ lọc hiện tại.
                 </td>
               </tr>
@@ -728,6 +865,24 @@ const printDashboard = () => {
                   <span v-else style="font-size:12px;color:var(--text3)">Chưa quan trắc</span>
                 </td>
 
+                <td>
+                  <template v-if="proj.han_tuan_thu_gan_nhat">
+                    <span class="chip" :style="{
+                      background: getDeadlineBadgeMeta(proj.han_tuan_thu_gan_nhat.muc_canh_bao).badgeBg,
+                      color: getDeadlineBadgeMeta(proj.han_tuan_thu_gan_nhat.muc_canh_bao).badgeColor,
+                      border: '1px solid ' + getDeadlineBadgeMeta(proj.han_tuan_thu_gan_nhat.muc_canh_bao).badgeBorder,
+                      fontWeight: 600
+                    }">
+                      {{ proj.han_tuan_thu_gan_nhat.nhan_trang_thai }}
+                    </span>
+                    <div style="font-size:11.5px;color:var(--text3);margin-top:3px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+                         :title="proj.han_tuan_thu_gan_nhat.tieu_de">
+                      {{ formatDate(proj.han_tuan_thu_gan_nhat.han_nop) }} · {{ proj.han_tuan_thu_gan_nhat.tieu_de }}
+                    </div>
+                  </template>
+                  <span v-else style="font-size:12px;color:var(--text3)">Chưa có lịch</span>
+                </td>
+
                 <td class="no-print" style="text-align:right">
                   <button type="button" class="btn-secondary btn-sm" @click="emit('view-project', proj.id)">
                     <span>Mở hồ sơ</span>
@@ -739,7 +894,7 @@ const printDashboard = () => {
           </table>
         </div>
 
-        <!-- Pagination -->
+        <!-- Phân trang -->
         <div v-if="filteredProjects.length > 0" class="no-print"
              style="padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;background:var(--surface)">
           <div style="font-size:12.5px;color:var(--text2)">

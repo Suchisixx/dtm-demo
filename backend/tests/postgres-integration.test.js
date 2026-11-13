@@ -24,6 +24,7 @@ const {
   approveRuleCandidate,
   upsertTransitionalQcvn,
 } = require('../services/rule-repository');
+const { migrateVietnameseSchema } = require('../services/vietnamese-schema');
 
 const { QCVN_DATA } = require('../../frontend/src/data/qcvn-db');
 
@@ -79,17 +80,27 @@ test.before(async () => {
   }
 
   pgPool = new Pool(buildPgConfig(TEST_DB_NAME));
-
-  // Minimal core tables required by foreign keys and services
-  await pgPool.query(`
+  const schemaState = await pgPool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relname = 'nguoi_dung' AND c.relkind IN ('r', 'p')
+     ) AS vietnamese_schema`
+  );
+  if (!schemaState.rows[0].vietnamese_schema) {
+    // Tạo các bảng cũ tối thiểu để kiểm tra migration tại chỗ.
+    await pgPool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
       username VARCHAR(50) UNIQUE NOT NULL,
       full_name VARCHAR(100) NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
+      reset_token_hash VARCHAR(255),
+      reset_token_expires TIMESTAMP,
       role VARCHAR(20) NOT NULL DEFAULT 'staff',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_hash VARCHAR(255);
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP;
     CREATE TABLE IF NOT EXISTS laws (
       id VARCHAR(100) PRIMARY KEY,
       type VARCHAR(20) NOT NULL,
@@ -105,6 +116,7 @@ test.before(async () => {
       link TEXT,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    ALTER TABLE laws ADD COLUMN IF NOT EXISTS last_crawled_mod VARCHAR(100);
     CREATE TABLE IF NOT EXISTS projects (
       id SERIAL PRIMARY KEY,
       user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -119,21 +131,50 @@ test.before(async () => {
       phuong_xa VARCHAR(100),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS rules (
+      id VARCHAR(100) PRIMARY KEY, rule_name VARCHAR(255) NOT NULL,
+      rule_type VARCHAR(50), expression TEXT NOT NULL, is_active BOOLEAN DEFAULT TRUE, version INTEGER DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS rule_versions (
+      id SERIAL PRIMARY KEY, rule_id VARCHAR(100) REFERENCES rules(id) ON DELETE CASCADE,
+      version INTEGER NOT NULL, expression TEXT NOT NULL, changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, change_reason TEXT
+    );
+    CREATE TABLE IF NOT EXISTS law_update_history (
+      id SERIAL PRIMARY KEY, law_id VARCHAR(100), action VARCHAR(50) NOT NULL,
+      updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, description TEXT
+    );
+    CREATE TABLE IF NOT EXISTS system_settings (key VARCHAR(100) PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS query_logs (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      query_type VARCHAR(50) NOT NULL, input_params JSONB NOT NULL, output_result JSONB NOT NULL,
+      queried_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      action VARCHAR(100) NOT NULL, ip_address VARCHAR(50), user_agent TEXT, payload JSONB,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  await pgPool.query(
-    `INSERT INTO laws (id, type, year, so, ten, status)
+    await pgPool.query(
+      `INSERT INTO laws (id, type, year, so, ten, status)
      VALUES ('luat_bvmt_2020', 'luat', 2020, '72/2020/QH14', 'Luat BVMT 2020', 'valid'),
             ('nd_08_2022', 'nd', 2022, '08/2022/ND-CP', 'Nghi dinh 08/2022/ND-CP', 'valid'),
             ('vbhn_49_2026', 'vbhn', 2026, '49/VBHN-BNNMT', 'VBHN 49/VBHN-BNNMT', 'valid')
      ON CONFLICT (id) DO NOTHING`
-  );
+    );
 
-  await ensureClassificationSchema(pgPool);
-  await ensureQcvnSchema(pgPool);
-  await ensureSensitiveVerificationSchema(pgPool);
-  await ensureGisSchema(pgPool);
-  await ensureCrawlerSyncSchema(pgPool);
+    await ensureClassificationSchema(pgPool);
+    await ensureQcvnSchema(pgPool);
+    await ensureSensitiveVerificationSchema(pgPool);
+    await ensureGisSchema(pgPool);
+    await ensureCrawlerSyncSchema(pgPool);
+    await migrateVietnameseSchema(pgPool);
+  } else {
+    await migrateVietnameseSchema(pgPool);
+  }
 
   await seedClassificationCatalog(pgPool, { indDb: IND_DB, industryMeta: INDUSTRY_META });
   await seedQcvnCatalog(pgPool, { qcvnData: QCVN_DATA });
@@ -143,12 +184,12 @@ test.before(async () => {
   });
 
   const uRes = await pgPool.query(
-    `INSERT INTO users (username, full_name, password_hash, role)
+    `INSERT INTO nguoi_dung (ten_dang_nhap, ho_ten, mat_khau_bam, vai_tro)
      VALUES ('pg_admin_test', 'PG Admin Test', 'hash', 'admin')
-     ON CONFLICT (username) DO UPDATE SET role = 'admin'
-     RETURNING id`
+     ON CONFLICT (ten_dang_nhap) DO UPDATE SET vai_tro = 'admin'
+     RETURNING ma`
   );
-  testUserId = uRes.rows[0].id;
+  testUserId = uRes.rows[0].ma;
 });
 
 test.after(async () => {
@@ -161,7 +202,7 @@ test.after(async () => {
       await defaultDb.pool.end();
     }
   } catch {
-    // ignore cleanup error
+    // Bỏ qua lỗi khi dọn dữ liệu kiểm thử.
   }
 });
 
@@ -183,7 +224,7 @@ test('PG Integration: Idempotent seed preserves VERIFIED rows & filters out DRAF
      WHERE industry_code = 'che_bien_go'`
   );
 
-  // Re-run seed idempotently and assert VERIFIED row was not overwritten
+  // Chạy lại seed và xác nhận bản ghi VERIFIED không bị ghi đè.
   await seedClassificationCatalog(pgPool, { indDb: IND_DB, industryMeta: INDUSTRY_META });
   const checkInd = await pgPool.query(
     `SELECT verification_status, source_document FROM industries WHERE code = 'che_bien_go'`
@@ -191,12 +232,12 @@ test('PG Integration: Idempotent seed preserves VERIFIED rows & filters out DRAF
   assert.equal(checkInd.rows[0].verification_status, 'VERIFIED');
   assert.equal(checkInd.rows[0].source_document, 'PG_VERIFIED_TEST');
 
-  // Insert DRAFT and PENDING_REVIEW industries and assert loadClassificationCatalog excludes them
+  // Thêm ngành DRAFT/PENDING_REVIEW và xác nhận danh mục runtime loại bỏ chúng.
   await pgPool.query(
-    `INSERT INTO industries (code, name, display_name, unit, verification_status, publication_status)
+    `INSERT INTO nganh_nghe (ma_nganh, ten_nganh, ten_hien_thi, don_vi, trang_thai_xac_minh, trang_thai_cong_bo)
      VALUES ('pg_draft_ind', 'Draft Ind', 'Draft Ind', 'm3', 'NEEDS_LEGAL_VERIFICATION', 'DRAFT'),
             ('pg_pending_ind', 'Pending Ind', 'Pending Ind', 'm3', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_REVIEW')
-     ON CONFLICT (code) DO UPDATE SET publication_status = EXCLUDED.publication_status`
+     ON CONFLICT (ma_nganh) DO UPDATE SET trang_thai_cong_bo = EXCLUDED.trang_thai_cong_bo`
   );
 
   const loaded = await loadClassificationCatalog({ db: pgPool });
@@ -272,7 +313,7 @@ test('PG Integration: DB GIS layers & Server Sensitive Verification lifecycle (e
     declaredDetails: { insideCoreProtectedZone: true },
   });
 
-  // Before Admin approval -> cannot escalate to Nhom I officially (base is Nhom II)
+  // Trước khi quản trị viên duyệt, không được chính thức nâng từ Nhóm II lên Nhóm I.
   const beforeEval = await evaluateClassificationWithDb(
     { ...project.form_data, latitude: Number(project.latitude), longitude: Number(project.longitude) },
     { db: pgPool, projectId: project.id }
@@ -281,7 +322,7 @@ test('PG Integration: DB GIS layers & Server Sensitive Verification lifecycle (e
   assert.equal(beforeEval.nhom, 'Nhóm II');
   assert.equal(beforeEval.isOfficialConclusion, false);
 
-  // Admin verifies -> evaluateStoredProject & evaluateClassificationWithDb escalate to Nhom I / DTM
+  // Sau khi quản trị viên xác minh, hai hàm đánh giá cho kết quả Nhóm I/ĐTM.
   const verifRow = await reviewProjectSensitiveVerification(pgPool, {
     projectId: project.id,
     verificationStatus: 'VERIFIED',
@@ -301,7 +342,7 @@ test('PG Integration: DB GIS layers & Server Sensitive Verification lifecycle (e
   assert.equal(afterVerifyEval.nhom, 'Nhóm I');
   assert.equal(afterVerifyEval.hs, 'DTM');
 
-  // If declaration changes later -> resets back to PENDING_VERIFICATION automatically
+  // Khi nội dung khai báo thay đổi, trạng thái tự quay về PENDING_VERIFICATION.
   const afterEditSens = await upsertProjectSensitiveDeclaration(pgPool, {
     projectId: project.id,
     declaredFlags: { rung: true, lua: true },
@@ -335,7 +376,7 @@ test('PG Integration: Crawler sync creates PENDING_REVIEW candidates, Admin appr
   const targetCand = pendingList.find(c => c.law_id === 'vb_pg_test_2026' && c.target_type === 'CLASSIFICATION_THRESHOLD');
   assert.ok(targetCand);
 
-  // Approving threshold candidate requires sourceDocument & creates VERIFIED threshold row
+  // Duyệt đề xuất ngưỡng cần sourceDocument và tạo bản ghi ngưỡng VERIFIED.
   await approveRuleCandidate(pgPool, {
     candidateId: targetCand.id,
     reviewedBy: testUserId,
@@ -352,7 +393,7 @@ test('PG Integration: Crawler sync creates PENDING_REVIEW candidates, Admin appr
     },
   });
 
-  // Upsert & verify transitional QCVN 40:2011 and select it for existing facility
+  // Thêm/cập nhật, xác minh QCVN 40:2011 chuyển tiếp và chọn cho cơ sở hiện hữu.
   await upsertTransitionalQcvn(pgPool, {
     id: 'qcvn40_2011_b',
     ten: 'QCVN 40:2011/BTNMT Cột B (PG)',
@@ -383,7 +424,7 @@ test('PG Integration: Crawler sync creates PENDING_REVIEW candidates, Admin appr
   assert.equal(selRes.status, 'OK');
   assert.equal(selRes.qcvnId, 'qcvn40_2011_b');
 
-  // Cleanup synthetic test records in isolated test DB
+  // Dọn dữ liệu kiểm thử trong cơ sở dữ liệu riêng.
   await pgPool.query(`DELETE FROM classification_thresholds WHERE industry_code = 'che_bien_go' AND min_value = 99999999`);
   await pgPool.query(`DELETE FROM rule_candidates WHERE law_id = 'vb_pg_test_2026'`);
   await pgPool.query(`DELETE FROM law_rule_impacts WHERE law_id = 'nd_08_2022'`);

@@ -1,5 +1,5 @@
 // backend/fixtures/classification-catalog.js
-// Danh mục quy định ngành nghề & ngưỡng quy chuẩn phân loại (Static Seed / Fallback)
+// Danh mục ngành nghề và ngưỡng phân loại dùng làm dữ liệu nền/dự phòng
 const TWO_TIER_GOV_EFFECTIVE_DATE = '2025-07-01';
 const VBHN_49_EFFECTIVE_DATE = '2026-01-29';
 

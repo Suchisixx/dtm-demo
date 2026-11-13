@@ -14,6 +14,7 @@ const {
   seedQcvnCatalog,
   seedGisLayers,
 } = require('./services/rule-repository');
+const { migrateVietnameseSchema } = require('./services/vietnamese-schema');
 
 const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -25,7 +26,7 @@ const dbConfig = {
 async function initDatabase() {
   console.log('--- Đang khởi tạo cơ sở dữ liệu PostgreSQL ---');
   
-  // 1. Kết nối với database mặc định 'postgres' để kiểm tra và tạo database mới
+  // 1. Kết nối tới cơ sở dữ liệu mặc định 'postgres' để kiểm tra và tạo cơ sở dữ liệu ứng dụng
   const defaultClient = new Client({
     ...dbConfig,
     database: 'postgres',
@@ -53,7 +54,7 @@ async function initDatabase() {
     await defaultClient.end();
   }
 
-  // 2. Kết nối trực tiếp vào database 'etc_legalhub' mới tạo
+  // 2. Kết nối trực tiếp vào cơ sở dữ liệu ứng dụng vừa tạo
   const targetClient = new Client({
     ...dbConfig,
     database: process.env.DB_NAME || 'etc_legalhub',
@@ -62,6 +63,26 @@ async function initDatabase() {
   try {
     await targetClient.connect();
     console.log('✔ Đã kết nối trực tiếp vào database ứng dụng.');
+
+    const schemaState = await targetClient.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'nguoi_dung' AND c.relkind IN ('r', 'p')
+       ) AS vietnamese_schema,
+       EXISTS (
+         SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relname = 'users' AND c.relkind IN ('r', 'p')
+       ) AS legacy_schema`
+    );
+    if (schemaState.rows?.[0]?.vietnamese_schema === true) {
+      console.log('Schema tiếng Việt đã tồn tại; đồng bộ danh mục qua bootstrap runtime.');
+      const { ensureRuntimeDatabaseReady } = require('./services/db-bootstrap');
+      await ensureRuntimeDatabaseReady({ db: targetClient });
+      return;
+    }
+    if (schemaState.rows?.[0]?.legacy_schema === true) {
+      throw new Error('VIETNAMESE_SCHEMA_MIGRATION_REQUIRED: create a database backup, then run backend/scripts/migrate-vietnamese-schema.js');
+    }
 
     // Tạo bảng users
     const createUsersTable = `
@@ -119,7 +140,7 @@ async function initDatabase() {
         ADD COLUMN IF NOT EXISTS phuong_xa TEXT,
         ADD COLUMN IF NOT EXISTS classification_result JSONB;
     `);
-    // Backfill toạ độ từ form_data cho dữ liệu cũ
+    // Bổ sung tọa độ từ form_data cho dữ liệu cũ
     await targetClient.query(`
       UPDATE projects SET
         latitude = (form_data->>'latitude')::NUMERIC,
@@ -183,7 +204,7 @@ async function initDatabase() {
     await targetClient.query(createQcvnSamplesTable);
     console.log('✔ Bảng "qcvn_samples" đã sẵn sàng.');
 
-    // Migration: Liên kết mẫu quan trắc với dự án
+    // Bổ sung liên kết mẫu quan trắc với dự án
     await targetClient.query(`
       ALTER TABLE qcvn_samples
         ADD COLUMN IF NOT EXISTS project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
@@ -235,7 +256,7 @@ async function initDatabase() {
     await targetClient.query(createClassificationThresholdsTable);
     console.log('✔ Bảng "classification_thresholds" đã sẵn sàng.');
 
-    // Tạo bảng rules (Quy tắc Rule Engine)
+    // Tạo bảng rules lưu định nghĩa quy tắc nghiệp vụ
     const createRulesTable = `
       CREATE TABLE IF NOT EXISTS rules (
         id VARCHAR(100) PRIMARY KEY,
@@ -290,7 +311,7 @@ async function initDatabase() {
     await targetClient.query(createSystemSettingsTable);
     console.log('✔ Bảng "system_settings" đã sẵn sàng.');
 
-    // Seed cấu hình tự động quét mặc định là true
+    // Tạo cấu hình ban đầu cho tác vụ quét tự động
     await targetClient.query(`
       INSERT INTO system_settings (key, value)
       VALUES ('auto_crawl_enabled', 'false')
@@ -327,7 +348,7 @@ async function initDatabase() {
     await targetClient.query(createAuditLogsTable);
     console.log('✔ Bảng "audit_logs" đã sẵn sàng.');
 
-    // 3. Tạo tài khoản mẫu (Seed Users)
+    // 3. Tạo tài khoản mẫu
     const seedUsers = [
       { username: 'admin', password: 'admin123', fullName: 'Người quản trị', role: 'admin' },
       { username: 'staff1', password: 'staff123', fullName: 'Nhân viên 1', role: 'staff' },
@@ -355,7 +376,7 @@ async function initDatabase() {
     }
     console.log('✔ Đã đồng bộ toàn bộ tài khoản mẫu thành công.');
 
-    // Helper to generate direct luatmoitruong.vn link
+    // Hàm tạo liên kết trực tiếp đến luatmoitruong.vn
     function getDirectLawLink(law) {
       if (law.link && law.link.startsWith('https://www.luatmoitruong.vn/')) {
         return law.link;
@@ -405,7 +426,7 @@ async function initDatabase() {
       return `https://www.luatmoitruong.vn/${cleanNum}`;
     }
 
-    // 4. Đồng bộ văn bản pháp lý từ file seed (nếu có) vào database
+    // 4. Đồng bộ văn bản pháp lý từ dữ liệu nền (nếu có) vào cơ sở dữ liệu
     try {
       const lawsPath = path.join(__dirname, '../frontend/src/data/laws.js');
       if (fs.existsSync(lawsPath)) {
@@ -479,6 +500,8 @@ async function initDatabase() {
     await ensureSensitiveVerificationSchema(targetClient);
     await ensureGisSchema(targetClient);
     await ensureCrawlerSyncSchema(targetClient);
+    await migrateVietnameseSchema(targetClient);
+    console.log('✔ Đã đổi tên schema PostgreSQL sang tiếng Việt và tạo lớp tương thích SQL.');
     console.log('✔ Đã kiểm tra và bổ sung các cột metadata pháp lý, xác minh nhạy cảm, GIS & crawler sync (migration an toàn, không xóa dữ liệu).');
 
     if (schemaOnly) {
@@ -486,7 +509,7 @@ async function initDatabase() {
       return;
     }
 
-    // 5. Seed QCVN an toàn từ frontend/src/data/qcvn-db.js (không ghi đè dữ liệu đã VERIFIED/PUBLISHED)
+    // 5. Bổ sung QCVN an toàn từ frontend/src/data/qcvn-db.js, không ghi đè dữ liệu đã VERIFIED/PUBLISHED
     try {
       console.log('Đang seed danh mục QCVN (idempotent, bảo toàn bản ghi VERIFIED)...');
       const { QCVN_DATA, QCVN_SCHEMA_VERSION } = require('../frontend/src/data/qcvn-db.js');
@@ -500,7 +523,7 @@ async function initDatabase() {
       console.error('⚠️ Không thể seed danh mục QCVN:', e.message);
     }
 
-    // 6. Seed Ngành nghề & Ngưỡng phân loại (gồm cả t và 6 processRules, không TRUNCATE)
+    // 6. Bổ sung ngành nghề và ngưỡng phân loại, gồm các quy tắc theo công đoạn; không TRUNCATE
     try {
       console.log('Đang seed Ngành nghề & Ngưỡng phân loại từ classification-service.js...');
       const { IND_DB: indDb, INDUSTRY_META, RULE_SCHEMA_VERSION } = require('./services/classification-service');
@@ -515,7 +538,7 @@ async function initDatabase() {
       console.error('⚠️ Không thể đồng bộ ngành nghề từ classification-service.js:', e.message);
     }
 
-    // 6b. Seed lớp bản đồ GIS (Vùng nhạy cảm & KCN, bảo toàn bản ghi VERIFIED)
+    // 6b. Bổ sung lớp GIS vùng nhạy cảm và KCN, bảo toàn bản ghi VERIFIED
     try {
       console.log('Đang seed lớp GIS nhạy cảm & KCN từ spatial-gis-service.js...');
       const { VIETNAM_SENSITIVE_ZONES, VIETNAM_INDUSTRIAL_PARKS } = require('./services/spatial-gis-service');
@@ -529,7 +552,7 @@ async function initDatabase() {
       console.error('⚠️ Không thể seed lớp GIS:', e.message);
     }
 
-    // 7. Đồng bộ Quy tắc mẫu của Rule Engine vào database (A01, A04, Q10)
+    // 7. Đồng bộ các quy tắc mẫu vào cơ sở dữ liệu (A01, A04, Q10)
     try {
       console.log('Đang đồng bộ Quy tắc mẫu của Rule Engine...');
       const sampleRules = [

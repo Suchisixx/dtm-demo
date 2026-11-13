@@ -1,18 +1,19 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useAdministrativeDivisions, loadDivisions } from '../composables/useAdministrativeDivisions.js'
 import {
   DEFAULT_LAT,
   DEFAULT_LNG,
   DEFAULT_ZOOM,
   NHOM_COLORS,
-  CARTO_VOYAGER_URL,
-  CARTO_ATTRIBUTION,
-  OSM_LANDUSE_URL,
-  OSM_ATTRIBUTION,
-  ESRI_IMAGERY_URL,
   EMBEDDED_GIS_LAYERS,
   API
 } from '../utils/constants.js'
+import {
+  createBaseTileLayer,
+  createAdminBoundaryWmsLayer,
+  fetchAndRenderAdminBoundary
+} from '../utils/map-layers.js'
 import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 
@@ -30,15 +31,21 @@ const selectedProjectId = ref(null)
 const activeBaseMap = ref('voyager')
 const showImpactBuffers = ref(true)
 const showSensitiveLayers = ref(true)
+const showAdminBoundary = ref(true)
+const activeBoundaryLabel = ref('')
+const { divisions } = useAdministrativeDivisions()
 let gisStaticLayers = EMBEDDED_GIS_LAYERS
 
 let map = null
 let baseTileLayer = null
 let labelTileLayer = null
+let adminBoundaryWmsLayer = null
+let adminBoundaryLayerGroup = null
 let clusterGroup = null
 let bufferLayerGroup = null
 let sensitiveLayerGroup = null
 const markerMap = new Map()
+let mapBoundaryReqSeq = 0
 
 const uniqueProvinces = computed(() => {
   const provinces = new Set(projects.value.map(p => p.tinh).filter(Boolean))
@@ -98,24 +105,84 @@ const switchBaseMap = (mode) => {
     labelTileLayer = null
   }
 
-  if (mode === 'voyager') {
-    baseTileLayer = window.L.tileLayer(CARTO_VOYAGER_URL, {
-      attribution: CARTO_ATTRIBUTION,
-      subdomains: ['0', '1', '2', '3'],
-      maxZoom: 20
-    }).addTo(map)
-  } else if (mode === 'satellite') {
-    baseTileLayer = window.L.tileLayer(ESRI_IMAGERY_URL, {
-      attribution: '&copy; Google Satellite Hybrid',
-      subdomains: ['0', '1', '2', '3'],
-      maxZoom: 20
-    }).addTo(map)
+  baseTileLayer = createBaseTileLayer(window.L, mode, map, (fallbackLayer) => {
+    baseTileLayer = fallbackLayer
+  })
+}
+
+const syncAdminWmsLayer = () => {
+  if (!map || !window.L) return
+  if (showAdminBoundary.value) {
+    if (!adminBoundaryWmsLayer) {
+      adminBoundaryWmsLayer = createAdminBoundaryWmsLayer(window.L)
+    }
+    if (adminBoundaryWmsLayer && !map.hasLayer(adminBoundaryWmsLayer)) {
+      adminBoundaryWmsLayer.addTo(map)
+    }
   } else {
-    baseTileLayer = window.L.tileLayer(OSM_LANDUSE_URL, {
-      attribution: OSM_ATTRIBUTION,
-      subdomains: ['a', 'b', 'c'],
-      maxZoom: 19
-    }).addTo(map)
+    if (adminBoundaryWmsLayer && map.hasLayer(adminBoundaryWmsLayer)) {
+      map.removeLayer(adminBoundaryWmsLayer)
+    }
+    if (adminBoundaryLayerGroup) {
+      adminBoundaryLayerGroup.clearLayers()
+    }
+    activeBoundaryLabel.value = ''
+  }
+}
+
+const toggleAdminBoundary = () => {
+  showAdminBoundary.value = !showAdminBoundary.value
+  syncAdminWmsLayer()
+}
+
+const findAdminUnitCode = (provinceName, wardName) => {
+  const list = divisions.value || []
+  if (!provinceName || list.length === 0) return null
+  const cleanName = (s) => normalizeString(s || '')
+    .replace(/^(tinh|thanh pho|tp\.|tp)\s+/i, '')
+    .replace(/^(phuong|xa|thi tran)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const normProv = cleanName(provinceName)
+  const prov = list.find(p => cleanName(p.name) === normProv || normalizeString(p.name).includes(normProv))
+  if (!prov) return null
+
+  if (wardName && Array.isArray(prov.wards)) {
+    const normWard = cleanName(wardName)
+    const ward = prov.wards.find(w => cleanName(w.name) === normWard)
+    if (ward) {
+      return { code: ward.code, label: `${ward.name}, ${prov.name}` }
+    }
+  }
+  return { code: prov.code, label: prov.name }
+}
+
+const highlightProjectBoundary = async ({ provinceName, wardName, fitBounds = false }) => {
+  if (!map || !window.L || !adminBoundaryLayerGroup || !showAdminBoundary.value) return
+  const reqId = ++mapBoundaryReqSeq
+  await loadDivisions()
+  const match = findAdminUnitCode(provinceName, wardName)
+  if (!match || reqId !== mapBoundaryReqSeq) {
+    if (reqId === mapBoundaryReqSeq) {
+      adminBoundaryLayerGroup.clearLayers()
+      activeBoundaryLabel.value = ''
+    }
+    return
+  }
+  try {
+    await fetchAndRenderAdminBoundary(window.L, map, adminBoundaryLayerGroup, match.code, {
+      fitBounds,
+      maxZoom: wardName ? 14 : 11,
+      color: '#15803d',
+      fillColor: '#16a34a',
+      weight: 2.8,
+      fillOpacity: 0.1
+    })
+    if (reqId === mapBoundaryReqSeq) {
+      activeBoundaryLabel.value = match.label
+    }
+  } catch (err) {
+    logger.warn('Không tải được ranh giới hành chính trên MapTab:', err)
   }
 }
 
@@ -268,6 +335,8 @@ const focusProject = (p) => {
   selectedProjectId.value = p.id
   if (!map) return
   map.flyTo([p.latitude, p.longitude], 15, { duration: 1 })
+  const wardName = p.form_data?.phuongXa || p.form_data?.ward || ''
+  highlightProjectBoundary({ provinceName: p.tinh, wardName, fitBounds: false })
   const marker = markerMap.get(p.id)
   if (marker) {
     setTimeout(() => {
@@ -278,6 +347,12 @@ const focusProject = (p) => {
 
 watch([filterNhom, filterHoSo, filterQcvn, filterTinh, searchQuery], () => {
   updateMapMarkers(true)
+  if (filterTinh.value) {
+    highlightProjectBoundary({ provinceName: filterTinh.value, fitBounds: true })
+  } else if (adminBoundaryLayerGroup) {
+    adminBoundaryLayerGroup.clearLayers()
+    activeBoundaryLabel.value = ''
+  }
 })
 
 const fetchData = async () => {
@@ -329,6 +404,8 @@ onMounted(() => {
 
     switchBaseMap(activeBaseMap.value)
 
+    adminBoundaryLayerGroup = window.L.layerGroup().addTo(map)
+    syncAdminWmsLayer()
     sensitiveLayerGroup = window.L.layerGroup().addTo(map)
     bufferLayerGroup = window.L.layerGroup().addTo(map)
 
@@ -362,7 +439,7 @@ onUnmounted(() => {
 <template>
   <div class="page fade-up">
     <div class="container">
-      <!-- PAGE HEADER -->
+      <!-- Tiêu đề trang -->
       <div class="page-header">
         <div>
           <h2 class="section-head">Bản đồ Không gian Dự án (GIS Workspace)</h2>
@@ -373,7 +450,7 @@ onUnmounted(() => {
       </div>
 
       <div class="card map-workspace-card">
-        <!-- FILTER BAR -->
+        <!-- Thanh bộ lọc -->
         <div class="map-toolbar">
           <div style="position:relative;min-width:200px;flex:1;max-width:260px">
             <i class="ti ti-search" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text3)"></i>
@@ -435,9 +512,9 @@ onUnmounted(() => {
           <i class="ti ti-alert-circle"></i> {{ error }}
         </div>
 
-        <!-- SPLIT WORKSPACE: SIDEBAR LIST + LARGE MAP -->
+        <!-- Vùng làm việc chia đôi: danh sách và bản đồ -->
         <div class="map-layout">
-          <!-- Left Sidebar: Project List -->
+          <!-- Danh sách dự án bên trái -->
           <div class="projects-list-side">
             <div class="side-header">
               <span>Danh sách dự án định vị ({{ filteredProjects.length }})</span>
@@ -487,9 +564,9 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Right Area: Interactive GIS Map -->
+          <!-- Khu vực bên phải: bản đồ GIS tương tác -->
           <div class="map-container">
-            <!-- Floating Top-Left: Base Map Switcher -->
+            <!-- Bộ chuyển lớp nền bản đồ ở góc trên bên trái -->
             <div class="gis-floating-controls left">
               <button
                 type="button"
@@ -523,8 +600,18 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <!-- Floating Top-Right: Layer Toggles -->
+            <!-- Các nút bật/tắt lớp bản đồ ở góc trên bên phải -->
             <div class="gis-floating-controls right">
+              <button
+                type="button"
+                class="gis-ctrl-pill"
+                :class="{ active: showAdminBoundary }"
+                @click="toggleAdminBoundary"
+                title="Hiển thị ranh giới hành chính Tỉnh/Thành phố và Phường/Xã"
+              >
+                <i class="ti ti-border-outer"></i>
+                <span>Ranh giới hành chính</span>
+              </button>
               <button
                 type="button"
                 class="gis-ctrl-pill"
@@ -549,6 +636,11 @@ onUnmounted(() => {
 
             <div id="gis-map" class="map-view"></div>
 
+            <div v-if="activeBoundaryLabel" style="position:absolute;left:56px;bottom:14px;z-index:400;background:rgba(255,255,255,0.95);border:1px solid #86efac;color:#166534;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:flex;align-items:center;gap:6px">
+              <i class="ti ti-map-pin-check"></i>
+              <span>Ranh giới: {{ activeBoundaryLabel }}</span>
+            </div>
+
             <div class="map-legend">
               <div class="legend-title">Chú giải GIS Môi trường</div>
               <div class="legend-item"><span class="color-dot" style="background: #e74c3c;"></span> Nhóm I (ĐTM cấp Bộ / Nguy cơ cao)</div>
@@ -559,6 +651,7 @@ onUnmounted(() => {
               <div class="legend-divider"></div>
               <div class="legend-item"><span class="color-ring" style="border-color: #7C3AED; background: rgba(139,92,246,0.2);"></span> Khu công nghiệp tập trung</div>
               <div class="legend-item"><span class="color-ring" style="border-color: #D65B5B; background: rgba(214,91,91,0.18);"></span> Khu bảo tồn / Di sản / Nguồn nước</div>
+              <div class="legend-item"><span class="color-ring" style="border-color: #15803d; background: rgba(22,163,74,0.14);"></span> Ranh giới Tỉnh / Phường-Xã</div>
             </div>
           </div>
         </div>

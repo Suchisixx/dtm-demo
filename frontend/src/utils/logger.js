@@ -1,5 +1,5 @@
 // frontend/src/utils/logger.js
-// Logger wrapper — chỉ log ở development mode
+// Lớp ghi nhật ký, chỉ ghi chi tiết trong chế độ phát triển
 
 const isDev = import.meta.env.DEV
 

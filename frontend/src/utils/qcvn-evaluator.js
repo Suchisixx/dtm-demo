@@ -1,6 +1,6 @@
 // frontend/src/utils/qcvn-evaluator.js
-// Thuật toán dùng chung (UI + Backend API) cho lựa chọn QCVN và đánh giá mẫu quan trắc.
-// Tuyệt đối không tự gắn hard-code QCVN_DATA làm nguồn runtime chính thức khi thiếu DB.
+// Thuật toán dùng chung cho giao diện và API máy chủ để chọn QCVN, đánh giá mẫu quan trắc.
+// Không dùng QCVN_DATA viết sẵn làm nguồn runtime chính thức khi thiếu cơ sở dữ liệu.
 
 export const QCVN_STATUS_TO_DB = {
   PASS: 'dat',
@@ -37,8 +37,8 @@ function emptySummary() {
 }
 
 /**
- * Chuẩn hóa giới hạn GPMT (hỗ trợ cả max, min, range).
- * Với loại range (ví dụ pH), không chấp nhận 1 số đơn lẻ để tránh bỏ sót biên trên/dưới.
+ * Chuẩn hóa giới hạn GPMT (hỗ trợ max, min và khoảng giá trị).
+ * Với giới hạn khoảng (ví dụ pH), không nhận một số đơn lẻ để tránh bỏ sót cận trên/dưới.
  */
 export function parsePermitLimit(rawValue, paramType = 'max') {
   if (rawValue === undefined || rawValue === null || rawValue === '') {
@@ -92,8 +92,8 @@ export function parsePermitLimit(rawValue, paramType = 'max') {
 }
 
 /**
- * Cây quyết định chọn bộ QCVN, Cột (A/B/C), khoảng lưu lượng (F1/F2/F3) và kiểm tra chuyển tiếp.
- * Luôn fail-closed khi thiếu dữ liệu hoặc thiếu bảng chuyển tiếp trong catalog.
+ * Chọn QCVN, Cột (A/B/C), khoảng lưu lượng (F1/F2/F3) và kiểm tra giai đoạn chuyển tiếp.
+ * Luôn fail-closed khi thiếu dữ liệu hoặc danh mục không có bảng chuyển tiếp.
  */
 export function selectApplicableQcvn({
   sourceType = 'nuoc_thai_cn',
@@ -120,7 +120,7 @@ export function selectApplicableQcvn({
   }
 
   if (sourceType === 'nuoc_thai_cn' || sourceType === 'nuoc_thai_sh') {
-    if (receivingWaterConfirmed === false) {
+    if (receivingWaterConfirmed !== true) {
       return {
         status: 'NEEDS_REVIEW',
         reason: 'MISSING_RECEIVING_SOURCE',
@@ -155,7 +155,7 @@ export function selectApplicableQcvn({
     }
 
     if (sourceType === 'nuoc_thai_cn') {
-      if (flowRate === null || flowRate === undefined || flowRate === '' || Number.isNaN(Number(flowRate)) || Number(flowRate) <= 0) {
+      if (flowRate === null || flowRate === undefined || flowRate === '' || !Number.isFinite(Number(flowRate)) || Number(flowRate) <= 0) {
         return {
           status: 'NEEDS_REVIEW',
           reason: 'MISSING_FLOW_RATE',
@@ -365,8 +365,8 @@ export function selectApplicableQcvn({
 }
 
 /**
- * Đánh giá mẫu quan trắc so với QCVN và giới hạn riêng trong GPMT.
- * Hỗ trợ đầy đủ max, min, range cho cả QCVN và GPMT, kèm gate fail-closed.
+ * Đánh giá mẫu quan trắc theo QCVN và giới hạn riêng trong GPMT.
+ * Hỗ trợ giới hạn trên, giới hạn dưới, khoảng giá trị và các điều kiện fail-closed.
  */
 export function evaluateQcvnSample({
   qcvnId,

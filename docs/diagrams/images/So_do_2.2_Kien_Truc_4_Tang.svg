@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 580" width="1200" height="580">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#2563EB"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#16A34A"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 10 5 L 0 8.5 z" fill="#DC2626"/>
+    </marker>
+    <marker id="generalization" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <polygon points="2,2 10,6 2,10" fill="#FFFFFF" stroke="#0F172A" stroke-width="1.5"/>
+    </marker>
+    <style>
+      text { font-family: 'Segoe UI', Arial, sans-serif; }
+    </style>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF" />
+  <rect x="150" y="25" width="900" height="35" fill="none" stroke="none" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="600" y="48.5" text-anchor="middle" font-size="15" font-weight="800" fill="#0F172A">SƠ ĐỒ 2.2: KIẾN TRÚC HỆ THỐNG 4 TẦNG (ETC LEGALHUB ARCHITECTURE)</text>
+  <circle cx="90" cy="250" r="14" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.5" />
+  <line x1="90" y1="264" x2="90" y2="302" stroke="#1E293B" stroke-width="1.5" />
+  <line x1="70" y1="276" x2="110" y2="276" stroke="#1E293B" stroke-width="1.5" />
+  <line x1="90" y1="302" x2="74" y2="332" stroke="#1E293B" stroke-width="1.5" />
+  <line x1="90" y1="302" x2="106" y2="332" stroke="#1E293B" stroke-width="1.5" />
+  <text x="90" y="350" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F172A">Người dùng</text>
+  <text x="90" y="365" text-anchor="middle" font-size="11.5" font-weight="700" fill="#0F172A">(Chuyên viên / QTV)</text>
+  <rect x="200" y="190" width="220" height="170" fill="#F8FAFC" stroke="#2563EB" stroke-width="2" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="310" y="235" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">TẦNG TRÌNH BÀY (CLIENT)</text>
+  <text x="310" y="250" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A"></text>
+  <text x="310" y="265" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Vue.js 3 SPA Application</text>
+  <text x="310" y="280" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">• Quản lý hồ sơ &amp; Mini-Map</text>
+  <text x="310" y="295" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">• Đối chiếu quy chuẩn QCVN</text>
+  <text x="310" y="310" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">• Bản đồ không gian Leaflet.js</text>
+  <text x="310" y="325" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">• Bảng điều khiển KPI Chart.js</text>
+  <rect x="500" y="120" width="320" height="320" fill="#F0FDF4" stroke="#16A34A" stroke-width="2" rx="6" ry="6" stroke-dasharray="5, 4" />
+  <text x="516" y="142" text-anchor="start" font-size="12" font-weight="700" fill="#16A34A">TẦNG NGHIỆP VỤ (EXPRESS API SERVERS)</text>
+  <rect x="530" y="172" width="260" height="58" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="4" />
+  <ellipse cx="660" cy="172" rx="130" ry="12" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" />
+  <text x="660" y="198" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">Động cơ Phân loại (Rule Engine)</text>
+  <text x="660" y="214" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">Nghị định 08/2022 &amp; NĐ 48/2026</text>
+  <rect x="530" y="262" width="260" height="58" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="4" />
+  <ellipse cx="660" cy="262" rx="130" ry="12" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" />
+  <text x="660" y="288" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">Động cơ Đối chiếu QCVN</text>
+  <text x="660" y="304" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">QCVN 40, QCVN 14, QCVN 19</text>
+  <rect x="530" y="352" width="260" height="58" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="4" />
+  <ellipse cx="660" cy="352" rx="130" ry="12" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" />
+  <text x="660" y="378" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">Dịch vụ GIS &amp; Thống kê KPI</text>
+  <text x="660" y="394" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">Phân tích bán kính R &amp; Cảnh báo</text>
+  <rect x="910" y="212" width="220" height="148" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2" rx="4" />
+  <ellipse cx="1020" cy="212" rx="110" ry="12" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2" />
+  <text x="1020" y="238" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">TẦNG DỮ LIỆU (DATABASE)</text>
+  <text x="1020" y="254" text-anchor="middle" font-size="11" font-weight="400" fill="#475569"></text>
+  <text x="1020" y="270" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">PostgreSQL &amp; PostGIS</text>
+  <text x="1020" y="286" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">• Dữ liệu dự án &amp; Tọa độ GIS</text>
+  <text x="1020" y="302" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">• Tri thức quy tắc &amp; QCVN</text>
+  <text x="1020" y="318" text-anchor="middle" font-size="11" font-weight="400" fill="#475569">• Mẫu quan trắc môi trường</text>
+  <rect x="530" y="470" width="260" height="55" fill="#FFFBEB" stroke="#D97706" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="660" y="495" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Tác vụ nền: Web Crawler</text>
+  <text x="660" y="510" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">(node-cron tự động quét)</text>
+  <rect x="910" y="470" width="220" height="55" fill="#FFFFFF" stroke="#D97706" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
+  <text x="1020" y="495" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Trang nguồn:</text>
+  <text x="1020" y="510" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">luatmoitruong.vn</text>
+  <line x1="120" y1="275" x2="200" y2="275" stroke="#2563EB" stroke-width="1.5"  marker-end="url(#arrow-blue)" />
+  <text x="160" y="274" text-anchor="middle" font-size="10" font-weight="600" fill="#2563EB">HTTP / JSON</text>
+  <line x1="420" y1="275" x2="530" y2="285" stroke="#16A34A" stroke-width="1.5"  marker-end="url(#arrow-green)" />
+  <text x="475" y="279" text-anchor="middle" font-size="10" font-weight="600" fill="#16A34A">REST API Calls</text>
+  <line x1="790" y1="285" x2="910" y2="280" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <text x="850" y="281.5" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">SQL / PostGIS</text>
+  <line x1="790" y1="497.5" x2="910" y2="497.5" stroke="#334155" stroke-width="1.5"  marker-end="url(#arrow)" />
+  <text x="850" y="496.5" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">Tải HTML</text>
+  <line x1="660" y1="470" x2="660" y2="410" stroke="#334155" stroke-width="1.5" stroke-dasharray="4, 4" marker-end="url(#arrow)" />
+</svg>

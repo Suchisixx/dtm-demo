@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../utils/constants.js'
 import { logger } from '../utils/logger.js'
+import { useAdminPagination } from '../composables/useAdminPagination.js'
 import {
   getAdminSeverityMeta,
   getAdminEventActionLabel,
@@ -13,10 +14,10 @@ const props = defineProps({
   currentUser: Object
 })
 
-// Subpage state
+// Trạng thái trang con
 const currentSubpage = ref('users')
 
-// Runtime industries metadata from PostgreSQL (replaces static catalog)
+// Metadata ngành nghề runtime lấy từ PostgreSQL, thay cho danh mục tĩnh
 const industriesMeta = ref({})
 const fetchAdminIndustriesMeta = async () => {
   try {
@@ -30,16 +31,16 @@ const fetchAdminIndustriesMeta = async () => {
   }
 }
 
-// Data states
+// Trạng thái dữ liệu
 const users = ref([])
 const projects = ref([])
 const laws = ref([])
 
-// Search & Filter for Laws subpage
+// Tìm kiếm và lọc văn bản ở trang con
 const lawSearchQuery = ref('')
 const lawFilterType = ref('all')
 
-// User Modal State
+// Trạng thái hộp thoại người dùng
 const showUserModal = ref(false)
 const userForm = ref({
   id: '',
@@ -51,7 +52,7 @@ const userForm = ref({
 const userModalError = ref('')
 const isUserEdit = ref(false)
 
-// Law Modal State
+// Trạng thái hộp thoại văn bản
 const showLawModal = ref(false)
 const lawForm = ref({
   id: '',
@@ -70,7 +71,7 @@ const lawForm = ref({
 const lawModalError = ref('')
 const isLawEdit = ref(false)
 
-// API fetches
+// Tải dữ liệu từ API
 const fetchUsers = async () => {
   try {
     const res = await fetch(API.ADMIN_USERS)
@@ -104,7 +105,7 @@ const fetchLaws = async () => {
   }
 }
 
-// Crawler Settings & Actions
+// Cấu hình và thao tác crawler
 const autoCrawlEnabled = ref(false)
 const crawlHistory = ref([])
 const isCrawling = ref(false)
@@ -112,7 +113,7 @@ const crawlerMessage = ref('')
 const crawlerStatusType = ref('info')
 const lastCrawlStats = ref(null)
 
-// === Kiểm duyệt Rule, Tác động Luật & QCVN Chuyển tiếp (Admin Verification Center) ===
+// === Kiểm duyệt quy tắc, tác động văn bản và QCVN chuyển tiếp ===
 const lawImpacts = ref([])
 const impactStatusFilter = ref('OPEN')
 const ruleCandidates = ref([])
@@ -137,6 +138,132 @@ const transitionalForm = ref({
   sourceDocument: '',
   thamSoText: ''
 })
+
+const SHOW_CRAWLER = ref(true)
+const SHOW_DEV_RULES_PANEL = ref(false)
+const SHOW_ADVANCED_RULE_TOOLS = ref(false)
+
+const thresholdRules = ref([])
+const thresholdLoading = ref(false)
+const thresholdStatusFilter = ref('ALL')
+const thresholdSearch = ref('')
+const isEditingThresholdModalOpen = ref(false)
+const editingThreshold = ref({})
+const isVerifyingThresholdModalOpen = ref(false)
+const verifyingThreshold = ref({})
+const thresholdFeedback = ref('')
+const thresholdFeedbackError = ref('')
+
+const fetchThresholdRules = async () => {
+  thresholdLoading.value = true
+  thresholdFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}?status=${encodeURIComponent(thresholdStatusFilter.value || 'ALL')}`)
+    if (res.ok) {
+      const data = await res.json()
+      thresholdRules.value = data.thresholds || []
+    }
+  } catch (err) {
+    logger.error('Lỗi tải danh sách ngưỡng:', err)
+  } finally {
+    thresholdLoading.value = false
+  }
+}
+
+const filteredThresholdRules = computed(() => {
+  let list = thresholdRules.value || []
+  if (thresholdSearch.value.trim()) {
+    const q = thresholdSearch.value.trim().toLowerCase()
+    list = list.filter(r => 
+      (r.industry_name && r.industry_name.toLowerCase().includes(q)) ||
+      (r.industry_code && r.industry_code.toLowerCase().includes(q)) ||
+      (r.process_stage && r.process_stage.toLowerCase().includes(q)) ||
+      (r.legal_ref && r.legal_ref.toLowerCase().includes(q))
+    )
+  }
+  return list
+})
+
+const openEditThresholdModal = (rule) => {
+  editingThreshold.value = { ...rule }
+  isEditingThresholdModalOpen.value = true
+}
+
+const saveThresholdEdit = async (asDraft = false) => {
+  thresholdLoading.value = true
+  thresholdFeedback.value = ''
+  thresholdFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}/${editingThreshold.value.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...editingThreshold.value,
+        asDraft,
+      })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      thresholdFeedback.value = data.message || 'Đã cập nhật quy tắc thành công!'
+      isEditingThresholdModalOpen.value = false
+      await fetchThresholdRules()
+      await fetchRuleVerificationCenter()
+    } else {
+      thresholdFeedbackError.value = data.error || 'Không thể cập nhật quy tắc!'
+    }
+  } catch (err) {
+    thresholdFeedbackError.value = err.message || 'Lỗi mạng khi cập nhật quy tắc!'
+  } finally {
+    thresholdLoading.value = false
+  }
+}
+
+const openVerifyThresholdModal = (rule) => {
+  verifyingThreshold.value = {
+    id: rule.id,
+    industry_name: rule.industry_name,
+    legalRef: rule.legal_ref || '',
+    effectiveFrom: rule.effective_from || new Date().toISOString().slice(0, 10),
+  }
+  isVerifyingThresholdModalOpen.value = true
+}
+
+const confirmVerifyThreshold = async () => {
+  if (!verifyingThreshold.value.legalRef?.trim()) {
+    thresholdFeedbackError.value = 'Vui lòng nhập căn cứ pháp lý trước khi phê duyệt!'
+    return
+  }
+  if (!verifyingThreshold.value.effectiveFrom) {
+    thresholdFeedbackError.value = 'Vui lòng chọn ngày bắt đầu hiệu lực trước khi phê duyệt!'
+    return
+  }
+  thresholdLoading.value = true
+  thresholdFeedback.value = ''
+  thresholdFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}/${verifyingThreshold.value.id}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        legalRef: verifyingThreshold.value.legalRef.trim(),
+        effectiveFrom: verifyingThreshold.value.effectiveFrom,
+      })
+    })
+    const data = await res.json()
+    if (res.ok) {
+      thresholdFeedback.value = data.message || 'Đã phê duyệt quy tắc thành công!'
+      isVerifyingThresholdModalOpen.value = false
+      await fetchThresholdRules()
+      await fetchRuleVerificationCenter()
+    } else {
+      thresholdFeedbackError.value = data.error || 'Không thể phê duyệt quy tắc!'
+    }
+  } catch (err) {
+    thresholdFeedbackError.value = err.message || 'Lỗi mạng khi phê duyệt quy tắc!'
+  } finally {
+    thresholdLoading.value = false
+  }
+}
 
 const pendingImpactsCount = computed(() => lawImpacts.value.filter(i => i.status === 'OPEN').length)
 const pendingCandidatesCount = computed(() => ruleCandidates.value.filter(c => ['PENDING_REVIEW', 'EXTRACTED'].includes(c.status)).length)
@@ -208,10 +335,56 @@ const resolveImpactAction = async (impactId, status) => {
   }
 }
 
-const approveCandidateAction = async (cand) => {
+const editingQcvnCand = ref(null)
+const editingQcvnParams = ref([])
+const candidateParamsModalError = ref('')
+
+const openCandidateParamsModal = (cand) => {
+  candidateParamsModalError.value = ''
+  editingQcvnCand.value = cand
+  const existing = Array.isArray(cand?.proposed_data?.tham_so) ? cand.proposed_data.tham_so : []
+  editingQcvnParams.value = existing.length > 0
+    ? existing.map(p => ({
+        ma: p.ma || p.key || '',
+        ten: p.ten || p.name || '',
+        don_vi: p.don_vi || p.unit || 'mg/L',
+        limit: p.limit ?? p.gioi_han ?? p.max ?? '',
+        min: p.min ?? '',
+        max: p.max ?? '',
+        loai: p.loai || 'max'
+      }))
+    : [{ ma: 'COD', ten: 'Nhu cầu oxy hóa học (COD)', don_vi: 'mg/L', limit: 150, min: '', max: '', loai: 'max' }]
+}
+
+const addCandidateParamRow = () => {
+  editingQcvnParams.value.push({ ma: '', ten: '', don_vi: 'mg/L', limit: '', min: '', max: '', loai: 'max' })
+}
+
+const removeCandidateParamRow = (idx) => {
+  editingQcvnParams.value.splice(idx, 1)
+}
+
+const applyCommonWastewaterPreset = () => {
+  editingQcvnParams.value = [
+    { ma: 'pH', ten: 'pH', don_vi: '—', limit: '', min: 5.5, max: 9, loai: 'range' },
+    { ma: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', limit: 100, min: '', max: '', loai: 'max' },
+    { ma: 'COD', ten: 'Nhu cầu oxy hóa học (COD)', don_vi: 'mg/L', limit: 150, min: '', max: '', loai: 'max' },
+    { ma: 'BOD5', ten: 'Nhu cầu oxy sinh hóa (BOD5)', don_vi: 'mg/L', limit: 50, min: '', max: '', loai: 'max' }
+  ]
+}
+
+const approveCandidateAction = async (cand, overrideProposedData = null) => {
   const sourceDoc = (candidateSourceDocs.value[cand.id] || '').trim()
   if (!sourceDoc) {
     rulesFeedbackError.value = 'Bắt buộc nhập số hiệu văn bản / căn cứ pháp lý trước khi phê duyệt đề xuất!'
+    return
+  }
+  if (
+    !overrideProposedData &&
+    cand.target_type === 'QCVN' &&
+    (!Array.isArray(cand.proposed_data?.tham_so) || cand.proposed_data.tham_so.length === 0)
+  ) {
+    openCandidateParamsModal(cand)
     return
   }
   rulesFeedback.value = ''
@@ -222,18 +395,57 @@ const approveCandidateAction = async (cand) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sourceDocument: sourceDoc,
-        reviewNote: candidateNotes.value[cand.id] || null
+        reviewNote: candidateNotes.value[cand.id] || null,
+        ...(overrideProposedData ? { proposedData: overrideProposedData } : {})
       })
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
       rulesFeedbackError.value = data.error || 'Không thể duyệt đề xuất quy tắc.'
-      return
+      return false
     }
     rulesFeedback.value = data.message || `Đã phê duyệt và công bố đề xuất #${cand.id}.`
     await fetchRuleVerificationCenter()
+    return true
   } catch (err) {
     rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
+    return false
+  }
+}
+
+const confirmApproveCandidateWithParams = async () => {
+  if (!editingQcvnCand.value) return
+  candidateParamsModalError.value = ''
+  const cleaned = editingQcvnParams.value
+    .map(p => {
+      const ma = String(p.ma || '').trim()
+      const ten = String(p.ten || '').trim()
+      if (!ma || !ten) return null
+      const loai = p.loai === 'range' ? 'range' : 'max'
+      if (loai === 'range') {
+        const min = Number(p.min)
+        const max = Number(p.max)
+        if (Number.isNaN(min) || Number.isNaN(max) || min > max) return null
+        return { ma, key: ma.toLowerCase(), ten, don_vi: p.don_vi || '—', loai: 'range', min, max }
+      }
+      const lim = Number(p.limit)
+      if (Number.isNaN(lim) || lim < 0) return null
+      return { ma, key: ma.toLowerCase(), ten, don_vi: p.don_vi || 'mg/L', loai: 'max', gioi_han: lim, limit: lim }
+    })
+    .filter(Boolean)
+
+  if (cleaned.length === 0) {
+    candidateParamsModalError.value = 'Vui lòng nhập ít nhất 1 thông số hợp lệ (mã, tên và ngưỡng số hợp lệ).'
+    return
+  }
+
+  const cand = editingQcvnCand.value
+  const nextProposed = { ...(cand.proposed_data || {}), tham_so: cleaned }
+  const ok = await approveCandidateAction(cand, nextProposed)
+  if (ok) {
+    editingQcvnCand.value = null
+  } else if (rulesFeedbackError.value) {
+    candidateParamsModalError.value = rulesFeedbackError.value
   }
 }
 
@@ -453,14 +665,17 @@ const switchSubpage = (subpage) => {
     fetchAdminIndustriesMeta()
     fetchAllProjects()
   } else if (subpage === 'laws') fetchLaws()
-  else if (subpage === 'rules') fetchRuleVerificationCenter()
+  else if (subpage === 'rules') {
+    fetchThresholdRules()
+    fetchRuleVerificationCenter()
+  }
   else if (subpage === 'crawler') {
     fetchCrawlerSettings()
     fetchCrawlHistory()
   }
 }
 
-// User Actions
+// Thao tác người dùng
 const openAddUserModal = () => {
   isUserEdit.value = false
   userForm.value = { id: '', username: '', fullName: '', password: '', role: 'staff' }
@@ -539,7 +754,7 @@ const handleDeleteUser = async (id, username) => {
   }
 }
 
-// Project Actions
+// Thao tác dự án
 const handleDeleteProject = async (id, name) => {
   if (!confirm(`Bạn có chắc chắn muốn XÓA dự án "${name}" của nhân viên không?\nHành động này không thể hoàn tác!`)) {
     return
@@ -558,7 +773,7 @@ const handleDeleteProject = async (id, name) => {
   }
 }
 
-// Law Actions
+// Thao tác văn bản
 const openAddLawModal = () => {
   isLawEdit.value = false
   lawForm.value = {
@@ -662,7 +877,7 @@ const handleDeleteLaw = async (id, so) => {
   }
 }
 
-// Helpers
+// Hàm hỗ trợ
 const getLawTypeLabel = (type) => {
   return {
     luat: 'Luật',
@@ -673,7 +888,7 @@ const getLawTypeLabel = (type) => {
   }[type] || type.toUpperCase()
 }
 
-// Filters laws listing
+// Lọc danh sách văn bản
 const filteredLaws = computed(() => {
   const query = lawSearchQuery.value.toLowerCase().trim()
   return laws.value.filter(l => {
@@ -688,40 +903,28 @@ const filteredLaws = computed(() => {
 })
 
 // Phân trang Quản lý Quy chuẩn & Văn bản pháp lý
-const lawPageSize = ref(10)
-const lawCurrentPage = ref(1)
-const lawTotalPages = computed(() => Math.max(1, Math.ceil(filteredLaws.value.length / lawPageSize.value)))
-const paginatedLaws = computed(() => {
-  const start = (lawCurrentPage.value - 1) * lawPageSize.value
-  return filteredLaws.value.slice(start, start + lawPageSize.value)
-})
-watch([lawSearchQuery, lawFilterType, lawPageSize], () => {
-  lawCurrentPage.value = 1
-})
+const {
+  currentPage: lawCurrentPage,
+  pageSize: lawPageSize,
+  totalPages: lawTotalPages,
+  paginatedItems: paginatedLaws
+} = useAdminPagination(filteredLaws, { resetOn: [lawSearchQuery, lawFilterType] })
 
 // Phân trang Quản lý Dự án
-const projectPageSize = ref(10)
-const projectCurrentPage = ref(1)
-const projectTotalPages = computed(() => Math.max(1, Math.ceil(projects.value.length / projectPageSize.value)))
-const paginatedProjects = computed(() => {
-  const start = (projectCurrentPage.value - 1) * projectPageSize.value
-  return projects.value.slice(start, start + projectPageSize.value)
-})
-watch([projectPageSize], () => {
-  projectCurrentPage.value = 1
-})
+const {
+  currentPage: projectCurrentPage,
+  pageSize: projectPageSize,
+  totalPages: projectTotalPages,
+  paginatedItems: paginatedProjects
+} = useAdminPagination(projects)
 
 // Phân trang Quản lý Nhân viên
-const userPageSize = ref(10)
-const userCurrentPage = ref(1)
-const userTotalPages = computed(() => Math.max(1, Math.ceil(users.value.length / userPageSize.value)))
-const paginatedUsers = computed(() => {
-  const start = (userCurrentPage.value - 1) * userPageSize.value
-  return users.value.slice(start, start + userPageSize.value)
-})
-watch([userPageSize], () => {
-  userCurrentPage.value = 1
-})
+const {
+  currentPage: userCurrentPage,
+  pageSize: userPageSize,
+  totalPages: userTotalPages,
+  paginatedItems: paginatedUsers
+} = useAdminPagination(users)
 
 onMounted(() => {
   fetchUsers()
@@ -731,7 +934,7 @@ onMounted(() => {
 
 <template>
   <div id="admin" class="page container fade-up">
-    <!-- PAGE HEADER -->
+    <!-- Tiêu đề trang -->
     <div class="page-header">
       <div>
         <h2 class="section-head">Bảng Điều khiển Quản trị Hệ thống</h2>
@@ -741,7 +944,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- HORIZONTAL NAVIGATION TABS -->
+    <!-- Các thẻ điều hướng ngang -->
     <div class="admin-tabs-bar">
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'users' }" @click="switchSubpage('users')">
         <i class="ti ti-users"></i>
@@ -759,15 +962,11 @@ onMounted(() => {
         <i class="ti ti-refresh"></i>
         <span>Đồng bộ dữ liệu tự động</span>
       </button>
-      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'rules' }" @click="switchSubpage('rules')">
-        <i class="ti ti-shield-check"></i>
-        <span>Kiểm duyệt Rule &amp; QCVN</span>
-      </button>
     </div>
 
-    <!-- CONTENT AREA -->
+    <!-- Vùng nội dung -->
     <div class="admin-content">
-      <!-- Subpage: Users -->
+      <!-- Trang con: người dùng -->
       <div v-if="currentSubpage === 'users'" id="admin-users" class="admin-subpage">
         <div class="admin-section-header">
           <div class="admin-section-title">Danh sách tài khoản nhân sự</div>
@@ -820,7 +1019,7 @@ onMounted(() => {
           </table>
         </div>
 
-        <!-- Phân trang Users -->
+        <!-- Phân trang người dùng -->
         <div v-if="users.length > 0"
              style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
           <div style="font-size:12.5px;color:var(--text2)">
@@ -842,7 +1041,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Subpage: Projects -->
+      <!-- Trang con: dự án -->
       <div v-if="currentSubpage === 'projects'" id="admin-projects" class="admin-subpage">
         <div class="admin-section-header">
           <div class="admin-section-title">Quản lý hồ sơ dự án toàn hệ thống</div>
@@ -882,7 +1081,7 @@ onMounted(() => {
           </table>
         </div>
 
-        <!-- Phân trang Projects -->
+        <!-- Phân trang dự án -->
         <div v-if="projects.length > 0"
              style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
           <div style="font-size:12.5px;color:var(--text2)">
@@ -904,7 +1103,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Subpage: Laws -->
+      <!-- Trang con: văn bản -->
       <div v-if="currentSubpage === 'laws'" id="admin-laws" class="admin-subpage">
         <div class="admin-section-header">
           <div class="admin-section-title">Quản lý cơ sở dữ liệu Văn bản pháp lý &amp; Quy chuẩn</div>
@@ -974,7 +1173,7 @@ onMounted(() => {
           </table>
         </div>
 
-        <!-- Phân trang Laws -->
+        <!-- Phân trang văn bản -->
         <div v-if="filteredLaws.length > 0"
              style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;gap:12px;padding-top:14px;border-top:1px solid var(--border)">
           <div style="font-size:12.5px;color:var(--text2)">
@@ -996,7 +1195,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Subpage: Crawler -->
+      <!-- Trang con: crawler -->
       <div v-if="currentSubpage === 'crawler'" id="admin-crawler" class="admin-subpage">
         <div class="admin-section-header">
           <div class="admin-section-title">Cấu hình đồng bộ văn bản pháp lý tự động</div>
@@ -1034,7 +1233,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Bảng thống kê phiên quét trực quan (Crawl Session Telemetry) -->
+        <!-- Bảng thống kê phiên thu thập dữ liệu -->
         <div v-if="lastCrawlStats" class="kpi-grid fade-up" style="margin-bottom:24px">
           <div class="kpi-card">
             <div class="kpi-header">
@@ -1112,8 +1311,8 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Subpage: Kiểm duyệt Rule & QCVN -->
-      <div v-if="currentSubpage === 'rules'" id="admin-rules" class="admin-subpage">
+      <!-- Trang con: kiểm duyệt quy tắc và QCVN, ẩn khỏi người dùng thông thường -->
+      <div v-if="SHOW_DEV_RULES_PANEL && currentSubpage === 'rules'" id="admin-rules" class="admin-subpage">
         <div class="admin-section-header">
           <div>
             <div class="admin-section-title">Trung tâm Kiểm duyệt Quy tắc, Tác động Luật &amp; QCVN Chuyển tiếp</div>
@@ -1134,7 +1333,7 @@ onMounted(() => {
           {{ rulesFeedbackError }}
         </div>
 
-        <!-- KPI summary -->
+        <!-- Chỉ số tổng hợp -->
         <div class="kpi-grid" style="margin-bottom:20px">
           <div class="kpi-card">
             <div class="kpi-card-top"><span class="kpi-label">Cảnh báo tác động văn bản (Chờ xử lý)</span></div>
@@ -1158,7 +1357,132 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Section 1: Law Rule Impacts -->
+        <!-- Khu vực quản lý ngưỡng quy tắc -->
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header" style="flex-wrap:wrap;gap:12px">
+            <div class="card-title">
+              <i class="ti ti-adjustments"></i> Quản lý Ngưỡng Phân loại (Threshold Rules)
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <input
+                type="text"
+                v-model="thresholdSearch"
+                placeholder="🔍 Tìm theo ngành, công đoạn, căn cứ..."
+                style="height:32px;font-size:12.5px;min-width:220px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--border)"
+              />
+              <select v-model="thresholdStatusFilter" @change="fetchThresholdRules" style="height:32px;font-size:12.5px;width:150px">
+                <option value="ALL">Tất cả trạng thái</option>
+                <option value="VERIFIED">Đã xác minh</option>
+                <option value="NEEDS_REVIEW">Cần rà soát</option>
+                <option value="DRAFT">Bản nháp</option>
+              </select>
+              <button type="button" class="btn-secondary btn-sm" :disabled="thresholdLoading" @click="fetchThresholdRules">
+                <i class="ti ti-refresh"></i>
+                <span>{{ thresholdLoading ? '...' : 'Tải lại' }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="thresholdFeedback" style="margin:12px 16px 0;padding:8px 12px;border-radius:var(--radius);background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);font-size:12.5px">
+            {{ thresholdFeedback }}
+          </div>
+          <div v-if="thresholdFeedbackError" style="margin:12px 16px 0;padding:8px 12px;border-radius:var(--radius);background:var(--red-bg);border:1px solid var(--danger-border);color:var(--red);font-size:12.5px">
+            {{ thresholdFeedbackError }}
+          </div>
+
+          <div class="table-container" style="margin-top:12px;max-height:500px;overflow-y:auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:60px">ID</th>
+                  <th>Ngành nghề</th>
+                  <th>Công đoạn</th>
+                  <th>Ngưỡng công suất</th>
+                  <th>Nhóm / Hồ sơ</th>
+                  <th>Căn cứ pháp lý</th>
+                  <th>Trạng thái</th>
+                  <th style="text-align:right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="filteredThresholdRules.length === 0">
+                  <td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">
+                    Không tìm thấy quy tắc ngưỡng nào phù hợp.
+                  </td>
+                </tr>
+                <tr v-for="rule in filteredThresholdRules" :key="rule.id">
+                  <td>#{{ rule.id }}</td>
+                  <td>
+                    <strong>{{ rule.industry_name }}</strong>
+                    <div style="font-size:11px;color:var(--text3)"><code>{{ rule.industry_code }}</code></div>
+                  </td>
+                  <td>{{ rule.process_stage || '—' }}</td>
+                  <td>
+                    <span style="font-weight:600">{{ rule.operator || '>=' }} {{ rule.min_value }}</span>
+                    <span v-if="rule.max_value !== null"> đến {{ rule.max_value }}</span>
+                    <span style="font-size:11.5px;color:var(--text3)"> ({{ rule.unit }})</span>
+                  </td>
+                  <td>
+                    <span class="chip" :class="rule.project_group === 'I' ? 'chip-danger' : (rule.project_group === 'II' ? 'chip-warning' : (rule.project_group === 'III' ? 'chip-info' : 'chip-neutral'))" style="font-size:11px">
+                      Nhóm {{ rule.project_group }}
+                    </span>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px">
+                      HS: <strong>{{ rule.legal_doc_required }}</strong> | TQ: {{ rule.tq }}
+                    </div>
+                  </td>
+                  <td style="max-width:220px">
+                    <div style="font-size:12px;line-height:1.3">{{ rule.legal_ref || 'Chưa gắn căn cứ' }}</div>
+                    <div style="font-size:11px;color:var(--text3);margin-top:2px">
+                      {{ rule.phu_luc ? `PL: ${rule.phu_luc}` : '' }}
+                      {{ rule.effective_from ? ` | HL: ${rule.effective_from}` : '' }}
+                    </div>
+                  </td>
+                  <td>
+                    <span class="chip" :class="rule.verification_status === 'VERIFIED' ? 'chip-success' : (rule.verification_status === 'DRAFT' ? 'chip-neutral' : 'chip-warning')" style="font-size:11px">
+                      {{ rule.verification_status === 'VERIFIED' ? 'Đã xác minh' : (rule.verification_status === 'DRAFT' ? 'Bản nháp' : 'Cần rà soát') }}
+                    </span>
+                    <div v-if="rule.approved_by" style="font-size:10.5px;color:var(--text3);margin-top:2px">
+                      {{ rule.approved_by }}
+                    </div>
+                  </td>
+                  <td style="text-align:right">
+                    <div style="display:flex;gap:6px;justify-content:flex-end">
+                      <button type="button" class="btn-secondary btn-sm" @click="openEditThresholdModal(rule)" title="Chỉnh sửa quy tắc">
+                        <i class="ti ti-edit"></i>
+                        <span>Sửa</span>
+                      </button>
+                      <button
+                        v-if="rule.verification_status !== 'VERIFIED'"
+                        type="button"
+                        class="btn-primary btn-sm"
+                        @click="openVerifyThresholdModal(rule)"
+                        title="Phê duyệt đưa vào áp dụng chính thức"
+                      >
+                        <i class="ti ti-check"></i>
+                        <span>Phê duyệt</span>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Công cụ quy tắc nâng cao có thể bật/tắt -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:8px 12px;background:var(--bg2, #f5f5f5);border-radius:var(--radius)">
+          <div style="font-size:12.5px;color:var(--text2)">
+            <i class="ti ti-settings"></i> <strong>Công cụ mở rộng:</strong> Rà soát cảnh báo tác động văn bản, đề xuất từ crawler và bảng QCVN chuyển tiếp.
+          </div>
+          <button type="button" class="btn-secondary btn-sm" @click="SHOW_ADVANCED_RULE_TOOLS = !SHOW_ADVANCED_RULE_TOOLS">
+            <i class="ti" :class="SHOW_ADVANCED_RULE_TOOLS ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
+            <span>{{ SHOW_ADVANCED_RULE_TOOLS ? 'Thu gọn công cụ mở rộng' : 'Mở rộng công cụ trích xuất luật & QCVN' }}</span>
+          </button>
+        </div>
+
+        <div v-if="SHOW_ADVANCED_RULE_TOOLS">
+
+        <!-- Khu vực 1: tác động của văn bản đến quy tắc -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
             <div class="card-title"><i class="ti ti-alert-triangle"></i> 1. Cảnh báo Quy tắc chịu tác động khi văn bản thay đổi</div>
@@ -1196,7 +1520,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Section 2: Rule Candidates from Crawler -->
+        <!-- Khu vực 2: đề xuất quy tắc từ crawler -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
             <div class="card-title"><i class="ti ti-git-pull-request"></i> 2. Đề xuất Quy tắc từ bóc tách tự động</div>
@@ -1220,13 +1544,17 @@ onMounted(() => {
               </div>
               <details style="margin:0 0 8px 0;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px">
                 <summary style="cursor:pointer;font-weight:600;color:var(--text2)">
-                  Xem dữ liệu bóc tách chi tiết (JSON) ▾
+                  Xem dữ liệu bóc tách chi tiết ▾
                 </summary>
                 <pre style="margin-top:6px;padding:6px;background:var(--bg);border-radius:4px;font-size:11px;overflow-x:auto">{{ JSON.stringify(cand.proposed_data, null, 2) }}</pre>
               </details>
+              <div v-if="cand.target_type === 'QCVN' && (!Array.isArray(cand.proposed_data?.tham_so) || cand.proposed_data.tham_so.length === 0)" style="font-size:12px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-bottom:8px">
+                <i class="ti ti-alert-triangle"></i> Đề xuất QCVN chưa có bảng thông số đo đạc — vui lòng cấu hình thông số trước khi phê duyệt.
+              </div>
               <div v-if="['PENDING_REVIEW', 'EXTRACTED'].includes(cand.status)" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
                 <input type="text" v-model="candidateSourceDocs[cand.id]" placeholder="Số hiệu văn bản gốc / căn cứ pháp lý *..." style="flex:1;min-width:220px" />
                 <input type="text" v-model="candidateNotes[cand.id]" placeholder="Ghi chú duyệt..." style="flex:1;min-width:180px" />
+                <button v-if="cand.target_type === 'QCVN'" type="button" class="btn-secondary btn-sm" @click="openCandidateParamsModal(cand)">Cấu hình thông số</button>
                 <button type="button" class="btn-primary btn-sm" @click="approveCandidateAction(cand)">Phê duyệt &amp; Công bố</button>
                 <button type="button" class="btn-secondary btn-sm" @click="rejectCandidateAction(cand)">Từ chối</button>
               </div>
@@ -1234,7 +1562,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Section 3: Industry & QCVN Verification Catalog -->
+        <!-- Khu vực 3: danh mục ngành nghề và QCVN cần xác minh -->
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
             <div class="card-title"><i class="ti ti-certificate"></i> 3. Xác nhận pháp lý cho QCVN &amp; Ngành nghề</div>
@@ -1295,7 +1623,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Section 4: Upsert Transitional QCVN 40:2011 / 14:2008 from Official Text -->
+        <!-- Khu vực 4: nhập bảng QCVN chuyển tiếp từ văn bản gốc -->
         <div class="card" style="margin-bottom:0">
           <div class="card-header">
             <div class="card-title"><i class="ti ti-file-import"></i> 4. Nhập &amp; Xác nhận Bảng QCVN Chuyển tiếp (40:2011 / 14:2008) từ văn bản gốc</div>
@@ -1341,10 +1669,11 @@ onMounted(() => {
             <span>Lưu &amp; Xác nhận Bảng Chuyển tiếp</span>
           </button>
         </div>
+        </div> <!-- Kết thúc khối chỉ hiện khi SHOW_ADVANCED_RULE_TOOLS bật -->
       </div>
     </div>
 
-    <!-- Modal Thêm/Sửa Nhân viên -->
+    <!-- Hộp thoại thêm/sửa nhân viên -->
     <div v-if="showUserModal" class="modal-overlay" @click.self="showUserModal = false">
       <div class="modal-card fade-up" style="width:440px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
@@ -1371,8 +1700,8 @@ onMounted(() => {
           <div class="form-group">
             <label class="form-label">Vai trò hệ thống *</label>
             <select v-model="userForm.role">
-              <option value="staff">Chuyên viên (staff)</option>
-              <option value="admin">Quản trị viên (admin)</option>
+              <option value="staff">Chuyên viên</option>
+              <option value="admin">Quản trị viên</option>
             </select>
           </div>
           <div v-if="userModalError" style="color:var(--red);background:var(--red-bg);padding:8px 12px;border-radius:var(--radius);font-size:12.5px;margin-bottom:12px">
@@ -1389,7 +1718,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Modal Thêm/Sửa Quy chuẩn -->
+    <!-- Hộp thoại thêm/sửa quy chuẩn -->
     <div v-if="showLawModal" class="modal-overlay" @click.self="showLawModal = false">
       <div class="modal-card fade-up" style="width:580px;max-height:90vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
@@ -1476,6 +1805,230 @@ onMounted(() => {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Hộp thoại chỉnh sửa ngưỡng phân loại -->
+    <div v-if="isEditingThresholdModalOpen" class="modal-overlay" @click.self="isEditingThresholdModalOpen = false">
+      <div class="modal-card fade-up" style="width:580px;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <h3 style="font-size:16px;font-weight:600;color:var(--text);margin:0">
+            Chỉnh sửa Quy tắc Ngưỡng #{{ editingThreshold.id }} — {{ editingThreshold.industry_name }}
+          </h3>
+          <button type="button" class="drawer-close-btn" @click="isEditingThresholdModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <div v-if="editingThreshold.verification_status === 'VERIFIED'" style="margin-bottom:14px;padding:8px 12px;border-radius:var(--radius);background:var(--warn-bg, #FFF9EB);border:1px solid var(--warn-border, #FFE5B4);color:var(--warn, #B76E00);font-size:12px">
+          <i class="ti ti-alert-triangle"></i> Lưu ý: Quy tắc này hiện đang ở trạng thái <strong>Đã xác minh</strong>. Khi lưu chỉnh sửa, hệ thống sẽ <strong>tự động thu hồi phê duyệt</strong> và chuyển về trạng thái <strong>Cần rà soát</strong> để bảo đảm tính pháp lý.
+        </div>
+
+        <form @submit.prevent="saveThresholdEdit(false)">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">Công đoạn / Quy trình</label>
+              <input type="text" v-model="editingThreshold.process_stage" placeholder="VD: Luyện kim, Cán kéo... (để trống nếu chung)" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Toán tử so sánh</label>
+              <select v-model="editingThreshold.operator">
+                <option value=">=">&gt;= (Lớn hơn hoặc bằng)</option>
+                <option value=">">&gt; (Lớn hơn)</option>
+                <option value="<=">&lt;= (Nhỏ hơn hoặc bằng)</option>
+                <option value="=">= (Bằng)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Công suất tối thiểu *</label>
+              <input type="number" step="any" v-model="editingThreshold.min_value" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Công suất tối đa</label>
+              <input type="number" step="any" v-model="editingThreshold.max_value" placeholder="Để trống nếu không giới hạn trên" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Đơn vị tính</label>
+              <input type="text" v-model="editingThreshold.unit" placeholder="VD: tấn sản phẩm/năm, MW, ha..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nhóm dự án *</label>
+              <select v-model="editingThreshold.project_group" required>
+                <option value="I">Nhóm I (Nguy cơ tác động xấu cao)</option>
+                <option value="II">Nhóm II (Nguy cơ tác động xấu)</option>
+                <option value="III">Nhóm III (Ít nguy cơ tác động xấu)</option>
+                <option value="IV">Nhóm IV (Không có nguy cơ)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Loại hồ sơ môi trường *</label>
+              <select v-model="editingThreshold.legal_doc_required" required>
+                <option value="ĐTM">ĐTM (Đánh giá tác động môi trường)</option>
+                <option value="GPMT">GPMT (Giấy phép môi trường)</option>
+                <option value="ĐKMT">ĐKMT (Đăng ký môi trường)</option>
+                <option value="MIỄN_ĐKMT">Miễn đăng ký môi trường</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Thẩm quyền thẩm định / cấp phép</label>
+              <select v-model="editingThreshold.tq">
+                <option value="btnmt">Bộ TN&amp;MT</option>
+                <option value="ubnd_tinh">UBND cấp Tỉnh / Sở TN&amp;MT</option>
+                <option value="cap_xa">UBND cấp Xã (từ 01/07/2025)</option>
+                <option value="bo_khac">Bộ quản lý chuyên ngành khác</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Phụ lục áp dụng</label>
+              <input type="text" v-model="editingThreshold.phu_luc" placeholder="VD: Phụ lục III, Mục 1" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Căn cứ pháp lý</label>
+              <input type="text" v-model="editingThreshold.legal_ref" placeholder="VD: NĐ 08/2022/NĐ-CP, VBHN 49/2026..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hiệu lực từ</label>
+              <input type="date" v-model="editingThreshold.effective_from" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hiệu lực đến</label>
+              <input type="date" v-model="editingThreshold.effective_to" />
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+            <button type="button" class="btn-secondary" @click="isEditingThresholdModalOpen = false">Hủy</button>
+            <button type="button" class="btn-secondary" @click="saveThresholdEdit(true)">
+              <i class="ti ti-file-pencil"></i>
+              <span>Lưu dạng Bản nháp</span>
+            </button>
+            <button type="submit" class="btn-primary">
+              <i class="ti ti-device-floppy"></i>
+              <span>Lưu thay đổi</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Hộp thoại xác minh và phê duyệt ngưỡng phân loại -->
+    <div v-if="isVerifyingThresholdModalOpen" class="modal-overlay" @click.self="isVerifyingThresholdModalOpen = false">
+      <div class="modal-card fade-up" style="width:480px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <h3 style="font-size:16px;font-weight:600;color:var(--text);margin:0">
+            Phê duyệt Quy tắc #{{ verifyingThreshold.id }}
+          </h3>
+          <button type="button" class="drawer-close-btn" @click="isVerifyingThresholdModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+          Bạn đang thực hiện phê duyệt chính thức cho quy tắc thuộc ngành: <strong>{{ verifyingThreshold.industry_name }}</strong>. Vui lòng kiểm tra và cung cấp đầy đủ thông tin căn cứ pháp lý:
+        </p>
+
+        <form @submit.prevent="confirmVerifyThreshold">
+          <div class="form-group">
+            <label class="form-label">Căn cứ pháp lý / Số hiệu văn bản quy chuẩn *</label>
+            <input
+              type="text"
+              v-model="verifyingThreshold.legalRef"
+              placeholder="VD: Nghị định 08/2022/NĐ-CP Phụ lục III mục 2..."
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ngày bắt đầu có hiệu lực thi hành *</label>
+            <input
+              type="date"
+              v-model="verifyingThreshold.effectiveFrom"
+              required
+            />
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:20px">
+            <button type="button" class="btn-secondary" @click="isVerifyingThresholdModalOpen = false">Hủy</button>
+            <button type="submit" class="btn-primary">
+              <i class="ti ti-check"></i>
+              <span>Xác nhận Phê duyệt</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal cấu hình thông số cho đề xuất QCVN từ crawler -->
+    <div v-if="editingQcvnCand" class="drawer-overlay" @click.self="editingQcvnCand = null">
+      <div class="drawer-panel" style="max-width:720px;margin:auto;border-radius:12px;height:auto;max-height:88vh;overflow-y:auto;padding:20px">
+        <div class="drawer-header" style="padding:0 0 12px 0;margin-bottom:12px">
+          <div class="drawer-title">
+            <i class="ti ti-adjustments" style="color:var(--accent)"></i>
+            <span>Cấu hình thông số QCVN #{{ editingQcvnCand.id }} ({{ editingQcvnCand.target_code }})</span>
+          </div>
+          <button type="button" class="drawer-close-btn" @click="editingQcvnCand = null" aria-label="Đóng">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <span style="font-size:12.5px;color:var(--text2)">Nhập tối thiểu 1 chỉ tiêu quan trắc để hệ thống cho phép phê duyệt và công bố QCVN.</span>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn-secondary btn-sm" @click="applyCommonWastewaterPreset">Nạp mẫu nước thải (pH, TSS, COD, BOD5)</button>
+            <button type="button" class="btn-secondary btn-sm" @click="addCandidateParamRow">+ Thêm chỉ tiêu</button>
+          </div>
+        </div>
+
+        <div v-if="candidateParamsModalError" role="alert" style="margin-bottom:10px;padding:8px 12px;border-radius:6px;background:#fee2e2;color:#991b1b;font-size:12.5px">
+          {{ candidateParamsModalError }}
+        </div>
+
+        <div style="overflow-x:auto">
+          <table class="saas-table" style="width:100%">
+            <thead>
+              <tr>
+                <th>Mã</th>
+                <th>Tên thông số</th>
+                <th>Đơn vị</th>
+                <th>Loại</th>
+                <th>Ngưỡng / Khoảng</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(row, idx) in editingQcvnParams" :key="idx">
+                <td><input type="text" v-model="row.ma" placeholder="COD" style="width:76px" /></td>
+                <td><input type="text" v-model="row.ten" placeholder="Tên chỉ tiêu" style="min-width:150px" /></td>
+                <td><input type="text" v-model="row.don_vi" placeholder="mg/L" style="width:72px" /></td>
+                <td>
+                  <select v-model="row.loai" style="width:88px">
+                    <option value="max">Tối đa (≤)</option>
+                    <option value="range">Khoảng</option>
+                  </select>
+                </td>
+                <td>
+                  <input v-if="row.loai !== 'range'" type="number" step="any" min="0" v-model="row.limit" placeholder="150" style="width:88px" />
+                  <div v-else style="display:flex;gap:4px;align-items:center">
+                    <input type="number" step="any" v-model="row.min" placeholder="Min" style="width:62px" />
+                    <span>–</span>
+                    <input type="number" step="any" v-model="row.max" placeholder="Max" style="width:62px" />
+                  </div>
+                </td>
+                <td>
+                  <button type="button" class="btn-secondary btn-sm" @click="removeCandidateParamRow(idx)" aria-label="Xóa dòng">×</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+          <button type="button" class="btn-secondary" @click="editingQcvnCand = null">Hủy</button>
+          <button type="button" class="btn-primary" @click="confirmApproveCandidateWithParams">
+            <i class="ti ti-check"></i>
+            <span>Lưu thông số &amp; Phê duyệt</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

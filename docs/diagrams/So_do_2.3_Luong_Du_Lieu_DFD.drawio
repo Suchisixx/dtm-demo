@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" modified="2026-11-12T17:52:17.143Z" agent="Mozilla/5.0" version="24.0.0" type="device">
+  <diagram id="sd23_dfd" name="Sơ đồ 2.3: Sơ đồ Luồng dữ liệu DFD (Mức 0 và Mức 1)">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" value="SƠ ĐỒ 2.3: LUỒNG DỮ LIỆU DFD (MỨC 0 NGỮ CẢNH &amp; MỨC 1 PHÂN RÃ)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="20" width="900" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="b_dfd0" value="A. SƠ ĐỒ NGỮ CẢNH (DFD MỨC 0)" style="shape=rect;rounded=1;dashed=1;strokeColor=#64748B;fillColor=#F8FAFC;align=left;spacingLeft=14;spacingTop=8;fontStyle=1;fontSize=11.5;" vertex="1" parent="1">
+          <mxGeometry x="80" y="65" width="940" height="220" as="geometry" />
+        </mxCell>
+        <mxCell id="ent_staff" value="Chuyên viên tư vấn" style="shape=rect;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="150" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="proc_0" value="0.0
+HỆ THỐNG QUẢN LÝ &amp;
+GIÁM SÁT PHÁP LÝ MÔI TRƯỜNG
+(ETC LEGALHUB)" style="ellipse;fillColor=#286B4F;strokeColor=#1E563F;strokeWidth=2;fontStyle=1;fontColor=#FFFFFF;align=center;" vertex="1" parent="1">
+          <mxGeometry x="420" y="120" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ent_admin" value="Quản trị viên" style="shape=rect;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="105" width="150" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="ent_web" value="Cổng luatmoitruong.vn" style="shape=rect;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="820" y="200" width="150" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="e_df0_1" value="Thông số dự án &amp; số đo QCVN" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.4;" edge="1" parent="1" source="ent_staff" target="proc_0">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df0_2" value="Hồ sơ ĐTM/GPMT &amp; Bản đồ GIS" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.4;" edge="1" parent="1" source="proc_0" target="ent_staff">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df0_3" value="Lệnh đồng bộ &amp; Kiểm duyệt luật" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;" edge="1" parent="1" source="ent_admin" target="proc_0">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df0_4" value="Văn bản pháp lý mới" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;" edge="1" parent="1" source="ent_web" target="proc_0">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b_dfd1" value="B. SƠ ĐỒ PHÂN RÃ CHỨC NĂNG (DFD MỨC 1)" style="shape=rect;rounded=1;dashed=1;strokeColor=#286B4F;fillColor=#F8FAFC;align=left;spacingLeft=14;spacingTop=8;fontStyle=1;fontSize=11.5;" vertex="1" parent="1">
+          <mxGeometry x="80" y="310" width="940" height="460" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="1.0: Xác thực &amp;
+Phân quyền" style="ellipse;fillColor=#EFF6FF;strokeColor=#2563EB;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="360" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="2.0: Phân loại hồ sơ
+&amp; Xác định thẩm quyền" style="ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="360" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="3.0: Đối chiếu QCVN
+&amp; Đánh giá mẫu đo" style="ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="360" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p4" value="4.0: Quản lý dự án
+&amp; Bản đồ GIS" style="ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="150" y="640" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p5" value="5.0: Giám sát nhắc hạn
+&amp; Dashboard KPI" style="ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="470" y="640" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="p6" value="6.0: Đồng bộ pháp lý
+(Web Crawler)" style="ellipse;fillColor=#FEF3C7;strokeColor=#D97706;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="640" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="ds1" value="D1: Kho người dùng (users)" style="shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="500" width="200" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ds2" value="D2: Kho tri thức luật &amp; QCVN" style="shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#059669;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="450" y="500" width="210" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ds3" value="D3: Kho dự án &amp; Mẫu quan trắc" style="shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#059669;strokeWidth=1.5;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="500" width="210" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e_df1_1" value="" style="endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.4;" edge="1" parent="1" source="p1" target="ds1">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df1_2" value="" style="endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;" edge="1" parent="1" source="p2" target="ds2">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df1_3" value="" style="endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;" edge="1" parent="1" source="p3" target="ds3">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df1_4" value="" style="endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;" edge="1" parent="1" source="p4" target="ds3">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df1_5" value="" style="endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;" edge="1" parent="1" source="p5" target="ds3">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_df1_6" value="" style="endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;" edge="1" parent="1" source="p6" target="ds2">
+          <mxGeometry relative="1" as="geometry">
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

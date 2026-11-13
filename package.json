@@ -1,7 +1,7 @@
 {
   "name": "etc-legalhub-monorepo",
   "version": "1.0.0",
-  "description": "ETC LegalHub Monorepo Controller",
+  "description": "Bộ điều phối mã nguồn hợp nhất ETC LegalHub",
   "scripts": {
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
     "dev:backend": "npm start --prefix backend",

@@ -3,6 +3,7 @@
 const defaultDb = require('../config/db');
 const { loadClassificationCatalog, getProjectSensitiveVerification } = require('./rule-repository');
 const { calculateImpactRadius, analyzeSpatialContext, analyzeSpatialContextWithDb } = require('./spatial-gis-service');
+const { RuleDataUnavailableError, isStaticFallbackAllowed } = require('./runtime-policy');
 
 const RULE_SCHEMA_VERSION = '2026.2-audit';
 const TWO_TIER_GOV_EFFECTIVE_DATE = '2025-07-01';
@@ -24,111 +25,16 @@ const {
 /**
  * So sánh công suất với ngưỡng tier theo đúng toán tử >= hoặc > (T01, T02, T03)
  */
-function matchesThreshold(value, min, operator = '>=') {
-  if (operator === '>') return value > min;
-  return value >= min;
-}
-
-function resolveIndustryCode(projectType) {
-  if (!projectType || typeof projectType !== 'string') {
-    return { resolvedCode: '', aliasedFrom: null };
-  }
-  const normalized = projectType.trim();
-  if (INDUSTRY_ALIASES[normalized]) {
-    return { resolvedCode: INDUSTRY_ALIASES[normalized], aliasedFrom: normalized };
-  }
-  return { resolvedCode: normalized, aliasedFrom: null };
-}
-
-function getAvailableProcessStages(industryKey, industryObj) {
-  const keys = industryObj?.processRules ? Object.keys(industryObj.processRules) : [];
-  const metaStages = industryObj?.processStagesMeta || INDUSTRY_META[industryKey]?.processStages || [];
-  const metaMap = new Map(metaStages.map(item => [item.key, item.label]));
-  return keys.map(key => ({ key, label: metaMap.get(key) || key }));
-}
-
-function isValidDateString(str) {
-  if (!str || typeof str !== 'string') return false;
-  const trimmed = str.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return false;
-  const d = new Date(`${trimmed}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === trimmed;
-}
-
-function isEffectiveOnDate(item = {}, evaluationDate = null) {
-  if (!evaluationDate) return true;
-  const target = String(evaluationDate).slice(0, 10);
-  const from = item.effectiveFrom ? String(item.effectiveFrom).slice(0, 10) : null;
-  const to = item.effectiveTo ? String(item.effectiveTo).slice(0, 10) : null;
-  if (from && target < from) return false;
-  if (to && target > to) return false;
-  return true;
-}
-
-/**
- * Tìm tier công suất kèm chi tiết hiệu lực theo evaluationDate (fail-closed theo ngày hiệu lực).
- */
-function findIndustryTierDetailed(projectType, capacity, processStage = null, catalog = IND_DB, evaluationDate = null) {
-  const { resolvedCode } = resolveIndustryCode(projectType);
-  const industry = catalog?.[resolvedCode];
-  if (!industry) return { tier: null, reason: 'UNKNOWN_INDUSTRY', totalTiers: 0, activeTiers: 0 };
-
-  const hasProcessRules = Boolean(industry.processRules && Object.keys(industry.processRules).length > 0);
-  if (hasProcessRules) {
-    if (!processStage || !Array.isArray(industry.processRules[processStage])) {
-      return { tier: null, reason: 'INVALID_PROCESS_STAGE', totalTiers: 0, activeTiers: 0 };
-    }
-  }
-
-  const allTiers = hasProcessRules
-    ? industry.processRules[processStage]
-    : (Array.isArray(industry.t) ? industry.t : []);
-
-  if (!allTiers || allTiers.length === 0) {
-    return { tier: null, reason: 'NO_ACTIVE_RULES', totalTiers: 0, activeTiers: 0 };
-  }
-
-  const activeTiers = allTiers.filter(t => isEffectiveOnDate(t, evaluationDate));
-  if (activeTiers.length === 0) {
-    return { tier: null, reason: 'NO_ACTIVE_RULE_FOR_DATE', totalTiers: allTiers.length, activeTiers: 0 };
-  }
-
-  const sortedTiers = [...activeTiers].sort((a, b) => {
-    if ((a.tierOrder ?? 0) !== (b.tierOrder ?? 0)) return (a.tierOrder ?? 0) - (b.tierOrder ?? 0);
-    if (b.min !== a.min) return b.min - a.min;
-    const effA = a.effectiveFrom || '';
-    const effB = b.effectiveFrom || '';
-    return effB.localeCompare(effA);
-  });
-
-  for (const tier of sortedTiers) {
-    if (matchesThreshold(capacity, tier.min, tier.operator || '>=')) {
-      return { tier, reason: null, totalTiers: allTiers.length, activeTiers: sortedTiers.length };
-    }
-  }
-  return { tier: null, reason: 'NO_MATCHING_TIER', totalTiers: allTiers.length, activeTiers: sortedTiers.length };
-}
-
-/**
- * Tìm tier công suất theo ngành, công suất, công đoạn và ngày hiệu lực.
- * Trả về null nếu ngành không tồn tại hoặc không có tier hiệu lực khớp (không fallback im lặng).
- */
-function findIndustryTier(projectType, capacity, processStage = null, catalog = IND_DB, evaluationDate = null) {
-  return findIndustryTierDetailed(projectType, capacity, processStage, catalog, evaluationDate).tier;
-}
-
-function formatAuditTextForUser(text) {
-  if (!text) return '';
-  return String(text)
-    .replace(/^\[NEEDS_LEGAL_VERIFICATION\]\s*/i, '')
-    .replace(/^Mục\s*4\.[0-9]+\s*README\s*:\s*/i, '')
-    .replace(/\s*\(NEEDS_LEGAL_VERIFICATION\)/gi, '')
-    .trim();
-}
-
-/**
- * Kiểm tra tính đầy đủ và hợp lệ của đầu vào trước khi chạy 3 bước đánh giá (fail-closed)
- */
+const {
+  matchesThreshold,
+  resolveIndustryCode,
+  getAvailableProcessStages,
+  isValidDateString,
+  isEffectiveOnDate,
+  findIndustryTierDetailed,
+  findIndustryTier,
+  formatAuditTextForUser,
+} = require('./classification-rule-helpers');
 function validateClassificationInput(formData = {}, catalog = IND_DB) {
   const { resolvedCode, aliasedFrom } = resolveIndustryCode(formData.nganh);
   const industry = resolvedCode ? catalog?.[resolvedCode] : null;
@@ -952,6 +858,57 @@ function evaluateClassification(formData = {}, options = {}) {
   const appliedEffectiveTo = groupResult.tier?.effectiveTo || null;
   const isHistoricalEvaluation = Boolean(evalDate && evalDate < TWO_TIER_GOV_EFFECTIVE_DATE);
 
+  const appliedTier = groupResult.tier || {};
+  const unitText = appliedTier.unit || industryObj.unit || '';
+  const processStageVal = formData.processStage || null;
+  const processStageRule = processStageVal && Array.isArray(industryObj.processRules)
+    ? industryObj.processRules.find(pr => pr.stage === processStageVal)
+    : null;
+  const processStageLabel = processStageRule?.label || processStageVal || null;
+  const minVal = appliedTier.min ?? null;
+  const maxVal = appliedTier.maxValue ?? null;
+  let thresholdText = 'Không giới hạn ngưỡng định lượng';
+  if (minVal !== null && maxVal !== null) {
+    thresholdText = `Từ ${Number(minVal).toLocaleString('vi-VN')} đến dưới ${Number(maxVal).toLocaleString('vi-VN')} ${unitText}`.trim();
+  } else if (minVal !== null && Number(minVal) > 0) {
+    thresholdText = `Từ ${Number(minVal).toLocaleString('vi-VN')} ${unitText} trở lên`.trim();
+  } else if (maxVal !== null) {
+    thresholdText = `Dưới ${Number(maxVal).toLocaleString('vi-VN')} ${unitText}`.trim();
+  } else if (minVal === 0) {
+    thresholdText = `Mọi quy mô${unitText ? ` (${unitText})` : ''}`;
+  }
+
+  const rawLegalRefs = [
+    phuluc && phuluc !== '—' ? phuluc : null,
+    ref || null,
+    ...(obligationsResult.obligationDetails || []).flatMap(d => d.legalBasis || []),
+    ...(authorityResult.competentAuthority?.legalBasis || []),
+    ...nangNhom.map(n => n.ref).filter(Boolean),
+  ].filter(Boolean);
+  const legalRefs = Array.from(new Set(rawLegalRefs.map(s => String(s).trim()).filter(Boolean)));
+  const procLabel = HS_INFO[hs]?.label || hs || 'Chưa xác định';
+  const capFormatted = `${Number(validation.numericCap).toLocaleString('vi-VN')}${unitText ? ` ${unitText}` : ''}`;
+
+  const classificationRationale = {
+    industryCode: resolvedNganh,
+    industryName: industryObj.name || resolvedNganh,
+    processStage: processStageVal,
+    processStageLabel,
+    inputCapacity: validation.numericCap,
+    unit: unitText,
+    matchedMin: minVal,
+    matchedMax: maxVal,
+    thresholdText,
+    capacityScale: groupResult.capacityScale || appliedTier.capacityScale || null,
+    projectGroup: isFromDb ? nhom : null,
+    procedureCode: isFromDb ? hs : null,
+    procedureLabel: isFromDb ? procLabel : null,
+    authorityLabel: isFromDb ? coQuan : null,
+    adjustments: nangNhom.map(n => `${n.text}${n.ref ? ` (${n.ref})` : ''}`),
+    legalRefs,
+    summaryText: `Ngành "${industryObj.name || resolvedNganh}" · Quy mô ${capFormatted} (${thresholdText}) → ${nhom || 'Chưa xác định'} · ${procLabel}`,
+  };
+
   const preliminary = {
     projectGroup: nhom,
     nhom,
@@ -989,6 +946,7 @@ function evaluateClassification(formData = {}, options = {}) {
     appliedEffectiveTo,
     isHistoricalEvaluation,
     evaluationDate: evalDate,
+    retrievedAt: new Date().toISOString(),
     gisSource: spatialAnalysis?.gisSource || null,
 
     // Các trường cấu trúc sau kiểm toán pháp lý
@@ -997,7 +955,7 @@ function evaluateClassification(formData = {}, options = {}) {
     obligationDetails: obligationsResult.obligationDetails,
     competentAuthority: authorityResult.competentAuthority,
 
-    // Các trường hiển thị tương thích UI (được đánh dấu isPreliminary khi chưa xác minh; ẩn khi fallback offline)
+    // Các trường hiển thị tương thích giao diện; đánh dấu sơ bộ nếu chưa xác minh và ẩn khi dùng dữ liệu ngoại tuyến
     hs: isFromDb ? hs : null,
     tq: isFromDb ? tq : null,
     phuluc,
@@ -1016,11 +974,12 @@ function evaluateClassification(formData = {}, options = {}) {
     infoExtra,
     luyTien,
     industryNote,
+    classificationRationale,
   };
 }
 
 /**
- * Thực thi phân loại sử dụng catalog runtime từ PostgreSQL (route API chính thức).
+ * Thực thi phân loại bằng danh mục runtime từ PostgreSQL (tuyến API chính thức).
  */
 async function evaluateClassificationWithDb(formData = {}, { db = defaultDb, projectId = null } = {}) {
   const loaded = await loadClassificationCatalog({ db });
@@ -1046,6 +1005,10 @@ async function evaluateClassificationWithDb(formData = {}, { db = defaultDb, pro
     });
   }
 
+  if (!isStaticFallbackAllowed()) {
+    throw new RuleDataUnavailableError(`Không thể tải dữ liệu quy tắc từ PostgreSQL: ${loaded.error || 'DB_LOAD_FAILED'}`);
+  }
+
   return evaluateClassification(formData, {
     catalog: IND_DB,
     ruleSource: 'FALLBACK_UNVERIFIED',
@@ -1055,8 +1018,8 @@ async function evaluateClassificationWithDb(formData = {}, { db = defaultDb, pro
 }
 
 /**
- * Đánh giá thống nhất cho một bản ghi dự án đã lưu trong DB (dùng chung cho /geo và /dashboard/stats).
- * Không fallback sang 'Nhóm II' / 'Nhóm III' / 'GPMT' / 'cap_so' khi dữ liệu thiếu hoặc lỗi.
+ * Đánh giá thống nhất dự án đã lưu trong DB, dùng chung cho /geo và /dashboard/stats.
+ * Không tự gán 'Nhóm II' / 'Nhóm III' / 'GPMT' / 'cap_so' khi thiếu dữ liệu hoặc có lỗi.
  */
 function evaluateStoredProject(projectRow = {}, options = {}) {
   const catalog = options.catalog || IND_DB;
@@ -1121,11 +1084,14 @@ function evaluateStoredProject(projectRow = {}, options = {}) {
 }
 
 /**
- * Trả về metadata danh mục ngành nghề, nhãn hiển thị, công đoạn và vùng nhạy cảm từ DB.
+ * Trả metadata ngành nghề, nhãn hiển thị, công đoạn và vùng nhạy cảm từ cơ sở dữ liệu.
  */
 async function getClassificationMetadata({ db = defaultDb } = {}) {
   const loaded = await loadClassificationCatalog({ db });
   const isFromDb = loaded.ok && loaded.catalog;
+  if (!isFromDb && !isStaticFallbackAllowed()) {
+    throw new RuleDataUnavailableError(`Không thể tải danh mục ngành nghề từ PostgreSQL: ${loaded.error || 'DB_LOAD_FAILED'}`);
+  }
   const catalog = isFromDb ? loaded.catalog : IND_DB;
   const ruleSource = isFromDb ? 'DATABASE' : 'FALLBACK_UNVERIFIED';
 
@@ -1137,6 +1103,8 @@ async function getClassificationMetadata({ db = defaultDb } = {}) {
       ...ind,
       code,
       name: ind.name || meta.name || code,
+      displayName: ind.displayName || ind.name || meta.name || code,
+      aliases: Array.isArray(ind.aliases) ? ind.aliases : [],
       groupLabel: meta.groupLabel || 'Ngành nghề khác',
       processStages,
       hasProcessRules: processStages.length > 0,
