@@ -1,0 +1,592 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1720" height="1360" viewBox="0 0 1720 1360" font-family="Segoe UI, Arial, sans-serif">
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="860" y="38" text-anchor="middle" font-size="20" font-weight="700" fill="#111827">SƠ ĐỒ QUAN HỆ THỰC THỂ (ERD) — HỆ THỐNG LEGALHUB</text>
+  <text x="860" y="60" text-anchor="middle" font-size="12.5" fill="#4B5563">19 bảng dữ liệu PostgreSQL/PostGIS (tên bảng vật lý tiếng Việt và view tương thích tiếng Anh)</text>
+  <polyline points="345,165 455,165" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="352" y1="171" x2="352" y2="159" stroke="#374151" stroke-width="1.6"/>
+  <line x1="358" y1="171" x2="358" y2="159" stroke="#374151" stroke-width="1.6"/>
+  <line x1="443" y1="165" x2="455" y2="159" stroke="#374151" stroke-width="1.6"/>
+  <line x1="443" y1="165" x2="455" y2="171" stroke="#374151" stroke-width="1.6"/>
+  <line x1="442" y1="159" x2="442" y2="171" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="890,155 775,155" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="883" y1="149" x2="883" y2="161" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="874" cy="155" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <line x1="787" y1="155" x2="775" y2="161" stroke="#374151" stroke-width="1.6"/>
+  <line x1="787" y1="155" x2="775" y2="149" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="793" cy="155" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1040,295 1040,220" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1046" y1="288" x2="1034" y2="288" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1040" cy="279" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1040" y1="232" x2="1034" y2="220" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1040" y1="232" x2="1046" y2="220" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1040" cy="238" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1190,355 1245,355 1245,155 1330,155" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1197" y1="361" x2="1197" y2="349" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1203" y1="361" x2="1203" y2="349" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="155" x2="1330" y2="149" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="155" x2="1330" y2="161" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1312" cy="155" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1190,385 1262,385 1262,350 1330,350" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1197" y1="391" x2="1197" y2="379" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1203" y1="391" x2="1203" y2="379" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="350" x2="1330" y2="344" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="350" x2="1330" y2="356" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1312" cy="350" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1190,415 1278,415 1278,545 1330,545" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1197" y1="421" x2="1197" y2="409" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1203" y1="421" x2="1203" y2="409" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="545" x2="1330" y2="539" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="545" x2="1330" y2="551" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1312" cy="545" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="345,465 455,465" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="352" y1="471" x2="352" y2="459" stroke="#374151" stroke-width="1.6"/>
+  <line x1="358" y1="471" x2="358" y2="459" stroke="#374151" stroke-width="1.6"/>
+  <line x1="443" y1="465" x2="455" y2="459" stroke="#374151" stroke-width="1.6"/>
+  <line x1="443" y1="465" x2="455" y2="471" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="437" cy="465" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="455,760 392,760 392,710 345,710" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="448" y1="754" x2="448" y2="766" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="439" cy="760" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <line x1="357" y1="710" x2="345" y2="716" stroke="#374151" stroke-width="1.6"/>
+  <line x1="357" y1="710" x2="345" y2="704" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="363" cy="710" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="455,810 410,810 410,905 345,905" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="448" y1="804" x2="448" y2="816" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="439" cy="810" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <line x1="357" y1="905" x2="345" y2="911" stroke="#374151" stroke-width="1.6"/>
+  <line x1="357" y1="905" x2="345" y2="899" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="363" cy="905" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="775,760 890,760" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="782" y1="766" x2="782" y2="754" stroke="#374151" stroke-width="1.6"/>
+  <line x1="788" y1="766" x2="788" y2="754" stroke="#374151" stroke-width="1.6"/>
+  <line x1="878" y1="760" x2="890" y2="754" stroke="#374151" stroke-width="1.6"/>
+  <line x1="878" y1="760" x2="890" y2="766" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="872" cy="760" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="775,835 835,835 835,1055 890,1055" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="782" y1="841" x2="782" y2="829" stroke="#374151" stroke-width="1.6"/>
+  <line x1="788" y1="841" x2="788" y2="829" stroke="#374151" stroke-width="1.6"/>
+  <line x1="878" y1="1055" x2="890" y2="1049" stroke="#374151" stroke-width="1.6"/>
+  <line x1="878" y1="1055" x2="890" y2="1061" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="872" cy="1055" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1190,740 1330,740" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1197" y1="746" x2="1197" y2="734" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1203" y1="746" x2="1203" y2="734" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1323" y1="734" x2="1323" y2="746" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1314" cy="740" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1190,810 1260,810 1260,935 1330,935" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1197" y1="816" x2="1197" y2="804" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1203" y1="816" x2="1203" y2="804" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="935" x2="1330" y2="929" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1318" y1="935" x2="1330" y2="941" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1312" cy="935" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1040,866 1040,975" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="1034" y1="873" x2="1046" y2="873" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1040" cy="882" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1040" y1="963" x2="1046" y2="975" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1040" y1="963" x2="1034" y2="975" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1040" cy="957" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <polyline points="1330,1135 1190,1135" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" stroke-dasharray="6,4"/>
+  <line x1="1323" y1="1129" x2="1323" y2="1141" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1317" y1="1129" x2="1317" y2="1141" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1202" y1="1135" x2="1190" y2="1141" stroke="#374151" stroke-width="1.6"/>
+  <line x1="1202" y1="1135" x2="1190" y2="1129" stroke="#374151" stroke-width="1.6"/>
+  <circle cx="1208" cy="1135" r="4.5" fill="#FFFFFF" stroke="#374151" stroke-width="1.6"/>
+  <g>
+    <rect x="50" y="80" width="295" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 50 85 Q 50 80 55 80 L 340 80 Q 345 80 345 85 L 345 110 L 50 110 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="197.5" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nganh_nghe (industries)</text>
+    <rect x="51" y="110" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="125" font-size="11.5" font-weight="700" fill="#9A3412">ma_nganh</text>
+    <text x="335" y="125" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="51" y="132" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="147" font-size="11.5" font-weight="400" fill="#1F2937">ten_nganh</text>
+    <text x="335" y="147" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="154" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="169" font-size="11.5" font-weight="400" fill="#1F2937">muc_do_rui_ro</text>
+    <text x="335" y="169" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="176" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="191" font-size="11.5" font-weight="400" fill="#1F2937">don_vi</text>
+    <text x="335" y="191" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="198" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="213" font-size="11.5" font-weight="400" fill="#1F2937">mo_ta_cong_doan</text>
+    <text x="335" y="213" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="51" y="220" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="235" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_xac_minh</text>
+    <text x="335" y="235" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 51 242 L 344 242 L 344 259 Q 344 263 340 263 L 55 263 Q 51 263 51 259 Z" fill="#FFFFFF"/>
+    <text x="60" y="257" font-size="11.5" font-weight="400" fill="#1F2937">phien_ban_quy_tac</text>
+    <text x="335" y="257" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="50" y="80" width="295" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="455" y="80" width="320" height="250" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 455 85 Q 455 80 460 80 L 770 80 Q 775 80 775 85 L 775 110 L 455 110 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="615" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nguong_phan_loai</text>
+    <rect x="456" y="110" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="125" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="765" y="125" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="456" y="132" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="147" font-size="11.5" font-weight="700" fill="#1E40AF">nganh_nghe_ma</text>
+    <text x="765" y="147" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="456" y="154" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="169" font-size="11.5" font-weight="700" fill="#1E40AF">phu_luc_phap_ly_ma</text>
+    <text x="765" y="169" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="456" y="176" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="191" font-size="11.5" font-weight="400" fill="#1F2937">cong_doan</text>
+    <text x="765" y="191" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="198" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="213" font-size="11.5" font-weight="400" fill="#1F2937">gia_tri_toi_thieu / toi_da</text>
+    <text x="765" y="213" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">decimal</text>
+    <rect x="456" y="220" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="235" font-size="11.5" font-weight="400" fill="#1F2937">nhom_du_an</text>
+    <text x="765" y="235" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="242" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="257" font-size="11.5" font-weight="400" fill="#1F2937">ho_so_phap_ly</text>
+    <text x="765" y="257" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="264" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="279" font-size="11.5" font-weight="400" fill="#1F2937">tham_quyen</text>
+    <text x="765" y="279" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="286" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="301" font-size="11.5" font-weight="400" fill="#1F2937">can_cu_phap_ly</text>
+    <text x="765" y="301" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <path d="M 456 308 L 774 308 L 774 325 Q 774 329 770 329 L 460 329 Q 456 329 456 325 Z" fill="#EAECEF"/>
+    <text x="465" y="323" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_xac_minh</text>
+    <text x="765" y="323" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="455" y="80" width="320" height="250" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="890" y="80" width="300" height="140" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 890 85 Q 890 80 895 80 L 1185 80 Q 1190 80 1190 85 L 1190 110 L 890 110 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="1040" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">phu_luc_phap_ly</text>
+    <rect x="891" y="110" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="125" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1180" y="125" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="891" y="132" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="147" font-size="11.5" font-weight="700" fill="#1E40AF">luat_ma</text>
+    <text x="1180" y="147" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="891" y="154" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="169" font-size="11.5" font-weight="400" fill="#1F2937">ten_phu_luc</text>
+    <text x="1180" y="169" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="176" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="191" font-size="11.5" font-weight="400" fill="#1F2937">so_muc</text>
+    <text x="1180" y="191" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 891 198 L 1189 198 L 1189 215 Q 1189 219 1185 219 L 895 219 Q 891 219 891 215 Z" fill="#FFFFFF"/>
+    <text x="900" y="213" font-size="11.5" font-weight="400" fill="#1F2937">tom_tat_noi_dung</text>
+    <text x="1180" y="213" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="890" y="80" width="300" height="140" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="890" y="295" width="300" height="206" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 890 300 Q 890 295 895 295 L 1185 295 Q 1190 295 1190 300 L 1190 325 L 890 325 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="1040" y="315" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">luat (laws)</text>
+    <rect x="891" y="325" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="340" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1180" y="340" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="891" y="347" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="362" font-size="11.5" font-weight="400" fill="#1F2937">loai</text>
+    <text x="1180" y="362" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="369" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="384" font-size="11.5" font-weight="400" fill="#1F2937">nam</text>
+    <text x="1180" y="384" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">integer</text>
+    <rect x="891" y="391" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="406" font-size="11.5" font-weight="400" fill="#1F2937">so_hieu</text>
+    <text x="1180" y="406" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="413" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="428" font-size="11.5" font-weight="400" fill="#1F2937">ten_van_ban</text>
+    <text x="1180" y="428" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="891" y="435" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="450" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai</text>
+    <text x="1180" y="450" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="457" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="472" font-size="11.5" font-weight="400" fill="#1F2937">dieu_khoan</text>
+    <text x="1180" y="472" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 891 479 L 1189 479 L 1189 496 Q 1189 500 1185 500 L 895 500 Q 891 500 891 496 Z" fill="#EAECEF"/>
+    <text x="900" y="494" font-size="11.5" font-weight="400" fill="#1F2937">crawler_cap_nhat_luc</text>
+    <text x="1180" y="494" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="890" y="295" width="300" height="206" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="80" width="330" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 85 Q 1330 80 1335 80 L 1655 80 Q 1660 80 1660 85 L 1660 110 L 1330 110 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="100" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">lich_su_cap_nhat_van_ban</text>
+    <rect x="1331" y="110" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="125" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="125" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="1331" y="132" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="147" font-size="11.5" font-weight="700" fill="#1E40AF">luat_ma</text>
+    <text x="1650" y="147" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="1331" y="154" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="169" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_cap_nhat_ma</text>
+    <text x="1650" y="169" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="176" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="191" font-size="11.5" font-weight="400" fill="#1F2937">hanh_dong</text>
+    <text x="1650" y="191" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="198" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="213" font-size="11.5" font-weight="400" fill="#1F2937">mo_ta</text>
+    <text x="1650" y="213" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <path d="M 1331 220 L 1659 220 L 1659 237 Q 1659 241 1655 241 L 1335 241 Q 1331 241 1331 237 Z" fill="#EAECEF"/>
+    <text x="1340" y="235" font-size="11.5" font-weight="400" fill="#1F2937">cap_nhat_luc</text>
+    <text x="1650" y="235" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="1330" y="80" width="330" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="265" width="330" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 270 Q 1330 265 1335 265 L 1655 265 Q 1660 265 1660 270 L 1660 295 L 1330 295 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="285" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">anh_huong_quy_tac_van_ban</text>
+    <rect x="1331" y="295" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="310" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="310" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="1331" y="317" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="332" font-size="11.5" font-weight="700" fill="#1E40AF">luat_ma</text>
+    <text x="1650" y="332" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="1331" y="339" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="354" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_xu_ly_ma</text>
+    <text x="1650" y="354" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="361" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="376" font-size="11.5" font-weight="400" fill="#1F2937">hanh_dong_su_kien</text>
+    <text x="1650" y="376" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="383" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="398" font-size="11.5" font-weight="400" fill="#1F2937">loai_doi_tuong / doi_tuong_ma</text>
+    <text x="1650" y="398" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="405" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="420" font-size="11.5" font-weight="400" fill="#1F2937">muc_do</text>
+    <text x="1650" y="420" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 1331 427 L 1659 427 L 1659 444 Q 1659 448 1655 448 L 1335 448 Q 1331 448 1331 444 Z" fill="#FFFFFF"/>
+    <text x="1340" y="442" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai</text>
+    <text x="1650" y="442" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1330" y="265" width="330" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="465" width="330" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 470 Q 1330 465 1335 465 L 1655 465 Q 1660 465 1660 470 L 1660 495 L 1330 495 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="485" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">de_xuat_quy_tac (rule_candidates)</text>
+    <rect x="1331" y="495" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="510" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="510" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="1331" y="517" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="532" font-size="11.5" font-weight="700" fill="#1E40AF">luat_ma</text>
+    <text x="1650" y="532" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="1331" y="539" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="554" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_duyet_ma</text>
+    <text x="1650" y="554" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="561" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="576" font-size="11.5" font-weight="400" fill="#1F2937">loai_doi_tuong / ma_doi_tuong</text>
+    <text x="1650" y="576" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="583" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="598" font-size="11.5" font-weight="400" fill="#1F2937">du_lieu_de_xuat</text>
+    <text x="1650" y="598" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="1331" y="605" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="620" font-size="11.5" font-weight="400" fill="#1F2937">do_tin_cay_trich_xuat</text>
+    <text x="1650" y="620" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 1331 627 L 1659 627 L 1659 644 Q 1659 648 1655 648 L 1335 648 Q 1331 648 1331 644 Z" fill="#FFFFFF"/>
+    <text x="1340" y="642" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai</text>
+    <text x="1650" y="642" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1330" y="465" width="330" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="50" y="390" width="295" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 50 395 Q 50 390 55 390 L 340 390 Q 345 390 345 395 L 345 420 L 50 420 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="197.5" y="410" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">quy_tac (rules)</text>
+    <rect x="51" y="420" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="435" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="335" y="435" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="51" y="442" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="457" font-size="11.5" font-weight="400" fill="#1F2937">ten_quy_tac</text>
+    <text x="335" y="457" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="464" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="479" font-size="11.5" font-weight="400" fill="#1F2937">loai_quy_tac</text>
+    <text x="335" y="479" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="486" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="501" font-size="11.5" font-weight="400" fill="#1F2937">bieu_thuc</text>
+    <text x="335" y="501" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="51" y="508" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="523" font-size="11.5" font-weight="400" fill="#1F2937">dang_hoat_dong</text>
+    <text x="335" y="523" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">boolean</text>
+    <path d="M 51 530 L 344 530 L 344 547 Q 344 551 340 551 L 55 551 Q 51 551 51 547 Z" fill="#EAECEF"/>
+    <text x="60" y="545" font-size="11.5" font-weight="400" fill="#1F2937">phien_ban</text>
+    <text x="335" y="545" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">integer</text>
+    <rect x="50" y="390" width="295" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="455" y="390" width="320" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 455 395 Q 455 390 460 390 L 770 390 Q 775 390 775 395 L 775 420 L 455 420 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="615" y="410" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">phien_ban_quy_tac</text>
+    <rect x="456" y="420" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="435" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="765" y="435" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="456" y="442" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="457" font-size="11.5" font-weight="700" fill="#1E40AF">quy_tac_ma</text>
+    <text x="765" y="457" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · varchar</text>
+    <rect x="456" y="464" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="479" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_thay_doi_ma</text>
+    <text x="765" y="479" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="456" y="486" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="501" font-size="11.5" font-weight="400" fill="#1F2937">phien_ban</text>
+    <text x="765" y="501" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">integer</text>
+    <rect x="456" y="508" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="523" font-size="11.5" font-weight="400" fill="#1F2937">bieu_thuc</text>
+    <text x="765" y="523" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="456" y="530" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="545" font-size="11.5" font-weight="400" fill="#1F2937">ly_do_thay_doi</text>
+    <text x="765" y="545" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <path d="M 456 552 L 774 552 L 774 569 Q 774 573 770 573 L 460 573 Q 456 573 456 569 Z" fill="#FFFFFF"/>
+    <text x="465" y="567" font-size="11.5" font-weight="400" fill="#1F2937">thay_doi_luc</text>
+    <text x="765" y="567" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="455" y="390" width="320" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="50" y="635" width="295" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 50 640 Q 50 635 55 635 L 340 635 Q 345 635 345 640 L 345 665 L 50 665 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="197.5" y="655" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nhat_ky_kiem_toan</text>
+    <rect x="51" y="665" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="680" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="335" y="680" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="51" y="687" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="702" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_dung_ma</text>
+    <text x="335" y="702" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="51" y="709" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="724" font-size="11.5" font-weight="400" fill="#1F2937">hanh_dong</text>
+    <text x="335" y="724" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="731" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="746" font-size="11.5" font-weight="400" fill="#1F2937">dia_chi_ip</text>
+    <text x="335" y="746" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="753" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="768" font-size="11.5" font-weight="400" fill="#1F2937">du_lieu</text>
+    <text x="335" y="768" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 51 775 L 344 775 L 344 792 Q 344 796 340 796 L 55 796 Q 51 796 51 792 Z" fill="#EAECEF"/>
+    <text x="60" y="790" font-size="11.5" font-weight="400" fill="#1F2937">tao_luc</text>
+    <text x="335" y="790" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="50" y="635" width="295" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="50" y="830" width="295" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 50 835 Q 50 830 55 830 L 340 830 Q 345 830 345 835 L 345 860 L 50 860 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="197.5" y="850" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nhat_ky_truy_van</text>
+    <rect x="51" y="860" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="875" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="335" y="875" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="51" y="882" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="897" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_dung_ma</text>
+    <text x="335" y="897" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="51" y="904" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="919" font-size="11.5" font-weight="400" fill="#1F2937">loai_truy_van</text>
+    <text x="335" y="919" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="51" y="926" width="293" height="22" fill="#EAECEF"/>
+    <text x="60" y="941" font-size="11.5" font-weight="400" fill="#1F2937">tham_so_dau_vao</text>
+    <text x="335" y="941" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="51" y="948" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="963" font-size="11.5" font-weight="400" fill="#1F2937">ket_qua_dau_ra</text>
+    <text x="335" y="963" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 51 970 L 344 970 L 344 987 Q 344 991 340 991 L 55 991 Q 51 991 51 987 Z" fill="#EAECEF"/>
+    <text x="60" y="985" font-size="11.5" font-weight="400" fill="#1F2937">truy_van_luc</text>
+    <text x="335" y="985" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="50" y="830" width="295" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="50" y="1030" width="295" height="74" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 50 1035 Q 50 1030 55 1030 L 340 1030 Q 345 1030 345 1035 L 345 1060 L 50 1060 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="197.5" y="1050" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">cai_dat_he_thong</text>
+    <rect x="51" y="1060" width="293" height="22" fill="#FFFFFF"/>
+    <text x="60" y="1075" font-size="11.5" font-weight="700" fill="#9A3412">khoa</text>
+    <text x="335" y="1075" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <path d="M 51 1082 L 344 1082 L 344 1099 Q 344 1103 340 1103 L 55 1103 Q 51 1103 51 1099 Z" fill="#EAECEF"/>
+    <text x="60" y="1097" font-size="11.5" font-weight="400" fill="#1F2937">gia_tri</text>
+    <text x="335" y="1097" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="50" y="1030" width="295" height="74" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="455" y="700" width="320" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 455 705 Q 455 700 460 700 L 770 700 Q 775 700 775 705 L 775 730 L 455 730 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="615" y="720" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nguoi_dung (users)</text>
+    <rect x="456" y="730" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="745" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="765" y="745" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="456" y="752" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="767" font-size="11.5" font-weight="400" fill="#1F2937">ten_dang_nhap</text>
+    <text x="765" y="767" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="774" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="789" font-size="11.5" font-weight="400" fill="#1F2937">mat_khau_bam</text>
+    <text x="765" y="789" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="796" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="811" font-size="11.5" font-weight="400" fill="#1F2937">ho_ten</text>
+    <text x="765" y="811" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="818" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="833" font-size="11.5" font-weight="400" fill="#1F2937">vai_tro</text>
+    <text x="765" y="833" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 456 840 L 774 840 L 774 857 Q 774 861 770 861 L 460 861 Q 456 861 456 857 Z" fill="#EAECEF"/>
+    <text x="465" y="855" font-size="11.5" font-weight="400" fill="#1F2937">tao_luc</text>
+    <text x="765" y="855" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="455" y="700" width="320" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="455" y="975" width="320" height="206" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 455 980 Q 455 975 460 975 L 770 975 Q 775 975 775 980 L 775 1005 L 455 1005 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="615" y="995" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">lop_ban_do (gis_layers)</text>
+    <rect x="456" y="1005" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="1020" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="765" y="1020" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="456" y="1027" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="1042" font-size="11.5" font-weight="400" fill="#1F2937">loai_lop / ten_lop</text>
+    <text x="765" y="1042" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="1049" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="1064" font-size="11.5" font-weight="400" fill="#1F2937">ma_co</text>
+    <text x="765" y="1064" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="456" y="1071" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="1086" font-size="11.5" font-weight="400" fill="#1F2937">vi_do / kinh_do</text>
+    <text x="765" y="1086" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">double</text>
+    <rect x="456" y="1093" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="1108" font-size="11.5" font-weight="400" fill="#1F2937">ban_kinh_km</text>
+    <text x="765" y="1108" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">double</text>
+    <rect x="456" y="1115" width="318" height="22" fill="#EAECEF"/>
+    <text x="465" y="1130" font-size="11.5" font-weight="400" fill="#1F2937">hinh_hoc</text>
+    <text x="765" y="1130" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="456" y="1137" width="318" height="22" fill="#FFFFFF"/>
+    <text x="465" y="1152" font-size="11.5" font-weight="400" fill="#1F2937">tinh</text>
+    <text x="765" y="1152" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <path d="M 456 1159 L 774 1159 L 774 1176 Q 774 1180 770 1180 L 460 1180 Q 456 1180 456 1176 Z" fill="#EAECEF"/>
+    <text x="465" y="1174" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_xac_minh</text>
+    <text x="765" y="1174" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="455" y="975" width="320" height="206" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="890" y="660" width="300" height="206" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 890 665 Q 890 660 895 660 L 1185 660 Q 1190 660 1190 665 L 1190 690 L 890 690 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="1040" y="680" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">du_an (projects)</text>
+    <rect x="891" y="690" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="705" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1180" y="705" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="891" y="712" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="727" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_dung_ma</text>
+    <text x="1180" y="727" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="891" y="734" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="749" font-size="11.5" font-weight="400" fill="#1F2937">ten_du_an</text>
+    <text x="1180" y="749" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="756" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="771" font-size="11.5" font-weight="400" fill="#1F2937">vi_do / kinh_do</text>
+    <text x="1180" y="771" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">numeric</text>
+    <rect x="891" y="778" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="793" font-size="11.5" font-weight="400" fill="#1F2937">quan_huyen / phuong_xa</text>
+    <text x="1180" y="793" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">text</text>
+    <rect x="891" y="800" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="815" font-size="11.5" font-weight="400" fill="#1F2937">du_lieu_bieu_mau</text>
+    <text x="1180" y="815" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="891" y="822" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="837" font-size="11.5" font-weight="400" fill="#1F2937">ket_qua_phan_loai</text>
+    <text x="1180" y="837" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 891 844 L 1189 844 L 1189 861 Q 1189 865 1185 865 L 895 865 Q 891 865 891 861 Z" fill="#EAECEF"/>
+    <text x="900" y="859" font-size="11.5" font-weight="400" fill="#1F2937">tao_luc</text>
+    <text x="1180" y="859" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">timestamp</text>
+    <rect x="890" y="660" width="300" height="206" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="665" width="330" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 670 Q 1330 665 1335 665 L 1655 665 Q 1660 665 1660 670 L 1660 695 L 1330 695 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="685" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">xac_minh_yeu_to_nhay_cam_du_an</text>
+    <rect x="1331" y="695" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="710" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="710" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="1331" y="717" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="732" font-size="11.5" font-weight="700" fill="#1E40AF">du_an_ma</text>
+    <text x="1650" y="732" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK, UQ · integer</text>
+    <rect x="1331" y="739" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="754" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_xac_minh_ma</text>
+    <text x="1650" y="754" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="761" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="776" font-size="11.5" font-weight="400" fill="#1F2937">co_yeu_to_khai_bao</text>
+    <text x="1650" y="776" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <rect x="1331" y="783" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="798" font-size="11.5" font-weight="400" fill="#1F2937">du_lieu_khong_gian</text>
+    <text x="1650" y="798" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 1331 805 L 1659 805 L 1659 822 Q 1659 826 1655 826 L 1335 826 Q 1331 826 1331 822 Z" fill="#EAECEF"/>
+    <text x="1340" y="820" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_xac_minh</text>
+    <text x="1650" y="820" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1330" y="665" width="330" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="855" width="330" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 860 Q 1330 855 1335 855 L 1655 855 Q 1660 855 1660 860 L 1660 885 L 1330 885 Z" fill="#B8E0D2" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="875" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">nghia_vu_tuan_thu</text>
+    <rect x="1331" y="885" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="900" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="900" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="1331" y="907" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="922" font-size="11.5" font-weight="700" fill="#1E40AF">du_an_ma</text>
+    <text x="1650" y="922" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="929" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="944" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_dung_ma</text>
+    <text x="1650" y="944" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="1331" y="951" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="966" font-size="11.5" font-weight="400" fill="#1F2937">ma_nghia_vu / tieu_de</text>
+    <text x="1650" y="966" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="973" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="988" font-size="11.5" font-weight="400" fill="#1F2937">chu_ky</text>
+    <text x="1650" y="988" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="995" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="1010" font-size="11.5" font-weight="400" fill="#1F2937">han_nop</text>
+    <text x="1650" y="1010" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">date</text>
+    <path d="M 1331 1017 L 1659 1017 L 1659 1034 Q 1659 1038 1655 1038 L 1335 1038 Q 1331 1038 1331 1034 Z" fill="#FFFFFF"/>
+    <text x="1340" y="1032" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai</text>
+    <text x="1650" y="1032" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1330" y="855" width="330" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="890" y="975" width="300" height="184" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 890 980 Q 890 975 895 975 L 1185 975 Q 1190 975 1190 980 L 1190 1005 L 890 1005 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="1040" y="995" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">mau_quan_trac_qcvn</text>
+    <rect x="891" y="1005" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="1020" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1180" y="1020" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · serial</text>
+    <rect x="891" y="1027" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="1042" font-size="11.5" font-weight="700" fill="#1E40AF">nguoi_dung_ma</text>
+    <text x="1180" y="1042" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="891" y="1049" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="1064" font-size="11.5" font-weight="700" fill="#1E40AF">du_an_ma</text>
+    <text x="1180" y="1064" text-anchor="end" font-size="10.5" font-weight="700" fill="#1D4ED8">FK · integer</text>
+    <rect x="891" y="1071" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="1086" font-size="11.5" font-weight="400" fill="#1F2937">ten_mau</text>
+    <text x="1180" y="1086" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="1093" width="298" height="22" fill="#FFFFFF"/>
+    <text x="900" y="1108" font-size="11.5" font-weight="400" fill="#1F2937">loai / loai_con</text>
+    <text x="1180" y="1108" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="891" y="1115" width="298" height="22" fill="#EAECEF"/>
+    <text x="900" y="1130" font-size="11.5" font-weight="400" fill="#1F2937">gia_tri_quan_trac</text>
+    <text x="1180" y="1130" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 891 1137 L 1189 1137 L 1189 1154 Q 1189 1158 1185 1158 L 895 1158 Q 891 1158 891 1154 Z" fill="#FFFFFF"/>
+    <text x="900" y="1152" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_danh_gia</text>
+    <text x="1180" y="1152" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="890" y="975" width="300" height="184" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="1330" y="1070" width="330" height="162" rx="5" ry="5" fill="#FFFFFF" stroke="#374151" stroke-width="1.4"/>
+    <path d="M 1330 1075 Q 1330 1070 1335 1070 L 1655 1070 Q 1660 1070 1660 1075 L 1660 1100 L 1330 1100 Z" fill="#F4B39D" stroke="#374151" stroke-width="1.2"/>
+    <text x="1495" y="1090" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">quy_chuan_qcvn (qcvns)</text>
+    <rect x="1331" y="1100" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="1115" font-size="11.5" font-weight="700" fill="#9A3412">ma</text>
+    <text x="1650" y="1115" text-anchor="end" font-size="10.5" font-weight="700" fill="#B45309">PK · varchar</text>
+    <rect x="1331" y="1122" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="1137" font-size="11.5" font-weight="400" fill="#1F2937">ten_quy_chuan</text>
+    <text x="1650" y="1137" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="1144" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="1159" font-size="11.5" font-weight="400" fill="#1F2937">ma_tieu_chuan</text>
+    <text x="1650" y="1159" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="1166" width="328" height="22" fill="#EAECEF"/>
+    <text x="1340" y="1181" font-size="11.5" font-weight="400" fill="#1F2937">loai_nguon / ma_cot</text>
+    <text x="1650" y="1181" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1331" y="1188" width="328" height="22" fill="#FFFFFF"/>
+    <text x="1340" y="1203" font-size="11.5" font-weight="400" fill="#1F2937">tham_so</text>
+    <text x="1650" y="1203" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">jsonb</text>
+    <path d="M 1331 1210 L 1659 1210 L 1659 1227 Q 1659 1231 1655 1231 L 1335 1231 Q 1331 1231 1331 1227 Z" fill="#EAECEF"/>
+    <text x="1340" y="1225" font-size="11.5" font-weight="400" fill="#1F2937">trang_thai_xac_minh</text>
+    <text x="1650" y="1225" text-anchor="end" font-size="10.5" font-weight="400" fill="#6B7280">varchar</text>
+    <rect x="1330" y="1070" width="330" height="162" rx="5" ry="5" fill="none" stroke="#374151" stroke-width="1.4"/>
+  </g>
+  <g>
+    <rect x="50" y="1235" width="1610" height="92" rx="6" ry="6" fill="#F9FAFB" stroke="#D1D5DB" stroke-width="1.2"/>
+    <text x="66" y="1259" font-size="12.5" font-weight="700" fill="#111827">CHÚ THÍCH SƠ ĐỒ ERD (KÝ HIỆU CROW'S FOOT):</text>
+    <rect x="66" y="1273" width="22" height="14" rx="2" fill="#F4B39D" stroke="#374151"/>
+    <text x="96" y="1284" font-size="11.5" fill="#374151">Bảng nền tảng / kế thừa hệ thống</text>
+    <rect x="320" y="1273" width="22" height="14" rx="2" fill="#B8E0D2" stroke="#374151"/>
+    <text x="350" y="1284" font-size="11.5" fill="#374151">Bảng bổ sung mở rộng (GIS, Xác minh nhạy cảm, Nhắc hạn tuân thủ, Crawler đồng bộ)</text>
+    <text x="66" y="1309" font-size="11.5" fill="#374151"><tspan font-weight="700" fill="#B45309">PK</tspan>: Khóa chính (Primary Key)   |   <tspan font-weight="700" fill="#1D4ED8">FK</tspan>: Khóa ngoại (Foreign Key)   |   <tspan font-weight="700">||</tspan>: Một và chỉ một (1)   |   <tspan font-weight="700">o|</tspan>: Không hoặc một (0..1)   |   <tspan font-weight="700">|&lt;</tspan>: Một hoặc nhiều (1..N)   |   <tspan font-weight="700">o&lt;</tspan>: Không hoặc nhiều (0..N)   |   <tspan font-weight="700">- - -</tspan>: Tham chiếu đối chiếu QCVN</text>
+  </g>
+</svg>

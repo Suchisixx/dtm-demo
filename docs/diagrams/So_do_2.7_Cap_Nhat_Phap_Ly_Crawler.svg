@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="880" viewBox="0 0 960 880" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="480" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#111827">SƠ ĐỒ 2.7. LƯU ĐỒ CẬP NHẬT VĂN BẢN PHÁP LUẬT (CRAWLER)</text>
+  <text x="480" y="54" text-anchor="middle" font-size="12" fill="#4B5563">Admin kích hoạt thủ công trên Web (auto_crawl mặc định tắt), đối chiếu Sitemap lastmod, bóc tách Cheerio &amp; tạo đề xuất duyệt</text>
+
+  <g>
+    <polyline points="450,120 450,146" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,202 450,228" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,280 450,306" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,374 450,404" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="378" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="391" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="575,340 655,340" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="599.8" y="319" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="615" y="332" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="782,371 935,371 935,789 550,789" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,476 450,506" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="480" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="493" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="590,440 655,440" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="604.8" y="419" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="620" y="432" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="782,468 782,789 550,789" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,560 450,588" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,654 450,684" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,738 450,768" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="start"><rect x="265" y="76" width="370" height="44" rx="22" ry="22" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.6"/>
+    <text x="450" y="102.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Admin bấm cập nhật thủ công trên Web (auto_crawl = false)</text></g>
+  <g id="db_cache">
+      <path d="M 285 154 L 285 194 A 165 8 0 0 0 615 194 L 615 154 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="154" rx="165" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="173.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Nạp cache văn bản từ bảng luat</text>
+    <text x="450" y="188.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(ma, trang_thai, crawler_cap_nhat_luc)</text></g>
+  <g id="proc_fetch"><rect x="285" y="228" width="330" height="52" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="250.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tải Sitemap XML bằng fetchWithTimeout()</text>
+    <text x="450" y="266.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">&amp; lọc danh sách URL văn bản pháp luật</text></g>
+  <g id="dec_net"><polygon points="450,306 575,340 450,374 325,340" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="336.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Kết nối &amp; đọc Sitemap</text>
+    <text x="450" y="351.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">thành công?</text></g>
+  <g id="warn_retry"><rect x="655" y="309" width="255" height="62" rx="6" ry="6" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+    <text x="782.5" y="336.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Ghi log lỗi kết nối / timeout</text>
+    <text x="782.5" y="351.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">&amp; trả thông báo lỗi cho Admin</text></g>
+  <g id="dec_diff"><polygon points="450,404 590,440 450,476 310,440" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="436.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Văn bản mới hoặc</text>
+    <text x="450" y="451.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">lastmod khác DB cache?</text></g>
+  <g id="proc_skip"><rect x="655" y="412" width="255" height="56" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="782.5" y="436.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Fast-Skip: Bỏ qua nhanh</text>
+    <text x="782.5" y="452.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">không cần tải lại HTML</text></g>
+  <g id="proc_cheerio"><rect x="285" y="506" width="330" height="54" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="529.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tải HTML &amp; phân tích nội dung, điều khoản</text>
+    <text x="450" y="545.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">bằng thư viện Cheerio (crawlDocument)</text></g>
+  <g id="db_save">
+      <path d="M 270 596 L 270 646 A 180 8 0 0 0 630 646 L 630 596 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="596" rx="180" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="620.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Cập nhật luat, ghi lich_su_cap_nhat_van_ban;</text>
+    <text x="450" y="635.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">sinh anh_huong_quy_tac_van_ban &amp; de_xuat_quy_tac</text></g>
+  <g id="io_notify"><polygon points="291,684 625,684 609,738 275,738" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="707.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Trả thống kê (Mới / Cập nhật / Hết hiệu lực / Fast-Skip)</text>
+    <text x="450" y="723.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">&amp; đưa đề xuất PENDING_REVIEW cho Admin duyệt</text></g>
+  <g id="end"><rect x="350" y="768" width="200" height="42" rx="21" ry="21" fill="#DCFCE7" stroke="#15803D" stroke-width="1.6"/>
+    <text x="450" y="793.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Kết thúc</text></g>
+
+  <!-- Chú thích chuẩn ký hiệu -->
+  <g transform="translate(30, 834)">
+    <rect x="0" y="0" width="900" height="32" rx="5" fill="#F9FAFB" stroke="#E5E7EB"/>
+    <text x="16" y="20" font-size="11" fill="#374151">
+      <tspan font-weight="700">Ký hiệu chuẩn:</tspan>  Hình oval: Bắt đầu / Kết thúc   |   Hình bình hành: Nhập / Xuất dữ liệu   |   Hình chữ nhật: Xử lý   |   Hình thoi: Điều kiện rẽ nhánh   |   Hình trụ: CSDL
+    </text>
+  </g>
+</svg>

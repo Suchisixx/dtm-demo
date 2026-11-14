@@ -8,6 +8,10 @@ const props = defineProps({
   currentUser: {
     type: Object,
     default: null
+  },
+  legalBasis: {
+    type: Object,
+    default: () => ({})
   }
 })
 
@@ -431,7 +435,7 @@ const printDashboard = () => {
                 <span>Phân bố Nhóm Dự án &amp; Hồ sơ Môi trường</span>
               </div>
               <div style="font-size:12px;color:var(--text3);margin-top:2px">
-                Theo Điều 28 Luật BVMT 2020 &amp; Nghị định 08/2022/NĐ-CP (cập nhật NĐ 48/2026)
+                {{ legalBasis?.dashboardSubText || 'Theo Điều 28 Luật BVMT 2020, NĐ 08/2022 (NĐ 48/2026 • 49/VBHN-BNNMT & 55/VBHN-BNNMT)' }}
               </div>
             </div>
           </div>

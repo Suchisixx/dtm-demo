@@ -5,7 +5,8 @@ import { logger } from '../utils/logger.js'
 import { normalizeString } from '../utils/string-helpers.js'
 
 const props = defineProps({
-  loadLawId: { type: String, default: null }
+  loadLawId: { type: String, default: null },
+  legalBasis: { type: Object, default: () => ({}) }
 })
 const emit = defineEmits(['law-loaded'])
 
@@ -134,6 +135,9 @@ const getTypeLabel = (type) => {
 
 const getStatusLabel = (status) => {
   return {
+    con_hieu_luc: 'Còn hiệu lực',
+    da_sua_doi: 'Đã sửa đổi',
+    het_hieu_luc: 'Hết hiệu lực',
     valid: 'Còn hiệu lực',
     amended: 'Đã sửa đổi',
     expired: 'Hết hiệu lực'
@@ -145,8 +149,8 @@ const filteredLaws = computed(() => {
 
   return laws.value.filter(l => {
     if (currentFilter.value !== 'all') {
-      if (currentFilter.value === 'hieuluc' && l.status !== 'valid') return false
-      if (currentFilter.value === 'suadoi' && l.status !== 'amended') return false
+      if (currentFilter.value === 'hieuluc' && l.status !== 'con_hieu_luc' && l.status !== 'valid') return false
+      if (currentFilter.value === 'suadoi' && l.status !== 'da_sua_doi' && l.status !== 'amended') return false
       if (currentFilter.value !== 'hieuluc' && currentFilter.value !== 'suadoi' && l.type !== currentFilter.value) return false
     }
 
@@ -315,7 +319,7 @@ const getDirectLawLink = (l) => {
         </button>
       </div>
       <div v-show="showLegalNotice" class="legal-notice-content">
-        <p>Nghị định 08/2022/NĐ-CP hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP và Văn bản hợp nhất 49/VBHN-BNNMT.</p>
+        <p>{{ legalBasis?.noticeText || 'Nghị định 08/2022/NĐ-CP và Thông tư 02/2022/TT-BTNMT hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP cùng các Văn bản hợp nhất hiện hành trong CSDL: 49/VBHN-BNNMT (hợp nhất Nghị định) và 55/VBHN-BNNMT (hợp nhất Thông tư).' }}</p>
       </div>
     </aside>
 
@@ -425,7 +429,7 @@ const getDirectLawLink = (l) => {
     <!-- Dạng thẻ -->
     <div v-else class="law-card-grid">
       <div v-for="l in paginatedLaws" :key="l.id"
-           class="law-card" :class="{ expired: l.status === 'expired' }"
+           class="law-card" :class="{ expired: l.status === 'het_hieu_luc' || l.status === 'expired' }"
            style="margin-bottom:0;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer"
            @click="selectedLaw = l">
         <div>

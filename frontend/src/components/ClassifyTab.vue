@@ -16,7 +16,6 @@ import {
   REMINDER_ALERT_META,
   REMINDER_RECURRENCE_OPTIONS,
   projectQcvnSamples,
-  projectSensitiveVerification,
   projectRemindersSync,
   reminderComplete,
   reminderById
@@ -39,7 +38,8 @@ import {
 
 const props = defineProps({
   loadProjectId: { type: Number, default: null },
-  currentUser: { type: Object, default: null }
+  currentUser: { type: Object, default: null },
+  legalBasis: { type: Object, default: () => ({}) }
 })
 const emit = defineEmits(['project-loaded', 'view-qcvn-sample', 'view-law'])
 
@@ -148,11 +148,6 @@ const paddyConversionAreaHa = ref(0)
 const forestConversionAreaHa = ref(0)
 const sensitiveEvidenceRef = ref('')
 const serverSensitiveVerification = ref(null)
-const adminSensitiveNote = ref('')
-const adminSensitiveEvidence = ref('')
-const isUpdatingSensitiveVerification = ref(false)
-const sensitiveVerificationMessage = ref('')
-const showAdminSensitivePanel = ref(false)
 
 // Thu gọn chi tiết kỹ thuật / nâng cao để giao diện đơn giản, dễ hiểu
 const showSensitiveDetails = ref(false)
@@ -162,6 +157,14 @@ const showUnverifiedNotice = ref(false)
 const showNangNhomNotice = ref(false)
 const showClassificationRationale = ref(false)
 
+const formatCapacityScale = (scale) => {
+  const normalized = String(scale || '').trim().toUpperCase()
+  if (normalized === 'LARGE' || normalized === 'LON') return 'Lớn'
+  if (normalized === 'MEDIUM' || normalized === 'TRUNG_BINH') return 'Trung bình'
+  if (normalized === 'SMALL' || normalized === 'NHO') return 'Nhỏ'
+  return scale || null
+}
+
 const displayRationale = computed(() => {
   if (!result.value) return null
   if (result.value.classificationRationale) return result.value.classificationRationale
@@ -170,13 +173,17 @@ const displayRationale = computed(() => {
   const capNum = Number(capacity.value || 0)
   const capText = `${capNum.toLocaleString('vi-VN')}${unit ? ` ${unit}` : ''}`
   const procText = result.value.hi?.label || result.value.hs || 'Chưa xác định'
+  const stageOpt = processStage.value
+    ? (availableProcessStages.value || []).find(s => s.key === processStage.value)
+    : null
   return {
     industryName: indName,
-    processStageLabel: processStage.value || null,
+    processStageLabel: stageOpt?.label || processStage.value || null,
     inputCapacity: capNum,
     unit,
     thresholdText: result.value.phuluc && result.value.phuluc !== '—' ? result.value.phuluc : 'Đối chiếu theo quy mô đầu vào',
     capacityScale: null,
+    capacityScaleLabel: null,
     projectGroup: result.value.nhom,
     procedureLabel: procText,
     authorityLabel: result.value.coQuan,
@@ -220,12 +227,6 @@ const effectiveSensitiveStatus = computed(() =>
   || result.value?.sensitiveVerificationStatus
   || 'NOT_REQUIRED'
 )
-
-const shouldShowAdminSensitivePanel = computed(() => Boolean(
-  props.currentUser?.role === 'admin'
-  && projectId.value
-  && (effectiveSensitiveStatus.value !== 'NOT_REQUIRED' || hasAnySensitiveDeclaration.value)
-))
 
 const isFallbackOrIncompleteResult = computed(() => Boolean(
   result.value && (result.value.ruleSource !== 'DATABASE' || result.value.errorCode || !result.value.hs)
@@ -1217,8 +1218,6 @@ const saveProjectToServer = async (formData) => {
       projectId.value = data.project.id
       if (data.sensitiveVerification !== undefined) {
         serverSensitiveVerification.value = data.sensitiveVerification
-        adminSensitiveEvidence.value = data.sensitiveVerification?.evidence_ref || sensitiveEvidenceRef.value || ''
-        adminSensitiveNote.value = data.sensitiveVerification?.verification_note || ''
       }
       if (data.project.classification_result) {
         result.value = data.project.classification_result
@@ -1245,48 +1244,10 @@ const fetchProjectSensitiveVerification = async (projId) => {
       const data = await res.json()
       if (data.sensitiveVerification !== undefined) {
         serverSensitiveVerification.value = data.sensitiveVerification
-        adminSensitiveEvidence.value = data.sensitiveVerification?.evidence_ref || sensitiveEvidenceRef.value || ''
-        adminSensitiveNote.value = data.sensitiveVerification?.verification_note || ''
       }
     }
   } catch (err) {
     logger.error('Lỗi tải trạng thái xác minh vùng nhạy cảm:', err)
-  }
-}
-
-const submitAdminSensitiveVerification = async (verificationStatus) => {
-  if (!projectId.value) {
-    showFormNotice('Vui lòng lưu dự án trước khi xác minh yếu tố nhạy cảm.', 'warning')
-    return
-  }
-  isUpdatingSensitiveVerification.value = true
-  sensitiveVerificationMessage.value = ''
-  try {
-    const res = await fetch(projectSensitiveVerification(projectId.value), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        verification_status: verificationStatus,
-        evidence_ref: adminSensitiveEvidence.value || sensitiveEvidenceRef.value || '',
-        verification_note: adminSensitiveNote.value || ''
-      })
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      sensitiveVerificationMessage.value = data.error || 'Không thể cập nhật xác minh vùng nhạy cảm.'
-      return
-    }
-    serverSensitiveVerification.value = data.sensitiveVerification || null
-    if (data.classification) {
-      result.value = data.classification
-      classificationSnapshot.value = data.classification
-    }
-    sensitiveVerificationMessage.value = data.message || `Đã cập nhật trạng thái: ${getSensitiveStatusLabel(verificationStatus)}`
-    fetchProjects(currentPage.value)
-  } catch (err) {
-    sensitiveVerificationMessage.value = err.message || 'Lỗi kết nối máy chủ.'
-  } finally {
-    isUpdatingSensitiveVerification.value = false
   }
 }
 
@@ -1327,9 +1288,6 @@ const selectProject = (project, extraSensitiveVerification = null) => {
   forestConversionAreaHa.value = Number(fd.forestConversionAreaHa ?? sDetails.forestConversionAreaHa ?? 0) || 0
   sensitiveEvidenceRef.value = fd.sensitiveEvidenceRef || sDetails.evidenceRef || ''
   serverSensitiveVerification.value = extraSensitiveVerification || project.sensitiveVerification || null
-  adminSensitiveEvidence.value = serverSensitiveVerification.value?.evidence_ref || sensitiveEvidenceRef.value || ''
-  adminSensitiveNote.value = serverSensitiveVerification.value?.verification_note || ''
-  sensitiveVerificationMessage.value = ''
 
   if (!extraSensitiveVerification && project.id) {
     fetchProjectSensitiveVerification(project.id)
@@ -1460,9 +1418,6 @@ const createNewProject = () => {
     lng: null
   }
   locationMismatchWarning.value = null
-  adminSensitiveEvidence.value = ''
-  adminSensitiveNote.value = ''
-  sensitiveVerificationMessage.value = ''
 
   latitude.value = DEFAULT_LAT
   longitude.value = DEFAULT_LNG
@@ -2715,7 +2670,7 @@ onUnmounted(() => {
                   </div>
                   <div class="result-sub">
                     <template v-if="result.isOfficialConclusion">
-                      {{ result.nhom }} — Căn cứ Nghị định 08/2022/NĐ-CP (hợp nhất NĐ 48/2026 &amp; VBHN 49)
+                      {{ result.nhom }} — {{ result.ref ? `Căn cứ ${result.ref} (${legalBasis?.ndVbhnSo || '49/VBHN-BNNMT'} & ${legalBasis?.ttVbhnSo || '55/VBHN-BNNMT'})` : (legalBasis?.classificationSubText || 'Căn cứ Nghị định 08/2022/NĐ-CP (49/VBHN-BNNMT) & 55/VBHN-BNNMT') }}
                     </template>
                     <template v-else-if="isFallbackOrIncompleteResult">
                       {{ result.ruleSource !== 'DATABASE'
@@ -2829,7 +2784,7 @@ onUnmounted(() => {
                       {{ Number(displayRationale.inputCapacity || 0).toLocaleString('vi-VN') }} {{ displayRationale.unit }}
                       <span v-if="displayRationale.thresholdText" style="color:var(--text3)"> — Khớp khung quy định: {{ displayRationale.thresholdText }}</span>
                     </li>
-                    <li v-if="displayRationale.capacityScale"><strong>Phân mức công suất:</strong> {{ displayRationale.capacityScale }}</li>
+                    <li v-if="displayRationale.capacityScaleLabel || displayRationale.capacityScale"><strong>Phân mức công suất:</strong> {{ displayRationale.capacityScaleLabel || formatCapacityScale(displayRationale.capacityScale) }}</li>
                   </ul>
                 </div>
 
@@ -2901,54 +2856,6 @@ onUnmounted(() => {
                 </div>
                 <div><strong>Xác minh nhạy cảm:</strong> {{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</div>
                 <div><strong>Nguồn dữ liệu bản đồ:</strong> {{ getGisSourceLabel(result.gisSource || spatialData?.gisSource) }}</div>
-              </div>
-            </div>
-
-            <!-- Admin Panel Xác minh vùng nhạy cảm (thu gọn mặc định, bấm để mở rộng khi cần thẩm định) -->
-            <div v-if="shouldShowAdminSensitivePanel"
-                 class="no-print"
-                 style="margin-top:12px;padding:10px 14px;background:#F8FAFC;border:1px solid var(--border);border-radius:var(--radius)">
-              <div
-                style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;cursor:pointer"
-                @click="showAdminSensitivePanel = !showAdminSensitivePanel"
-              >
-                <strong style="font-size:12.5px;color:var(--text)">
-                  <i class="ti ti-shield-check" style="color:var(--accent)"></i>
-                  Kiểm duyệt vùng nhạy cảm (Quản trị viên)
-                </strong>
-                <div style="display:flex;align-items:center;gap:10px">
-                  <span style="font-size:11.5px;color:var(--text2)">
-                    Trạng thái hiện tại: <strong>{{ getSensitiveStatusLabel(effectiveSensitiveStatus) }}</strong>
-                  </span>
-                  <button
-                    type="button"
-                    class="btn-secondary btn-sm"
-                    style="padding:3px 10px;font-size:11.5px"
-                    @click.stop="showAdminSensitivePanel = !showAdminSensitivePanel"
-                  >
-                    {{ showAdminSensitivePanel ? 'Thu gọn ▴' : 'Mở rộng ▾' }}
-                  </button>
-                </div>
-              </div>
-
-              <div v-if="showAdminSensitivePanel" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
-                <div class="form-grid-2" style="gap:8px;margin-bottom:8px">
-                  <input type="text" v-model="adminSensitiveEvidence" placeholder="Số văn bản / Chứng cứ ranh giới..." />
-                  <input type="text" v-model="adminSensitiveNote" placeholder="Ghi chú thẩm định của quản trị viên..." />
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                  <button type="button" class="btn-primary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('VERIFIED')">
-                    <i class="ti ti-check"></i>
-                    <span>Xác nhận hợp lệ</span>
-                  </button>
-                  <button type="button" class="btn-secondary btn-sm" :disabled="isUpdatingSensitiveVerification" @click="submitAdminSensitiveVerification('REJECTED')">
-                    <i class="ti ti-x"></i>
-                    <span>Từ chối xác nhận</span>
-                  </button>
-                  <span v-if="sensitiveVerificationMessage" style="font-size:12px;color:var(--accent);font-weight:500">
-                    {{ sensitiveVerificationMessage }}
-                  </span>
-                </div>
               </div>
             </div>
 

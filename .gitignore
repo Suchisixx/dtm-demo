@@ -10,11 +10,24 @@ backend/.env
 frontend/dist/
 backend/public/
 
-# OS/IDE files
+# OS/IDE & temporary backup files
 .DS_Store
 .vscode/
 .idea/
 *.log
+*.bkp
+.$*
+~$*
+
+# Internal agent rules, design notes, QA & thesis drafts
+.agents/
+AGENTS.md
+ReDesign.md
+caption_qa/
+docs/_erd-render/
+docs/diagrams/
+backend/backups/
+*.docx
 
 # Playwright
 /test-results/

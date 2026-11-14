@@ -39,13 +39,14 @@ function getLawIdFromSlug(slug) {
 
 // Chuẩn hóa loại văn bản
 function getLawTypeFromSlug(slug) {
-  if (slug.startsWith('nghi-dinh-')) return 'nd';
-  if (slug.startsWith('thong-tu-')) return 'tt';
-  if (slug.startsWith('luat-')) return 'luat';
-  if (slug.startsWith('qcvn-')) return 'qcvn';
-  if (slug.startsWith('van-ban-hop-nhat-')) return 'vbhn';
-  if (slug.startsWith('quyet-dinh-')) return 'qd';
-  if (slug.startsWith('nghi-quyet-')) return 'nq';
+  const lower = String(slug || '').toLowerCase();
+  if (lower.startsWith('van-ban-hop-nhat-') || /(?:^|-)vbhn(?:-|$)/.test(lower)) return 'vbhn';
+  if (lower.startsWith('nghi-dinh-')) return 'nd';
+  if (lower.startsWith('thong-tu-')) return 'tt';
+  if (lower.startsWith('luat-')) return 'luat';
+  if (lower.startsWith('qcvn-')) return 'qcvn';
+  if (lower.startsWith('quyet-dinh-')) return 'qd';
+  if (lower.startsWith('nghi-quyet-')) return 'nq';
   return 'luat';
 }
 
@@ -162,15 +163,22 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
   let so = docTitle;
   let year = new Date().getFullYear();
 
-  // Lấy số hiệu từ tiêu đề, ví dụ "48/2026/NĐ-CP"
+  // Lấy số hiệu từ tiêu đề, ví dụ "48/2026/NĐ-CP" hoặc "55/VBHN-BNNMT"
+  const vbhnRegex = /\b([0-9]+\/VBHN-[A-Za-z0-9Đđ-]+)\b/i;
   const soRegex = /([0-9]+(?:\.[0-9]+)?\/[0-9]{4}\/[A-Za-z0-9Đđ\u00C0-\u1EF9\/-]+)/i;
+  const vbhnMatch = docTitle.match(vbhnRegex);
   const soMatch = docTitle.match(soRegex);
+  const slugVbhnMatch = slug.match(/(?:^|-)([0-9]+)-vbhn-([a-z0-9-]+)$/i);
   if (id === 'luat_tai_nguyen_nuoc' || docTitle.includes('Tài nguyên nước')) {
     so = '28/2023/QH15';
     year = 2023;
   } else if (id === 'luat_bvmt_2020' || id === 'luat_bao_ve_moi_truong' || docTitle.includes('Bảo vệ môi trường 2020')) {
     so = '72/2020/QH14';
     year = 2020;
+  } else if (vbhnMatch) {
+    so = vbhnMatch[1].trim().toUpperCase();
+  } else if (slugVbhnMatch) {
+    so = `${slugVbhnMatch[1]}/VBHN-${slugVbhnMatch[2].replace(/-/g, '').toUpperCase()}`;
   } else if (soMatch) {
     so = soMatch[0].trim();
   } else {
@@ -240,7 +248,7 @@ async function crawlDocument(mainUrl, subpageUrls = []) {
     so,
     ten: docTitle,
     hieuluc: 'Đang có hiệu lực',
-    status: 'valid',
+    status: 'con_hieu_luc',
     mo_ta: metaDesc || `Quy định pháp lý về ${docTitle}`,
     dieu_khoang: clauses,
     link: mainUrl
@@ -341,10 +349,10 @@ async function runCrawler(updatedByUserId = null) {
 
         // Xử lý khi văn bản được xác định là ĐÃ HẾT HIỆU LỰC
         if (docData.isExpired) {
-          if (existsInDb && existingRecord.status !== 'expired') {
+          if (existsInDb && !['expired', 'het_hieu_luc'].includes(existingRecord.status)) {
             await db.query(
               `UPDATE laws
-               SET status = 'expired', hieuluc = 'Hết hiệu lực', last_crawled_mod = $1
+               SET status = 'het_hieu_luc', hieuluc = 'Hết hiệu lực', last_crawled_mod = $1
                WHERE id = $2`,
               [doc.lastmod, dbId]
             );
@@ -353,7 +361,7 @@ async function runCrawler(updatedByUserId = null) {
                VALUES ($1, 'AUTO_CRAWL_EXPIRE', $2, $3)`,
               [dbId, updatedByUserId, `Tự động chuyển trạng thái Hết hiệu lực: ${docData.docTitle}`]
             );
-            existingRecord.status = 'expired';
+            existingRecord.status = 'het_hieu_luc';
             existingRecord.last_crawled_mod = doc.lastmod;
             expiredUpdatedCount++;
             crawlEvents.push({

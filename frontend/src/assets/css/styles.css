@@ -839,19 +839,22 @@ body {
   gap: 5px;
 }
 
-.chip-status.valid {
+.chip-status.valid,
+.chip-status.con_hieu_luc {
   background: var(--success-bg);
   color: var(--success);
   border: 1px solid var(--success-border);
 }
 
-.chip-status.amended {
+.chip-status.amended,
+.chip-status.da_sua_doi {
   background: var(--warn-bg);
   color: var(--warn);
   border: 1px solid var(--warn-border);
 }
 
-.chip-status.expired {
+.chip-status.expired,
+.chip-status.het_hieu_luc {
   background: var(--red-bg);
   color: var(--red);
   border: 1px solid var(--danger-border);
@@ -1372,7 +1375,8 @@ input:disabled {
   box-shadow: var(--shadow);
 }
 
-.law-card.expired {
+.law-card.expired,
+.law-card.het_hieu_luc {
   opacity: 0.65;
 }
 
@@ -1420,9 +1424,12 @@ input:disabled {
   display: inline-block;
 }
 
-.status-dot.valid { background: var(--success); }
-.status-dot.amended { background: var(--warn); }
-.status-dot.expired { background: var(--red); }
+.status-dot.valid,
+.status-dot.con_hieu_luc { background: var(--success); }
+.status-dot.amended,
+.status-dot.da_sua_doi { background: var(--warn); }
+.status-dot.expired,
+.status-dot.het_hieu_luc { background: var(--red); }
 
 /* ── Khu vực phân loại dự án ── */
 .classify-studio-grid {

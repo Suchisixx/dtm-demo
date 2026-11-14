@@ -55,8 +55,8 @@ function createMockClassificationDb({ failQuery = false } = {}) {
           audit_note: params[8],
           process_stages_meta: params[9],
           verification_status: params[10],
-          publication_status: 'PUBLISHED',
-          rule_version: params[11],
+          publication_status: params[11],
+          rule_version: params[12],
         });
         return { rows: [], rowCount: 1 };
       }
@@ -112,11 +112,11 @@ function createMockClassificationDb({ failQuery = false } = {}) {
           effective_from: params[14],
           effective_to: params[15],
           verification_status: params[16],
-          publication_status: 'PUBLISHED',
-          tier_order: params[17],
-          rule_version: params[18],
-          source_ref: params[19],
-          appendix_id: params[20],
+          publication_status: params[17],
+          tier_order: params[18],
+          rule_version: params[19],
+          source_ref: params[20],
+          appendix_id: params[21],
           approved_by: null,
           approved_at: null,
         });
@@ -144,13 +144,13 @@ test('Seed phan loai an toan: khong TRUNCATE, seed du 39 nganh + 6 processRules 
   const processStages = new Set(
     db.state.classification_thresholds.filter(r => r.process_stage).map(r => `${r.industry_code}:${r.process_stage}`)
   );
-  assert.ok(processStages.has('thep:ore_smelting'));
-  assert.ok(processStages.has('thep:rolling_only'));
-  assert.ok(processStages.has('nhiet_dien:coal_fired'));
-  assert.ok(processStages.has('hoa_chat:basic_inorganic_or_pesticide'));
-  assert.ok(processStages.has('giay_bot:pulp_or_recycled'));
-  assert.ok(processStages.has('det_nhuom:dyeing_washing'));
-  assert.ok(processStages.has('dien_tu:surface_chemical_or_component'));
+  assert.ok(processStages.has('thep:luyen_kim_tu_quang_phe_lieu'));
+  assert.ok(processStages.has('thep:chi_can_keo_thep'));
+  assert.ok(processStages.has('nhiet_dien:nhiet_dien_than'));
+  assert.ok(processStages.has('hoa_chat:hoa_chat_co_ban_bvtv'));
+  assert.ok(processStages.has('giay_bot:san_xuat_bot_giay_tai_che'));
+  assert.ok(processStages.has('det_nhuom:nhuom_giat_hoan_tat'));
+  assert.ok(processStages.has('dien_tu:linh_kien_xu_ly_be_mat'));
 
   // Đánh dấu ngành và ngưỡng VERIFIED rồi chạy seed lại (kể cả force: true); dữ liệu không được ghi đè.
   const xiMangInd = db.state.industries.find(i => i.code === 'xi_mang');

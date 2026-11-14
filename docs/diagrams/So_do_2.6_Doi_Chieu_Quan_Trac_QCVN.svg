@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="880" viewBox="0 0 960 880" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="480" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#111827">SƠ ĐỒ 2.6. LƯU ĐỒ ĐỐI CHIẾU KẾT QUẢ QUAN TRẮC VỚI QCVN</text>
+  <text x="480" y="54" text-anchor="middle" font-size="12" fill="#4B5563">Kiểm soát tính đầy đủ mẫu đo, xác định cột áp dụng và đánh giá đạt/vượt ngưỡng theo quy_chuan_qcvn</text>
+
+  <g>
+    <polyline points="450,118 450,145" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,201 450,228" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,302 450,332" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="304" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="317" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="590,265 660,265" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="604.8" y="244" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="620" y="257" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="787,297 935,297 935,810 888,810" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,392 450,422" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,494 450,524" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="496" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="509" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="590,458 660,458" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="604.8" y="437" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="620" y="450" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="787,490 787,789" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,584 450,612" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,670 450,698" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,756 450,784" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="612,810 688,810" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="start"><rect x="350" y="76" width="200" height="42" rx="21" ry="21" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.6"/>
+    <text x="450" y="101.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Bắt đầu</text></g>
+  <g id="io_in"><polygon points="296,145 620,145 604,201 280,201" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="169.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Nhập mẫu quan trắc:</text>
+    <text x="450" y="185.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Loại QCVN, lưu lượng, nguồn tiếp nhận, chỉ số đo</text></g>
+  <g id="dec_gate"><polygon points="450,228 590,265 450,302 310,265" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="261.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Đủ lưu lượng &amp; xác nhận</text>
+    <text x="450" y="276.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">nguồn tiếp nhận (A/B)?</text></g>
+  <g id="warn_gate"><rect x="660" y="233" width="255" height="64" rx="6" ry="6" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+    <text x="787.5" y="261.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Gắn trạng thái NEEDS_REVIEW</text>
+    <text x="787.5" y="276.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Không tự gán cột B / lưu lượng giả</text></g>
+  <g id="db_qcvn">
+      <path d="M 295 340 L 295 384 A 155 8 0 0 0 605 384 L 605 340 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="340" rx="155" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="361.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Tra bảng quy chuẩn &amp; giới hạn thông số</text>
+    <text x="450" y="376.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(bảng quy_chuan_qcvn theo mã tiêu chuẩn, cột)</text></g>
+  <g id="dec_full"><polygon points="450,422 590,458 450,494 310,458" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="454.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Đủ chỉ tiêu bắt buộc</text>
+    <text x="450" y="469.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">&amp; đúng chu kỳ lấy mẫu?</text></g>
+  <g id="warn_inc"><rect x="660" y="426" width="255" height="64" rx="6" ry="6" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+    <text x="787.5" y="454.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Gắn INCOMPLETE / PERIOD_MISMATCH</text>
+    <text x="787.5" y="469.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Không được xếp loại Đạt (PASS)</text></g>
+  <g id="proc_cmp"><rect x="285" y="524" width="330" height="60" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="550.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">So sánh từng thông số với ngưỡng giới hạn</text>
+    <text x="450" y="566.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">(ngưỡng tối đa / khoảng pH) &amp; tính tỷ lệ vượt (%)</text></g>
+  <g id="proc_sum"><rect x="285" y="612" width="330" height="58" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="637.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tổng hợp số thông số Đạt / Vượt,</text>
+    <text x="450" y="653.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">xác định thông số vượt mức cao nhất</text></g>
+  <g id="db_save">
+      <path d="M 295 706 L 295 748 A 155 8 0 0 0 605 748 L 605 706 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="706" rx="155" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="726.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Lưu mẫu &amp; chi tiết đánh giá vào DB</text>
+    <text x="450" y="741.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(mau_quan_trac_qcvn liên kết du_an)</text></g>
+  <g id="io_out"><polygon points="296,784 620,784 604,836 280,836" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="806.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Hiển thị kết quả Đạt / Vượt chuẩn</text>
+    <text x="450" y="822.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">&amp; xuất báo cáo đối chiếu QCVN</text></g>
+  <g id="end"><rect x="688" y="789" width="200" height="42" rx="21" ry="21" fill="#DCFCE7" stroke="#15803D" stroke-width="1.6"/>
+    <text x="788" y="814.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Kết thúc</text></g>
+
+  <!-- Chú thích chuẩn ký hiệu -->
+  <g transform="translate(30, 834)">
+    <rect x="0" y="0" width="900" height="32" rx="5" fill="#F9FAFB" stroke="#E5E7EB"/>
+    <text x="16" y="20" font-size="11" fill="#374151">
+      <tspan font-weight="700">Ký hiệu chuẩn:</tspan>  Hình oval: Bắt đầu / Kết thúc   |   Hình bình hành: Nhập / Xuất dữ liệu   |   Hình chữ nhật: Xử lý   |   Hình thoi: Điều kiện rẽ nhánh   |   Hình trụ: CSDL
+    </text>
+  </g>
+</svg>

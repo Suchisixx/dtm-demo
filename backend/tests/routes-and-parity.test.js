@@ -171,7 +171,7 @@ test('Server-Authoritative Routes: POST /api/projects, POST /api/qcvns/samples, 
       return { rows: mem.qcvn_samples, rowCount: mem.qcvn_samples.length };
     }
     if (q.includes('FROM laws GROUP BY')) {
-      return { rows: [{ status: 'valid', count: 2 }], rowCount: 1 };
+      return { rows: [{ status: 'con_hieu_luc', count: 2 }], rowCount: 1 };
     }
     return { rows: [], rowCount: 0 };
   };
@@ -313,7 +313,7 @@ test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua
 
   assert.ok(classifyVue.includes('evaluationDate'), 'ClassifyTab phai co input evaluationDate');
   assert.ok(classifyVue.includes('insideCoreProtectedZone'), 'ClassifyTab phai co khai bao vung nhay cam');
-  assert.ok(classifyVue.includes('projectSensitiveVerification'), 'ClassifyTab phai ho tro xac minh Admin phia server');
+  assert.ok(!classifyVue.includes('submitAdminSensitiveVerification'), 'ClassifyTab da go bo khung kiem duyet Admin');
 
   assert.ok(!qcvnVue.includes('const industrialNganh ='), 'QCVNTab khong con mang industrialNganh hardcode');
   assert.ok(!qcvnVue.includes('const domesticNganh ='), 'QCVNTab khong con mang domesticNganh hardcode');
@@ -397,7 +397,7 @@ test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /selec
       { id: 3, user_id: 1, project_id: 102, name: 'Mau Dat Cu', type: 'nuoc_thai_cn', sub_type: 'qcvn40_a_low', trang_thai_tong_quat: 'dat', overall_status: null, evaluation_details: null, evaluated_rule_version: null, evaluated_verification_status: null, created_at: new Date().toISOString() },
     ],
     laws: [
-      { id: 'nd_08_2022', ten: 'Nghi dinh 08/2022', so: '08/2022/ND-CP', status: 'valid' },
+      { id: 'nd_08_2022', ten: 'Nghi dinh 08/2022', so: '08/2022/ND-CP', status: 'con_hieu_luc' },
     ],
     law_rule_impacts: [],
     rule_candidates: [],
@@ -719,7 +719,7 @@ test('UX Simplification & Vietnamese Localization Parity + DB Bootstrap Export',
   // 3. Giao diện không hiển thị mã trạng thái thô hoặc ghi chú lập trình trên nhãn chính.
   assert.ok(!classifyVue.includes('(NEEDS_REVIEW)'), 'ClassifyTab khong hien raw (NEEDS_REVIEW)');
   assert.ok(!classifyVue.includes('Xác nhận hợp lệ (VERIFIED)'), 'ClassifyTab nut Admin phai thuan Viet');
-  assert.ok(classifyVue.includes('shouldShowAdminSensitivePanel'), 'ClassifyTab an khung Admin khi khong co yeu to nhay cam');
+  assert.ok(!classifyVue.includes('shouldShowAdminSensitivePanel'), 'ClassifyTab da go bo khung kiem duyet vung nhay cam');
   assert.ok(classifyVue.includes('isFallbackOrIncompleteResult'), 'ClassifyTab khong tu mau thuan CHUA XAC DINH vs GPMT');
 
   assert.ok(!qcvnVue.includes('(QCVN_SELECTION_MISMATCH)'), 'QCVNTab khong hien raw (QCVN_SELECTION_MISMATCH)');
@@ -815,10 +815,13 @@ test('Simplification Plan: Runtime DB Fail-Closed, Standardized Industries & Ali
         }
         return { rows: [row], rowCount: 1 };
       }
-      if (trimmed.startsWith('UPDATE classification_thresholds SET verification_status = \'VERIFIED\'')) {
+      if (
+        trimmed.startsWith('UPDATE classification_thresholds SET verification_status = \'VERIFIED\'')
+        || trimmed.startsWith('UPDATE classification_thresholds SET verification_status = \'da_xac_minh\'')
+      ) {
         const row = mockThresholds.find(t => t.id === Number(params[3]));
         if (row) {
-          row.verification_status = 'VERIFIED';
+          row.verification_status = 'da_xac_minh';
           row.approved_by = params[0];
           row.legal_ref = params[1];
           row.effective_from = params[2];
@@ -889,4 +892,291 @@ test('Vietnamese PostgreSQL schema map is complete and preserves legacy API iden
   assert.equal(TABLES.laws.columns.year, 'nam');
   assert.equal(TABLES.laws.columns.type, 'loai');
   assert.equal(TABLES.laws.columns.mo_ta, 'mo_ta');
+});
+
+test('Vietnamese DB column values round-trip cleanly through Repository -> Engine', async () => {
+  const shared = require('../services/repository-shared');
+  const { loadClassificationCatalog, loadQcvnCatalog, loadGisLayers } = require('../services/rule-repository');
+
+  // 1. Bidirectional mappers
+  assert.equal(shared.toDbVerificationStatus('VERIFIED'), 'da_xac_minh');
+  assert.equal(shared.toDbVerificationStatus('NEEDS_LEGAL_VERIFICATION'), 'can_xac_minh_phap_ly');
+  assert.equal(shared.toCanonicalVerificationStatus('da_xac_minh'), 'VERIFIED');
+  assert.equal(shared.toCanonicalVerificationStatus('can_xac_minh_phap_ly'), 'NEEDS_LEGAL_VERIFICATION');
+
+  assert.equal(shared.toDbPublicationStatus('PUBLISHED'), 'da_cong_bo');
+  assert.equal(shared.toDbPublicationStatus('DRAFT'), 'ban_nhap');
+  assert.equal(shared.isActivePublicationStatus('da_cong_bo'), true);
+  assert.equal(shared.isActivePublicationStatus('ban_nhap'), false);
+
+  assert.equal(shared.toDbScale('LARGE'), 'lon');
+  assert.equal(shared.toCanonicalScale('lon'), 'LARGE');
+  assert.equal(shared.toDbQcvnStatus('current'), 'hien_hanh');
+  assert.equal(shared.toCanonicalQcvnStatus('hien_hanh'), 'current');
+  assert.equal(shared.toDbSampleStatus('PASS'), 'dat');
+  assert.equal(shared.toCanonicalSampleStatus('dat'), 'PASS');
+  assert.equal(shared.toDbGisLayerType('INDUSTRIAL_PARK'), 'khu_cong_nghiep');
+  assert.equal(shared.toCanonicalGisLayerType('khu_cong_nghiep'), 'INDUSTRIAL_PARK');
+
+  // 2. Repository loaders read Vietnamese DB values and return canonical objects for Engine
+  const mockViDb = {
+    query: async (sql) => {
+      if (sql.includes('FROM industries')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            code: 'xi_mang',
+            name: 'Xi măng',
+            display_name: 'Xi măng, clinker',
+            aliases: ['xi_mang'],
+            capacity_label: 'Xi măng (tấn/năm)',
+            unit: 'tấn/năm',
+            note: '',
+            audit_note: '',
+            process_stages_meta: null,
+            verification_status: 'da_xac_minh',
+            publication_status: 'da_cong_bo',
+            rule_version: '2026.2-audit',
+          }],
+        };
+      }
+      if (sql.includes('FROM classification_thresholds')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 1,
+            industry_code: 'xi_mang',
+            process_stage: '',
+            min_value: '100000',
+            max_value: null,
+            operator: '>=',
+            unit: 'tấn/năm',
+            capacity_scale: 'lon',
+            project_group: 'Nhóm I',
+            legal_doc_required: 'DTM',
+            tq: 'cap_bo',
+            historical_tq: null,
+            phu_luc: 'Phụ lục II',
+            legal_ref: 'NĐ 08/2022',
+            law_id: 'nd_08_2022',
+            effective_from: '2022-01-10',
+            effective_to: null,
+            verification_status: 'da_xac_minh',
+            publication_status: 'da_cong_bo',
+            tier_order: 0,
+            rule_version: '2026.2-audit',
+            source_ref: 'NĐ 08/2022',
+            approved_by: 'Hệ thống (Danh mục chuẩn)',
+            approved_at: new Date('2026-01-01'),
+            is_active_version: true,
+            superseded_at: null,
+          }],
+        };
+      }
+      if (sql.includes('FROM qcvns')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 'nuoc_thai_2025_a',
+            ten: 'QCVN 40:2025/BTNMT',
+            ap_dung: 'Nước thải công nghiệp',
+            tham_so: [{ ten: 'pH', min: 6, max: 9 }],
+            standard_code: 'QCVN 40',
+            standard_version: '2025',
+            status: 'hien_hanh',
+            source_type: 'nuoc_thai_cn',
+            column_code: 'A',
+            flow_range: 'F2 (50 - 2000 m³/ngày)',
+            effective_from: '2025-09-01',
+            effective_to: null,
+            mandatory_for_all_from: '2032-01-01',
+            replaces: null,
+            transition_rules: null,
+            verification_status: 'da_xac_minh',
+            publication_status: 'da_cong_bo',
+            source_document: 'QCVN 40:2025',
+            rule_version: '2026.2-audit',
+            verified_by: 'Hệ thống (Danh mục chuẩn)',
+            verified_at: new Date('2026-01-01'),
+            published_at: new Date('2026-01-01'),
+          }],
+        };
+      }
+      if (sql.includes('FROM gis_layers')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 'ip_test',
+            layer_type: 'khu_cong_nghiep',
+            name: 'KCN Test',
+            category: 'Khu công nghiệp',
+            flag_key: 'kcn',
+            latitude: 10.8,
+            longitude: 106.7,
+            radius_km: 2,
+            geometry_json: null,
+            province: 'TP.HCM',
+            legal_ref: 'QĐ Test',
+            verification_status: 'da_xac_minh',
+            publication_status: 'da_cong_bo',
+            source_document: 'QĐ Test',
+          }],
+        };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  const classCatalog = await loadClassificationCatalog({ db: mockViDb });
+  assert.equal(classCatalog.ok, true);
+  assert.equal(classCatalog.catalog.xi_mang.verificationStatus, 'VERIFIED');
+  assert.equal(classCatalog.catalog.xi_mang.t[0].capacityScale, 'LARGE');
+  assert.equal(classCatalog.catalog.xi_mang.t[0].verificationStatus, 'VERIFIED');
+
+  const qcvnCatalog = await loadQcvnCatalog({ db: mockViDb });
+  assert.equal(qcvnCatalog.ok, true);
+  assert.equal(qcvnCatalog.catalog.nuoc_thai_2025_a.status, 'current');
+  assert.equal(qcvnCatalog.catalog.nuoc_thai_2025_a.verificationStatus, 'VERIFIED');
+  assert.equal(qcvnCatalog.catalog.nuoc_thai_2025_a.publicationStatus, 'PUBLISHED');
+
+  const gisLayers = await loadGisLayers({ db: mockViDb });
+  assert.equal(gisLayers.ok, true);
+  assert.equal(gisLayers.industrialParks.length, 1);
+  assert.equal(gisLayers.industrialParks[0].layerType, 'INDUSTRIAL_PARK');
+  assert.equal(gisLayers.industrialParks[0].verificationStatus, 'VERIFIED');
+
+  // 3. Process stage round-trip & rationale formatting (processStageLabel + capacityScaleLabel)
+  assert.equal(shared.toDbProcessStage('dyeing_washing'), 'nhuom_giat_hoan_tat');
+  assert.equal(shared.toCanonicalProcessStage('nhuom_giat_hoan_tat'), 'dyeing_washing');
+  const { evaluateClassification } = require('../services/classification-service');
+  const textileEval = evaluateClassification({ nganh: 'det_nhuom', processStage: 'nhuom_giat_hoan_tat', capacity: 60 });
+  assert.equal(textileEval.preliminary.nhom, 'Nhóm I');
+  assert.equal(textileEval.classificationRationale.processStageLabel, 'Có công đoạn nhuộm, giặt mài, hoàn tất hóa chất');
+  assert.equal(textileEval.classificationRationale.capacityScaleLabel, 'Lớn');
+});
+
+test('GET /api/admin/audit-logs: requireAdmin RBAC & unified trace from audit_logs + law_update_history', async () => {
+  const express = require('express');
+  const http = require('http');
+  const jwt = require('jsonwebtoken');
+  const db = require('../config/db');
+  const { JWT_SECRET, COOKIE_NAME } = require('../utils/constants');
+  const adminRouter = require('../routes/admin');
+
+  const origQuery = db.query;
+  db.query = async (sql) => {
+    if (sql.includes('FROM audit_logs')) {
+      return {
+        rowCount: 2,
+        rows: [
+          {
+            id: 11,
+            user_id: 1,
+            action: 'UPDATE_LAW',
+            ip_address: '127.0.0.1',
+            payload: { id: 'luat_bvmt_2020', so: '72/2020/QH14', changedFields: { status: { from: 'con_hieu_luc', to: 'da_sua_doi' } } },
+            created_at: '2026-11-14T09:30:00Z',
+            actor_username: 'admin',
+            actor_name: 'Quản trị viên',
+          },
+          {
+            id: 10,
+            user_id: 2,
+            action: 'LOGIN',
+            ip_address: '127.0.0.1',
+            payload: null,
+            created_at: '2026-11-14T08:00:00Z',
+            actor_username: 'staff1',
+            actor_name: 'Chuyên viên A',
+          },
+        ],
+      };
+    }
+    if (sql.includes('FROM law_update_history')) {
+      return {
+        rowCount: 1,
+        rows: [
+          {
+            id: 5,
+            law_id: 'nd_08_2022',
+            action: 'update',
+            updated_by: 1,
+            updated_at: '2026-11-14T09:35:00Z',
+            description: 'Cập nhật văn bản pháp luật: 08/2022/NĐ-CP (status)',
+            actor_username: 'admin',
+            actor_name: 'Quản trị viên',
+            law_so: '08/2022/NĐ-CP',
+            law_ten: 'Nghị định 08/2022/NĐ-CP',
+          },
+        ],
+      };
+    }
+    return { rowCount: 0, rows: [] };
+  };
+
+  const app = express();
+  app.use(require('cookie-parser')());
+  app.use('/api/admin', adminRouter);
+  const server = http.createServer(app);
+  await new Promise(resolve => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const staffToken = jwt.sign({ id: 2, username: 'staff1', role: 'staff' }, JWT_SECRET);
+    const staffRes = await fetch(`http://127.0.0.1:${port}/api/admin/audit-logs`, {
+      headers: { Cookie: `${COOKIE_NAME}=${staffToken}` },
+    });
+    assert.equal(staffRes.status, 403);
+
+    const adminToken = jwt.sign({ id: 1, username: 'admin', role: 'admin' }, JWT_SECRET);
+    const legalRes = await fetch(`http://127.0.0.1:${port}/api/admin/audit-logs?scope=legal`, {
+      headers: { Cookie: `${COOKIE_NAME}=${adminToken}` },
+    });
+    assert.equal(legalRes.status, 200);
+    const legalData = await legalRes.json();
+    assert.equal(legalData.logs.length, 2);
+    assert.equal(legalData.logs[0].source, 'law_update_history');
+    assert.equal(legalData.logs[0].target_label, '08/2022/NĐ-CP');
+    assert.equal(legalData.logs[1].action, 'UPDATE_LAW');
+    assert.ok(legalData.logs[1].summary.includes('72/2020/QH14'));
+  } finally {
+    db.query = origQuery;
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('GET /api/laws/active-basis: dynamically synthesizes 49/VBHN-BNNMT and 55/VBHN-BNNMT from database', async () => {
+  const express = require('express');
+  const http = require('http');
+  const db = require('../config/db');
+  const lawsRouter = require('../routes/laws');
+
+  const origQuery = db.query;
+  db.query = async () => ({
+    rowCount: 3,
+    rows: [
+      { id: 'tt_55_vbhn_bnnmt', type: 'vbhn', year: 2026, sort_date: '2026-04-20', so: '55/VBHN-BNNMT', ten: 'Văn bản hợp nhất 55/VBHN-BNNMT — Hợp nhất Thông tư quy định chi tiết thi hành Luật Bảo vệ môi trường', status: 'con_hieu_luc', mo_ta: 'QUY ĐỊNH CHI TIẾT THI HÀNH MỘT SỐ ĐIỀU CỦA LUẬT BẢO VỆ MÔI TRƯỜNG' },
+      { id: 'vbhn_49_2026', type: 'vbhn', year: 2026, sort_date: '2026-04-17', so: '49/VBHN-BNNMT', ten: 'Văn bản hợp nhất 49/VBHN — NĐ 08/2022 hợp nhất toàn bộ sửa đổi', status: 'con_hieu_luc', mo_ta: 'Bản hợp nhất Nghị định 08/2022' },
+      { id: 'nd_48_2026', type: 'nd', year: 2026, sort_date: '2026-01-29', so: '48/2026/NĐ-CP', ten: 'Nghị định 48/2026/NĐ-CP', status: 'con_hieu_luc', mo_ta: '' },
+    ],
+  });
+
+  const app = express();
+  app.use('/api/laws', lawsRouter);
+  const server = http.createServer(app);
+  await new Promise(resolve => server.listen(0, resolve));
+  const { port } = server.address();
+
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/laws/active-basis`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.ndVbhnSo, '49/VBHN-BNNMT');
+    assert.equal(data.ttVbhnSo, '55/VBHN-BNNMT');
+    assert.ok(data.badgeText.includes('49/VBHN-BNNMT'));
+    assert.ok(data.badgeText.includes('55/VBHN-BNNMT'));
+  } finally {
+    db.query = origQuery;
+    await new Promise(resolve => server.close(resolve));
+  }
 });

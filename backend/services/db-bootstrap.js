@@ -186,6 +186,282 @@ async function ensureComplianceReminderSchema(db) {
   `);
 }
 
+async function promoteBaselineCatalogOnce(db) {
+  const flagKey = 'baseline_catalog_verified_v1';
+  const existingFlag = await db.query('SELECT value FROM system_settings WHERE key = $1', [flagKey]);
+  if (existingFlag.rowCount > 0 && existingFlag.rows[0].value === 'true') {
+    return;
+  }
+
+  await db.query(
+    `UPDATE industries
+     SET verification_status = 'da_xac_minh',
+         verified_by = COALESCE(verified_by, 'Hệ thống (Danh mục chuẩn)'),
+         verified_at = COALESCE(verified_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE publication_status IN ('PUBLISHED', 'da_cong_bo')
+       AND verification_status IN ('NEEDS_LEGAL_VERIFICATION', 'can_xac_minh_phap_ly')`
+  );
+
+  await db.query(
+    `UPDATE classification_thresholds
+     SET verification_status = 'da_xac_minh',
+         approved_by = COALESCE(approved_by, 'Hệ thống (Danh mục chuẩn)'),
+         approved_at = COALESCE(approved_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE publication_status IN ('PUBLISHED', 'da_cong_bo')
+       AND verification_status IN ('NEEDS_LEGAL_VERIFICATION', 'can_xac_minh_phap_ly')`
+  );
+
+  await db.query(
+    `UPDATE qcvns
+     SET verification_status = 'da_xac_minh',
+         verified_by = COALESCE(verified_by, 'Hệ thống (Danh mục chuẩn)'),
+         verified_at = COALESCE(verified_at, CURRENT_TIMESTAMP),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE publication_status IN ('PUBLISHED', 'da_cong_bo')
+       AND verification_status IN ('NEEDS_LEGAL_VERIFICATION', 'can_xac_minh_phap_ly')`
+  );
+
+  await db.query(
+    `INSERT INTO system_settings (key, value)
+     VALUES ($1, 'true')
+     ON CONFLICT (key) DO UPDATE SET value = 'true'`,
+    [flagKey]
+  );
+}
+
+/**
+ * Chuyển đổi 1 lần toàn bộ giá trị chuỗi tiếng Anh cũ trong DB sang tiếng Việt (idempotent).
+ */
+async function migrateEnglishValuesToVietnameseOnce(db) {
+  const flagKey = 'db_vietnamese_values_v1';
+  const existingFlag = await db.query('SELECT value FROM system_settings WHERE key = $1', [flagKey]);
+  if (existingFlag.rowCount > 0 && existingFlag.rows[0].value === 'true') {
+    return;
+  }
+
+  await db.query(`
+    UPDATE industries
+    SET verification_status = CASE verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE verification_status
+        END,
+        publication_status = CASE publication_status
+          WHEN 'PUBLISHED' THEN 'da_cong_bo'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'PENDING_REVIEW' THEN 'cho_duyet'
+          WHEN 'EXTRACTED' THEN 'da_trich_xuat'
+          WHEN 'RAW' THEN 'tho'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          WHEN 'ARCHIVED' THEN 'luu_tru'
+          ELSE publication_status
+        END,
+        risk_level = CASE risk_level
+          WHEN 'high' THEN 'cao'
+          WHEN 'HIGH' THEN 'cao'
+          WHEN 'medium' THEN 'trung_binh'
+          WHEN 'MEDIUM' THEN 'trung_binh'
+          WHEN 'low' THEN 'thap'
+          WHEN 'LOW' THEN 'thap'
+          ELSE risk_level
+        END,
+        verified_by = CASE WHEN verified_by = 'system-catalog-baseline' THEN 'Hệ thống (Danh mục chuẩn)' ELSE verified_by END
+    WHERE verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'DRAFT', 'REJECTED')
+       OR publication_status IN ('PUBLISHED', 'DRAFT', 'PENDING_REVIEW', 'EXTRACTED', 'RAW', 'REJECTED', 'ARCHIVED')
+       OR risk_level IN ('high', 'HIGH', 'medium', 'MEDIUM', 'low', 'LOW')
+       OR verified_by = 'system-catalog-baseline'
+  `);
+
+  await db.query(`
+    UPDATE classification_thresholds
+    SET verification_status = CASE verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE verification_status
+        END,
+        publication_status = CASE publication_status
+          WHEN 'PUBLISHED' THEN 'da_cong_bo'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'PENDING_REVIEW' THEN 'cho_duyet'
+          WHEN 'EXTRACTED' THEN 'da_trich_xuat'
+          WHEN 'RAW' THEN 'tho'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          WHEN 'ARCHIVED' THEN 'luu_tru'
+          ELSE publication_status
+        END,
+        capacity_scale = CASE capacity_scale
+          WHEN 'LARGE' THEN 'lon'
+          WHEN 'MEDIUM' THEN 'trung_binh'
+          WHEN 'SMALL' THEN 'nho'
+          ELSE capacity_scale
+        END,
+        approved_by = CASE WHEN approved_by = 'system-catalog-baseline' THEN 'Hệ thống (Danh mục chuẩn)' ELSE approved_by END
+    WHERE verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'DRAFT', 'REJECTED')
+       OR publication_status IN ('PUBLISHED', 'DRAFT', 'PENDING_REVIEW', 'EXTRACTED', 'RAW', 'REJECTED', 'ARCHIVED')
+       OR capacity_scale IN ('LARGE', 'MEDIUM', 'SMALL')
+       OR approved_by = 'system-catalog-baseline'
+  `);
+
+  await db.query(`
+    UPDATE qcvns
+    SET verification_status = CASE verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE verification_status
+        END,
+        publication_status = CASE publication_status
+          WHEN 'PUBLISHED' THEN 'da_cong_bo'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'PENDING_REVIEW' THEN 'cho_duyet'
+          WHEN 'EXTRACTED' THEN 'da_trich_xuat'
+          WHEN 'RAW' THEN 'tho'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          WHEN 'ARCHIVED' THEN 'luu_tru'
+          ELSE publication_status
+        END,
+        status = CASE status
+          WHEN 'current' THEN 'hien_hanh'
+          WHEN 'superseded' THEN 'het_hieu_luc'
+          WHEN 'historical' THEN 'lich_su'
+          WHEN 'transitional' THEN 'chuyen_tiep'
+          ELSE status
+        END,
+        flow_range = CASE flow_range
+          WHEN 'F1 (<=50 m3/ngay)' THEN 'F1 (<= 50 m³/ngày)'
+          WHEN 'F2 (50-2000 m3/ngay)' THEN 'F2 (50 - 2000 m³/ngày)'
+          WHEN 'F3 (>=2000 m3/ngay)' THEN 'F3 (>= 2000 m³/ngày)'
+          ELSE flow_range
+        END,
+        verified_by = CASE WHEN verified_by = 'system-catalog-baseline' THEN 'Hệ thống (Danh mục chuẩn)' ELSE verified_by END
+    WHERE verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'DRAFT', 'REJECTED')
+       OR publication_status IN ('PUBLISHED', 'DRAFT', 'PENDING_REVIEW', 'EXTRACTED', 'RAW', 'REJECTED', 'ARCHIVED')
+       OR status IN ('current', 'superseded', 'historical', 'transitional')
+       OR flow_range IN ('F1 (<=50 m3/ngay)', 'F2 (50-2000 m3/ngay)', 'F3 (>=2000 m3/ngay)')
+       OR verified_by = 'system-catalog-baseline'
+  `);
+
+  await db.query(`
+    UPDATE qcvn_samples
+    SET overall_status = CASE overall_status
+          WHEN 'PASS' THEN 'dat'
+          WHEN 'FAIL' THEN 'vuot'
+          WHEN 'INCOMPLETE' THEN 'chua_du_thong_so'
+          WHEN 'PERIOD_MISMATCH' THEN 'sai_chu_ky'
+          WHEN 'NEEDS_REVIEW' THEN 'can_ra_soat'
+          ELSE overall_status
+        END,
+        evaluated_verification_status = CASE evaluated_verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE evaluated_verification_status
+        END
+    WHERE overall_status IN ('PASS', 'FAIL', 'INCOMPLETE', 'PERIOD_MISMATCH', 'NEEDS_REVIEW')
+       OR evaluated_verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'DRAFT', 'REJECTED')
+  `);
+
+  await db.query(`
+    UPDATE gis_layers
+    SET layer_type = CASE layer_type
+          WHEN 'INDUSTRIAL_PARK' THEN 'khu_cong_nghiep'
+          WHEN 'SENSITIVE_ZONE' THEN 'vung_nhay_cam'
+          ELSE layer_type
+        END,
+        verification_status = CASE verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE verification_status
+        END,
+        publication_status = CASE publication_status
+          WHEN 'PUBLISHED' THEN 'da_cong_bo'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'PENDING_REVIEW' THEN 'cho_duyet'
+          WHEN 'EXTRACTED' THEN 'da_trich_xuat'
+          WHEN 'RAW' THEN 'tho'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          WHEN 'ARCHIVED' THEN 'luu_tru'
+          ELSE publication_status
+        END
+    WHERE layer_type IN ('INDUSTRIAL_PARK', 'SENSITIVE_ZONE')
+       OR verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'DRAFT', 'REJECTED')
+       OR publication_status IN ('PUBLISHED', 'DRAFT', 'PENDING_REVIEW', 'EXTRACTED', 'RAW', 'REJECTED', 'ARCHIVED')
+  `);
+
+  await db.query(`
+    UPDATE project_sensitive_verifications
+    SET verification_status = CASE verification_status
+          WHEN 'VERIFIED' THEN 'da_xac_minh'
+          WHEN 'NEEDS_LEGAL_VERIFICATION' THEN 'can_xac_minh_phap_ly'
+          WHEN 'PENDING_VERIFICATION' THEN 'cho_xac_minh'
+          WHEN 'NOT_REQUIRED' THEN 'khong_yeu_cau'
+          WHEN 'DRAFT' THEN 'ban_nhap'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE verification_status
+        END
+    WHERE verification_status IN ('VERIFIED', 'NEEDS_LEGAL_VERIFICATION', 'PENDING_VERIFICATION', 'NOT_REQUIRED', 'DRAFT', 'REJECTED')
+  `);
+
+  await db.query(`
+    UPDATE law_rule_impacts
+    SET severity = CASE severity
+          WHEN 'HIGH' THEN 'cao'
+          WHEN 'MEDIUM' THEN 'trung_binh'
+          WHEN 'LOW' THEN 'thap'
+          ELSE severity
+        END,
+        status = CASE status
+          WHEN 'OPEN' THEN 'dang_mo'
+          WHEN 'RESOLVED' THEN 'da_xu_ly'
+          WHEN 'IGNORED' THEN 'bo_qua'
+          ELSE status
+        END
+    WHERE severity IN ('HIGH', 'MEDIUM', 'LOW')
+       OR status IN ('OPEN', 'RESOLVED', 'IGNORED')
+  `);
+
+  await db.query(`
+    UPDATE rule_candidates
+    SET extraction_confidence = CASE extraction_confidence
+          WHEN 'HIGH' THEN 'cao'
+          WHEN 'MEDIUM' THEN 'trung_binh'
+          WHEN 'LOW' THEN 'thap'
+          ELSE extraction_confidence
+        END,
+        status = CASE status
+          WHEN 'PENDING_REVIEW' THEN 'cho_duyet'
+          WHEN 'EXTRACTED' THEN 'da_trich_xuat'
+          WHEN 'APPROVED' THEN 'da_duyet'
+          WHEN 'REJECTED' THEN 'tu_choi'
+          ELSE status
+        END
+    WHERE extraction_confidence IN ('HIGH', 'MEDIUM', 'LOW')
+       OR status IN ('PENDING_REVIEW', 'EXTRACTED', 'APPROVED', 'REJECTED')
+  `);
+
+  await db.query(
+    `INSERT INTO system_settings (key, value)
+     VALUES ($1, 'true')
+     ON CONFLICT (key) DO UPDATE SET value = 'true'`,
+    [flagKey]
+  );
+}
+
 async function loadQcvnSeedModule() {
   try {
     return require('../../frontend/src/data/qcvn-db.js');
@@ -260,6 +536,7 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
       qcvnData: QCVN_DATA || {},
       ruleVersion: QCVN_SCHEMA_VERSION || '2026.2-audit',
       force: false,
+      defaultVerified: true,
     });
 
     const classStats = await seedClassificationCatalog(db, {
@@ -267,6 +544,7 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
       industryMeta: INDUSTRY_META || {},
       ruleVersion: RULE_SCHEMA_VERSION || '2026.2-audit',
       force: false,
+      defaultVerified: true,
     });
 
     const gisStats = await seedGisLayers(db, {
@@ -274,6 +552,9 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
       industrialParks: VIETNAM_INDUSTRIAL_PARKS || [],
       force: false,
     });
+
+    await promoteBaselineCatalogOnce(db);
+    await migrateEnglishValuesToVietnameseOnce(db);
 
     if (
       qcvnStats.inserted > 0 || qcvnStats.enriched > 0

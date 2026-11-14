@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="1030" viewBox="0 0 980 1030" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="490" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#111827">SƠ ĐỒ 2.8. LƯU ĐỒ TÍNH HẠN VÀ NHẮC NGHĨA VỤ MÔI TRƯỜNG</text>
+  <text x="490" y="54" text-anchor="middle" font-size="12" fill="#4B5563">Liên kết kết quả phân loại hồ sơ với bảng nghia_vu_tuan_thu, quét node-cron hằng ngày (07:00) &amp; chống nhắc trùng</text>
+
+  <g>
+    <polyline points="450,118 450,142" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,198 450,224" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,272 450,298" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,354 450,380" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,432 450,458" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="575,491 660,491" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="596.4" y="470" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="615" y="483" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="450,524 450,552" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="456.8" y="526" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="539" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="925,491 950,491 950,710 450,710 450,724" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="585,586 660,586" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="601.4" y="565" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="620" y="578" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="450,620 450,648" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="456.8" y="622" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="635" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="792,614 792,710 450,710 450,724" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,696 450,724" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,778 450,804" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,870 450,896" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="872" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="885" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="585,837 792,837 792,903" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="619.8" y="816" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="635" y="829" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="635,924 692,924" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="start"><rect x="340" y="76" width="220" height="42" rx="21" ry="21" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.6"/>
+    <text x="450" y="101.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Bắt đầu</text></g>
+  <g id="io_init"><polygon points="281,142 635,142 619,198 265,198" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="166.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Lưu dự án từ Phân loại (ĐTM/GPMT/ĐKMT)</text>
+    <text x="450" y="182.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">→ Khởi tạo nghĩa vụ, chu kỳ &amp; hạn nộp (nghia_vu_tuan_thu)</text></g>
+  <g id="proc_cron"><rect x="285" y="224" width="330" height="48" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="252.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Kích hoạt tác vụ node-cron (07:00 hằng ngày)</text></g>
+  <g id="db_read">
+      <path d="M 285 306 L 285 346 A 165 8 0 0 0 615 346 L 615 306 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="306" rx="165" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="325.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Đọc các nghĩa vụ chưa hoàn thành</text>
+    <text x="450" y="340.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(trang_thai = chua_hoan_thanh)</text></g>
+  <g id="proc_calc"><rect x="285" y="380" width="330" height="52" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="402.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tính số ngày còn lại: delta = han_nop - hôm_nay</text>
+    <text x="450" y="418.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">(so với ngưỡng so_ngay_nhac_truoc)</text></g>
+  <g id="dec_over"><polygon points="450,458 575,491 450,524 325,491" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="487.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">delta &lt; 0</text>
+    <text x="450" y="502.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(Đã quá hạn)?</text></g>
+  <g id="warn_over"><rect x="660" y="463" width="265" height="56" rx="6" ry="6" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+    <text x="792.5" y="487.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Phân mức: QUÁ HẠN (qua_han)</text>
+    <text x="792.5" y="502.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Ưu tiên cảnh báo khẩn cấp</text></g>
+  <g id="dec_soon"><polygon points="450,552 585,586 450,620 315,586" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="582.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">0 &lt;= delta &lt;= so_ngay_nhac_truoc</text>
+    <text x="450" y="597.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">(Sắp đến hạn)?</text></g>
+  <g id="io_soon"><polygon points="676,558 925,558 909,614 660,614" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="792.5" y="582.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Phân mức: SẮP ĐẾN HẠN (sap_den_han)</text>
+    <text x="792.5" y="598.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Hiển thị nhắc hạn trên Dashboard</text></g>
+  <g id="proc_ok"><rect x="295" y="648" width="310" height="48" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="676.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Phân mức: TRONG HẠN (trong_han)</text></g>
+  <g id="proc_dedup"><rect x="265" y="724" width="370" height="54" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="747.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Chống nhắc trùng: chỉ cập nhật muc_canh_bao_cuoi</text>
+    <text x="450" y="763.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">&amp; gửi thông báo khi mức cảnh báo thay đổi</text></g>
+  <g id="dec_done"><polygon points="450,804 585,837 450,870 315,837" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="833.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Người dùng đánh dấu</text>
+    <text x="450" y="848.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">đã hoàn thành?</text></g>
+  <g id="proc_next"><rect x="265" y="896" width="370" height="56" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="920.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Lưu hoàn thành &amp; tự động cộng chu kỳ (+3 / +6 / +12 tháng)</text>
+    <text x="450" y="936.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">để tạo kỳ nghĩa vụ tiếp theo (nếu lặp lại)</text></g>
+  <g id="end"><rect x="692" y="903" width="200" height="42" rx="21" ry="21" fill="#DCFCE7" stroke="#15803D" stroke-width="1.6"/>
+    <text x="792" y="928.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Kết thúc</text></g>
+
+  <!-- Chú thích chuẩn ký hiệu -->
+  <g transform="translate(30, 984)">
+    <rect x="0" y="0" width="920" height="32" rx="5" fill="#F9FAFB" stroke="#E5E7EB"/>
+    <text x="16" y="20" font-size="11" fill="#374151">
+      <tspan font-weight="700">Ký hiệu chuẩn:</tspan>  Hình oval: Bắt đầu / Kết thúc   |   Hình bình hành: Nhập / Xuất dữ liệu   |   Hình chữ nhật: Xử lý   |   Hình thoi: Điều kiện rẽ nhánh   |   Hình trụ: CSDL
+    </text>
+  </g>
+</svg>

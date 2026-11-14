@@ -52,11 +52,33 @@ const uniqueProvinces = computed(() => {
   return Array.from(provinces).sort()
 })
 
+const normalizeHoSoCode = (raw) => {
+  const text = String(raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/Đ/g, 'D')
+  if (!text || text === '—' || text === '-' || text === 'NEEDS_REVIEW' || text.includes('CHUA XAC DINH')) {
+    return 'CHUA_XAC_DINH'
+  }
+  if (text.includes('DTM') || text.includes('DANH GIA TAC DONG')) return 'DTM'
+  if (text.includes('GPMT') || text.includes('GIAY PHEP MOI TRUONG')) return 'GPMT'
+  if (text.includes('DKMT') || text.includes('DANG KY MOI TRUONG')) return 'DKMT'
+  return text
+}
+
+const formatHoSoLabel = (raw) => {
+  const code = normalizeHoSoCode(raw)
+  if (code === 'DTM') return 'ĐTM'
+  if (code === 'GPMT') return 'GPMT'
+  if (code === 'DKMT') return 'ĐKMT'
+  return 'Chưa xác định'
+}
+
 const filteredProjects = computed(() => {
   const q = normalizeString(searchQuery.value.trim())
   return projects.value.filter(p => {
     const matchNhom = !filterNhom.value || (p.nhom_du_an || 'Cần rà soát') === filterNhom.value
-    const matchHoSo = !filterHoSo.value || (p.loai_ho_so || 'Chưa xác định').includes(filterHoSo.value)
+    const matchHoSo = !filterHoSo.value || normalizeHoSoCode(p.loai_ho_so) === filterHoSo.value
     const matchQcvn = !filterQcvn.value || (
       filterQcvn.value === 'dat'
         ? (p.quan_trac_gan_nhat_trang_thai === 'dat' || p.quan_trac_gan_nhat_trang_thai === 'dat_chuan')
@@ -294,7 +316,7 @@ const updateMapMarkers = (shouldFit = true) => {
         <div style="font-size:12px;color:#526158;margin-bottom:8px;line-height:1.4">${p.dia_chi || p.tinh || 'Chưa có địa chỉ'}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
           <span style="background:${color};color:#fff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.nhom_du_an || 'Cần rà soát'}</span>
-          <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${p.loai_ho_so || 'Chưa xác định'}</span>
+          <span style="background:#EFF4F8;color:#5681A5;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">${formatHoSoLabel(p.loai_ho_so)}</span>
           <span style="background:#F0F4F1;color:#286B4F;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px">R=${(radiusMeters / 1000).toFixed(1)}km</span>
         </div>
         <div style="font-size:12px;color:#526158;margin-bottom:4px;line-height:1.4"><strong style="color:#192A21">Thẩm quyền:</strong> ${p.co_quan || '—'}</div>
@@ -473,10 +495,10 @@ onUnmounted(() => {
             <label>Hồ sơ:</label>
             <select v-model="filterHoSo" style="width:142px;height:36px">
               <option value="">Tất cả hồ sơ</option>
-              <option value="ĐTM">ĐTM</option>
+              <option value="DTM">ĐTM</option>
               <option value="GPMT">GPMT</option>
-              <option value="ĐKMT">ĐKMT</option>
-              <option value="Chưa xác định">Chưa xác định</option>
+              <option value="DKMT">ĐKMT</option>
+              <option value="CHUA_XAC_DINH">Chưa xác định</option>
             </select>
           </div>
 
@@ -535,7 +557,7 @@ onUnmounted(() => {
                   <span class="p-nhom-badge" :style="{ backgroundColor: getNhomColor(p.nhom_du_an) }">
                     {{ p.nhom_du_an || 'Cần rà soát' }}
                   </span>
-                  <span class="p-hs-badge">{{ p.loai_ho_so || 'Chưa xác định' }}</span>
+                  <span class="p-hs-badge">{{ formatHoSoLabel(p.loai_ho_so) }}</span>
                   <span
                     v-if="p.quan_trac_gan_nhat_trang_thai"
                     class="p-qcvn-badge"

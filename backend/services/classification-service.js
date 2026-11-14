@@ -4,6 +4,15 @@ const defaultDb = require('../config/db');
 const { loadClassificationCatalog, getProjectSensitiveVerification } = require('./rule-repository');
 const { calculateImpactRadius, analyzeSpatialContext, analyzeSpatialContextWithDb } = require('./spatial-gis-service');
 const { RuleDataUnavailableError, isStaticFallbackAllowed } = require('./runtime-policy');
+const { toCanonicalProcessStage } = require('./repository-shared');
+
+function formatCapacityScaleLabel(scale) {
+  const normalized = String(scale || '').trim().toUpperCase();
+  if (normalized === 'LARGE' || normalized === 'LON') return 'Lớn';
+  if (normalized === 'MEDIUM' || normalized === 'TRUNG_BINH') return 'Trung bình';
+  if (normalized === 'SMALL' || normalized === 'NHO') return 'Nhỏ';
+  return scale || null;
+}
 
 const RULE_SCHEMA_VERSION = '2026.2-audit';
 const TWO_TIER_GOV_EFFECTIVE_DATE = '2025-07-01';
@@ -66,7 +75,10 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
   const hasProcessRules = Boolean(industry.processRules && Object.keys(industry.processRules).length > 0);
   if (hasProcessRules) {
     const availableProcessStages = getAvailableProcessStages(resolvedCode, industry);
-    if (!formData.processStage) {
+    const canonicalProcessStage = formData.processStage
+      ? (toCanonicalProcessStage(formData.processStage) || formData.processStage)
+      : null;
+    if (!canonicalProcessStage) {
       return {
         valid: false,
         errorCode: 'MISSING_PROCESS_STAGE',
@@ -77,7 +89,7 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
         message: `Ngành "${INDUSTRY_META[resolvedCode]?.name || resolvedCode}" bắt buộc phải chọn công đoạn / loại nhiên liệu trước khi phân loại.`,
       };
     }
-    if (!Array.isArray(industry.processRules[formData.processStage]) || industry.processRules[formData.processStage].length === 0) {
+    if (!Array.isArray(industry.processRules[canonicalProcessStage]) || industry.processRules[canonicalProcessStage].length === 0) {
       return {
         valid: false,
         errorCode: 'INVALID_PROCESS_STAGE',
@@ -117,7 +129,10 @@ function validateClassificationInput(formData = {}, catalog = IND_DB) {
     };
   }
 
-  const tierResult = findIndustryTierDetailed(resolvedCode, numericCap, formData.processStage || null, catalog, evalDate);
+  const canonicalProcessStage = formData.processStage
+    ? (toCanonicalProcessStage(formData.processStage) || formData.processStage)
+    : null;
+  const tierResult = findIndustryTierDetailed(resolvedCode, numericCap, canonicalProcessStage, catalog, evalDate);
   if (!tierResult.tier) {
     const isDateMiss = tierResult.reason === 'NO_ACTIVE_RULE_FOR_DATE';
     return {
@@ -681,6 +696,9 @@ function evaluateClassification(formData = {}, options = {}) {
   const normalizedFormData = {
     ...formData,
     nganh: resolvedNganh,
+    processStage: formData.processStage
+      ? (toCanonicalProcessStage(formData.processStage) || formData.processStage)
+      : null,
     capacity: validation.numericCap,
     evaluationDate: evalDate,
   };
@@ -860,11 +878,15 @@ function evaluateClassification(formData = {}, options = {}) {
 
   const appliedTier = groupResult.tier || {};
   const unitText = appliedTier.unit || industryObj.unit || '';
-  const processStageVal = formData.processStage || null;
-  const processStageRule = processStageVal && Array.isArray(industryObj.processRules)
-    ? industryObj.processRules.find(pr => pr.stage === processStageVal)
+  const processStageVal = formData.processStage
+    ? (toCanonicalProcessStage(formData.processStage) || formData.processStage)
     : null;
-  const processStageLabel = processStageRule?.label || processStageVal || null;
+  const stageOption = processStageVal
+    ? getAvailableProcessStages(resolvedNganh, industryObj).find(s => s.key === processStageVal)
+    : null;
+  const processStageLabel = stageOption?.label || processStageVal || null;
+  const capacityScaleCode = groupResult.capacityScale || appliedTier.capacityScale || null;
+  const capacityScaleLabel = formatCapacityScaleLabel(capacityScaleCode);
   const minVal = appliedTier.min ?? null;
   const maxVal = appliedTier.maxValue ?? null;
   let thresholdText = 'Không giới hạn ngưỡng định lượng';
@@ -899,7 +921,8 @@ function evaluateClassification(formData = {}, options = {}) {
     matchedMin: minVal,
     matchedMax: maxVal,
     thresholdText,
-    capacityScale: groupResult.capacityScale || appliedTier.capacityScale || null,
+    capacityScale: capacityScaleCode,
+    capacityScaleLabel,
     projectGroup: isFromDb ? nhom : null,
     procedureCode: isFromDb ? hs : null,
     procedureLabel: isFromDb ? procLabel : null,

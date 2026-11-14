@@ -3,9 +3,16 @@ const logger = require('../utils/logger');
 const {
   defaultDb,
   EXCLUDED_PUBLICATION_STATUSES,
+  isActivePublicationStatus,
+  isVerifiedStatusValue,
   isVietnamesePhysicalSchema,
   parseJsonSafe,
   slugifyId,
+  toDbVerificationStatus,
+  toCanonicalVerificationStatus,
+  toDbPublicationStatus,
+  toDbGisLayerType,
+  toCanonicalGisLayerType,
 } = require('./repository-shared');
 const SENSITIVE_FLAG_KEYS = ['kt', 'nt', 'dt', 'rung', 'di_san', 'lua', 'dd', 'bao_ton', 'bg'];
 
@@ -78,6 +85,7 @@ async function getProjectSensitiveVerification(projectId, { db = defaultDb } = {
     const row = res.rows[0];
     return {
       ...row,
+      verification_status: toCanonicalVerificationStatus(row.verification_status),
       declared_flags: parseJsonSafe(row.declared_flags, {}),
       declared_details: parseJsonSafe(row.declared_details, {}),
       spatial_snapshot: parseJsonSafe(row.spatial_snapshot, null),
@@ -129,7 +137,8 @@ async function upsertProjectSensitiveDeclaration(
       const declarationChanged = JSON.stringify(prevFlags) !== JSON.stringify(flags)
         || JSON.stringify(prevDetails) !== JSON.stringify(details);
 
-      let nextStatus = hasTrigger ? (existing.verification_status || 'PENDING_VERIFICATION') : 'NOT_REQUIRED';
+      const existingCanonical = toCanonicalVerificationStatus(existing.verification_status);
+      let nextStatus = hasTrigger ? (existingCanonical || 'PENDING_VERIFICATION') : 'NOT_REQUIRED';
       let nextVerifiedBy = existing.verified_by || null;
       let nextVerifiedAt = existing.verified_at || null;
       let nextNote = existing.verification_note || null;
@@ -137,12 +146,12 @@ async function upsertProjectSensitiveDeclaration(
       if (!hasTrigger) {
         nextVerifiedBy = null;
         nextVerifiedAt = null;
-      } else if (existing.verification_status === 'VERIFIED' && declarationChanged) {
+      } else if (existingCanonical === 'VERIFIED' && declarationChanged) {
         nextStatus = 'PENDING_VERIFICATION';
         nextVerifiedBy = null;
         nextVerifiedAt = null;
-        nextNote = 'Tự động đưa về PENDING_VERIFICATION do hồ sơ thay đổi khai báo vùng nhạy cảm.';
-      } else if (existing.verification_status === 'NOT_REQUIRED' || existing.verification_status === 'REJECTED') {
+        nextNote = 'Tự động đưa về Chờ xác minh do hồ sơ thay đổi khai báo vùng nhạy cảm.';
+      } else if (existingCanonical === 'NOT_REQUIRED' || existingCanonical === 'REJECTED') {
         if (declarationChanged) {
           nextStatus = 'PENDING_VERIFICATION';
           nextVerifiedBy = null;
@@ -168,14 +177,15 @@ async function upsertProjectSensitiveDeclaration(
           JSON.stringify(details),
           spatialSnapshot ? JSON.stringify(spatialSnapshot) : null,
           resolvedEvidenceRef || null,
-          nextStatus,
+          toDbVerificationStatus(nextStatus),
           nextVerifiedBy,
           nextVerifiedAt,
           nextNote,
           numericId,
         ]
       );
-      return updRes?.rows?.[0] || null;
+      const updRow = updRes?.rows?.[0] || null;
+      return updRow ? { ...updRow, verification_status: toCanonicalVerificationStatus(updRow.verification_status) } : null;
     }
 
     const params = [
@@ -192,7 +202,7 @@ async function upsertProjectSensitiveDeclaration(
         const insRes = await client.query(
           `INSERT INTO xac_minh_yeu_to_nhay_cam_du_an (
              du_an_ma, co_yeu_to_khai_bao, chi_tiet_khai_bao, du_lieu_khong_gian, tai_lieu_chung_minh, trang_thai_xac_minh
-           ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, 'PENDING_VERIFICATION')
+           ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, 'cho_xac_minh')
            ON CONFLICT (du_an_ma) DO UPDATE SET
              co_yeu_to_khai_bao = EXCLUDED.co_yeu_to_khai_bao,
              chi_tiet_khai_bao = EXCLUDED.chi_tiet_khai_bao,
@@ -206,7 +216,8 @@ async function upsertProjectSensitiveDeclaration(
              ghi_chu_xac_minh AS verification_note, tao_luc AS created_at, cap_nhat_luc AS updated_at`,
           params
         );
-        return insRes?.rows?.[0] || null;
+        const insRow = insRes?.rows?.[0] || null;
+        return insRow ? { ...insRow, verification_status: toCanonicalVerificationStatus(insRow.verification_status) } : null;
       } catch (viErr) {
         if (!/does not exist|relation/i.test(String(viErr?.message || ''))) {
           throw viErr;
@@ -218,7 +229,7 @@ async function upsertProjectSensitiveDeclaration(
     const legacyRes = await client.query(
       `INSERT INTO project_sensitive_verifications (
          project_id, declared_flags, declared_details, spatial_snapshot, evidence_ref, verification_status
-       ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, 'PENDING_VERIFICATION')
+       ) VALUES ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, 'cho_xac_minh')
        ON CONFLICT (project_id) DO UPDATE SET
          declared_flags = EXCLUDED.declared_flags,
          declared_details = EXCLUDED.declared_details,
@@ -228,7 +239,8 @@ async function upsertProjectSensitiveDeclaration(
        RETURNING *`,
       params
     );
-    return legacyRes?.rows?.[0] || null;
+    const legacyRow = legacyRes?.rows?.[0] || null;
+    return legacyRow ? { ...legacyRow, verification_status: toCanonicalVerificationStatus(legacyRow.verification_status) } : null;
   } catch (err) {
     logger.error('Lỗi lưu xác minh yếu tố nhạy cảm dự án:', err?.message || err);
     throw err;
@@ -243,13 +255,14 @@ async function reviewProjectSensitiveVerification(
   if (!Number.isInteger(numericId) || numericId <= 0) {
     throw new Error('INVALID_PROJECT_ID');
   }
-  const normalizedStatus = String(verificationStatus || '').trim().toUpperCase();
+  const normalizedStatus = toCanonicalVerificationStatus(verificationStatus);
   if (!['VERIFIED', 'REJECTED', 'PENDING_VERIFICATION'].includes(normalizedStatus)) {
     throw new Error('INVALID_VERIFICATION_STATUS');
   }
   if (normalizedStatus === 'VERIFIED' && !verifiedBy) {
     throw new Error('VERIFIED_BY_REQUIRED');
   }
+  const dbStatus = toDbVerificationStatus(normalizedStatus);
 
   const projRes = await client.query('SELECT id, form_data FROM projects WHERE id = $1', [numericId]);
   if (!projRes || projRes.rowCount === 0) {
@@ -277,33 +290,35 @@ async function reviewProjectSensitiveVerification(
         JSON.stringify(flags),
         JSON.stringify(details),
         evidenceRef || details.evidenceRef || null,
-        normalizedStatus,
+        dbStatus,
         normalizedStatus === 'PENDING_VERIFICATION' ? null : verifiedBy,
         verificationNote || null,
       ]
     );
-    return ins.rows[0];
+    const insRow = ins.rows[0];
+    return insRow ? { ...insRow, verification_status: toCanonicalVerificationStatus(insRow.verification_status) } : insRow;
   }
 
   const upd = await client.query(
     `UPDATE project_sensitive_verifications
      SET verification_status = $1::varchar,
          verified_by = $2,
-         verified_at = CASE WHEN $1::text = 'PENDING_VERIFICATION' THEN NULL ELSE CURRENT_TIMESTAMP END,
+         verified_at = CASE WHEN $1::text IN ('PENDING_VERIFICATION', 'cho_xac_minh') THEN NULL ELSE CURRENT_TIMESTAMP END,
          evidence_ref = COALESCE(NULLIF($3::text, ''), evidence_ref),
          verification_note = COALESCE($4, verification_note),
          updated_at = CURRENT_TIMESTAMP
      WHERE project_id = $5
      RETURNING *`,
     [
-      normalizedStatus,
+      dbStatus,
       normalizedStatus === 'PENDING_VERIFICATION' ? null : verifiedBy,
       evidenceRef || '',
       verificationNote || null,
       numericId,
     ]
   );
-  return upd.rows[0];
+  const updRow = upd.rows[0];
+  return updRow ? { ...updRow, verification_status: toCanonicalVerificationStatus(updRow.verification_status) } : updRow;
 }
 
 /**
@@ -348,7 +363,7 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
   const entries = [
     ...sensitiveZones.map((z, idx) => ({
       id: z.id || `sz_${slugifyId(z.name || idx)}`,
-      layer_type: 'SENSITIVE_ZONE',
+      layer_type: toDbGisLayerType('SENSITIVE_ZONE'),
       name: z.name,
       category: z.category || null,
       flag_key: z.flagKey || z.flag_key || null,
@@ -358,12 +373,12 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
       geometry_json: z.geometry || null,
       province: z.province || null,
       legal_ref: z.legalRef || z.legal_ref || null,
-      verification_status: z.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+      verification_status: toDbVerificationStatus(z.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION'),
       source_document: z.sourceDocument || null,
     })),
     ...industrialParks.map((p, idx) => ({
       id: p.id || `ip_${slugifyId(p.name || idx)}`,
-      layer_type: 'INDUSTRIAL_PARK',
+      layer_type: toDbGisLayerType('INDUSTRIAL_PARK'),
       name: p.name,
       category: p.category || 'Khu công nghiệp',
       flag_key: 'kcn',
@@ -373,7 +388,7 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
       geometry_json: p.geometry || null,
       province: p.province || null,
       legal_ref: p.legalRef || p.legal_ref || null,
-      verification_status: p.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+      verification_status: toDbVerificationStatus(p.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION'),
       source_document: p.sourceDocument || null,
     })),
   ];
@@ -386,7 +401,7 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
         `INSERT INTO gis_layers (
            id, layer_type, name, category, flag_key, latitude, longitude, radius_km,
            geometry_json, province, legal_ref, verification_status, publication_status, source_document
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, 'PUBLISHED', $13)`,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14)`,
         [
           item.id,
           item.layer_type,
@@ -400,6 +415,7 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
           item.province,
           item.legal_ref,
           item.verification_status,
+          toDbPublicationStatus('PUBLISHED'),
           item.source_document,
         ]
       );
@@ -407,9 +423,9 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
       continue;
     }
 
-    const isLocked = prev.verification_status === 'VERIFIED'
+    const isLocked = isVerifiedStatusValue(prev.verification_status)
       || Boolean(prev.verified_by)
-      || EXCLUDED_PUBLICATION_STATUSES.has(String(prev.publication_status || '').toUpperCase());
+      || !isActivePublicationStatus(prev.publication_status);
 
     if (isLocked) {
       skippedVerified++;
@@ -464,9 +480,10 @@ async function loadGisLayers({ db = defaultDb } = {}) {
 
     for (const row of res.rows) {
       if (!isActivePublicationStatus(row.publication_status)) continue;
+      const canonicalLayerType = toCanonicalGisLayerType(row.layer_type);
       const item = {
         id: row.id,
-        layerType: row.layer_type,
+        layerType: canonicalLayerType,
         name: row.name,
         category: row.category || '',
         flagKey: row.flag_key || null,
@@ -476,10 +493,10 @@ async function loadGisLayers({ db = defaultDb } = {}) {
         geometry: parseJsonSafe(row.geometry_json, null),
         province: row.province || '',
         legalRef: row.legal_ref || '',
-        verificationStatus: row.verification_status === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+        verificationStatus: toCanonicalVerificationStatus(row.verification_status) === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
         sourceDocument: row.source_document || null,
       };
-      if (row.layer_type === 'INDUSTRIAL_PARK') industrialParks.push(item);
+      if (canonicalLayerType === 'INDUSTRIAL_PARK') industrialParks.push(item);
       else sensitiveZones.push(item);
     }
 

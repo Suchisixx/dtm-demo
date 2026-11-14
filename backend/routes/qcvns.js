@@ -8,6 +8,7 @@ const { paginate, buildPagination, logQuery } = require('../utils/helpers');
 const { ACTIONS, JWT_SECRET, COOKIE_NAME, ROLES } = require('../utils/constants');
 const logger = require('../utils/logger');
 const { loadQcvnCatalog } = require('../services/rule-repository');
+const { toDbSampleStatus, toDbVerificationStatus } = require('../services/repository-shared');
 const {
   evaluateQcvnSampleWithDb,
   selectQcvnForProjectWithDb,
@@ -403,10 +404,10 @@ router.post('/samples', requireAuth, async (req, res) => {
           JSON.stringify(values),
           project_id || null,
           computedDbStatus,
-          serverEvaluation.overallStatus,
+          toDbSampleStatus(serverEvaluation.overallStatus),
           JSON.stringify(evaluationDetails),
           serverEvaluation.ruleVersion || null,
-          serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+          toDbVerificationStatus(serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'),
           id,
           userId,
         ]
@@ -445,10 +446,10 @@ router.post('/samples', requireAuth, async (req, res) => {
           JSON.stringify(values),
           project_id || null,
           computedDbStatus,
-          serverEvaluation.overallStatus,
+          toDbSampleStatus(serverEvaluation.overallStatus),
           JSON.stringify(evaluationDetails),
           serverEvaluation.ruleVersion || null,
-          serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION',
+          toDbVerificationStatus(serverEvaluation.verificationStatus || 'NEEDS_LEGAL_VERIFICATION'),
         ]
       );
 

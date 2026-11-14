@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="800" viewBox="0 0 960 800" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#374151"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="480" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#111827">SƠ ĐỒ 2.9. LUỒNG TRUY VẤN VÀ HIỂN THỊ DỮ LIỆU KHÔNG GIAN (GIS)</text>
+  <text x="480" y="54" text-anchor="middle" font-size="12" fill="#4B5563">Chuẩn hóa tọa độ WGS84, truy vấn PostgreSQL (du_an, lop_ban_do), tính khoảng cách Haversine &amp; hiển thị Leaflet.js</text>
+
+  <g>
+    <polyline points="450,118 450,145" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,199 450,226" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,278 450,306" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,378 450,408" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="453.4" y="380" width="37.2" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="472" y="393" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Đúng</text>
+    
+  </g>
+  <g>
+    <polyline points="585,342 660,342" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+      <rect x="604.8" y="321" width="30.4" height="18" rx="3" fill="#FFFFFF" opacity="0.92"/>
+      <text x="620" y="334" text-anchor="middle" font-size="11" font-weight="700" fill="#1F2937">Sai</text>
+    
+  </g>
+  <g>
+    <polyline points="787,374 787,693 550,693" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,470 450,498" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,554 450,582" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g>
+    <polyline points="450,640 450,672" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
+    
+  </g>
+  <g id="start"><rect x="350" y="76" width="200" height="42" rx="21" ry="21" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="1.6"/>
+    <text x="450" y="101.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Bắt đầu</text></g>
+  <g id="io_filter"><polygon points="296,145 620,145 604,199 280,199" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="168.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Chọn vị trí, ranh giới P/X hoặc bộ lọc:</text>
+    <text x="450" y="184.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Tỉnh/TP, Phường/Xã, nhóm hồ sơ, bán kính R</text></g>
+  <g id="proc_api"><rect x="285" y="226" width="330" height="52" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="248.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Gửi yêu cầu REST API kèm tọa độ / bộ lọc</text>
+    <text x="450" y="264.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">tới Express Server</text></g>
+  <g id="dec_coord"><polygon points="450,306 585,342 450,378 315,342" fill="#FFF7ED" stroke="#C2410C" stroke-width="1.5"/>
+    <text x="450" y="338.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Tọa độ WGS84 (lat, lng)</text>
+    <text x="450" y="353.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">hợp lệ trong phạm vi VN?</text></g>
+  <g id="warn_coord"><rect x="660" y="310" width="255" height="64" rx="6" ry="6" fill="#FEF2F2" stroke="#B91C1C" stroke-width="1.5"/>
+    <text x="787.5" y="338.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Từ chối tọa độ không hợp lệ</text>
+    <text x="787.5" y="353.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7F1D1D">Trả cảnh báo cho người dùng</text></g>
+  <g id="db_gis">
+      <path d="M 275 416 L 275 462 A 175 8 0 0 0 625 462 L 625 416 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+      <ellipse cx="450" cy="416" rx="175" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
+    
+    <text x="450" y="438.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Truy vấn bảng du_an (vi_do, kinh_do NUMERIC)</text>
+    <text x="450" y="453.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">&amp; lop_ban_do (vi_do, kinh_do, hinh_hoc JSONB)</text></g>
+  <g id="proc_hav"><rect x="275" y="498" width="350" height="56" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
+    <text x="450" y="522.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tính khoảng cách Haversine (haversineDistanceKm)</text>
+    <text x="450" y="538.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">tới KCN, vùng nhạy cảm, biên giới &amp; tạo cảnh báo</text></g>
+  <g id="io_map"><polygon points="291,582 625,582 609,640 275,640" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
+    <text x="450" y="607.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Leaflet.js vẽ marker phân màu theo nhóm,</text>
+    <text x="450" y="623.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">vùng đệm, ranh giới P/X &amp; popup chi tiết</text></g>
+  <g id="end"><rect x="350" y="672" width="200" height="42" rx="21" ry="21" fill="#DCFCE7" stroke="#15803D" stroke-width="1.6"/>
+    <text x="450" y="697.375" text-anchor="middle" font-size="12.5" font-weight="700" fill="#111827">Kết thúc</text></g>
+
+  <!-- Chú thích chuẩn ký hiệu -->
+  <g transform="translate(30, 754)">
+    <rect x="0" y="0" width="900" height="32" rx="5" fill="#F9FAFB" stroke="#E5E7EB"/>
+    <text x="16" y="20" font-size="11" fill="#374151">
+      <tspan font-weight="700">Ký hiệu chuẩn:</tspan>  Hình oval: Bắt đầu / Kết thúc   |   Hình bình hành: Nhập / Xuất dữ liệu   |   Hình chữ nhật: Xử lý   |   Hình thoi: Điều kiện rẽ nhánh   |   Hình trụ: CSDL
+    </text>
+  </g>
+</svg>

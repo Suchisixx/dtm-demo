@@ -14,6 +14,30 @@ const currentUser = ref(null)
 const showLogin = ref(false)
 const sidebarCollapsed = ref(false)
 const mobileMenuOpen = ref(false)
+const legalBasis = ref({
+  ndVbhnSo: '49/VBHN-BNNMT',
+  ttVbhnSo: '55/VBHN-BNNMT',
+  latestVbhnSo: '55/VBHN-BNNMT',
+  badgeText: 'Chuẩn pháp lý: NĐ 48/2026 • 49/VBHN-BNNMT & 55/VBHN-BNNMT',
+  classificationSubText: 'Căn cứ Nghị định 08/2022/NĐ-CP (49/VBHN-BNNMT) & 55/VBHN-BNNMT',
+  dashboardSubText: 'Theo Điều 28 Luật BVMT 2020, NĐ 08/2022 (NĐ 48/2026 • 49/VBHN-BNNMT & 55/VBHN-BNNMT)',
+  footerText: 'Dữ liệu đồng bộ theo chuỗi Nghị định 08/2022/NĐ-CP, NĐ 48/2026/NĐ-CP (49/VBHN-BNNMT & 55/VBHN-BNNMT)',
+  noticeText: 'Nghị định 08/2022/NĐ-CP và Thông tư 02/2022/TT-BTNMT hiện được áp dụng đồng thời với chuỗi sửa đổi, bổ sung tại Nghị định 05/2025/NĐ-CP, Nghị định 48/2026/NĐ-CP, Nghị định 110/2026/NĐ-CP cùng các Văn bản hợp nhất hiện hành trong CSDL: 49/VBHN-BNNMT (hợp nhất Nghị định) và 55/VBHN-BNNMT (hợp nhất Thông tư).',
+})
+
+const fetchActiveLegalBasis = async () => {
+  try {
+    const res = await fetch(API.LAWS_ACTIVE_BASIS)
+    if (res.ok) {
+      const data = await res.json()
+      if (data && data.badgeText) {
+        legalBasis.value = { ...legalBasis.value, ...data }
+      }
+    }
+  } catch (err) {
+    logger.error('Lỗi tải thông tin chuẩn pháp lý hiện hành:', err)
+  }
+}
 
 const PAGE_META = {
   dashboard: { title: 'Bảng điều khiển & Thống kê', group: 'Tổng quan' },
@@ -202,6 +226,7 @@ onMounted(() => {
   const initialPage = getPageFromUrl()
   window.history.replaceState({ page: initialPage }, '', `/${initialPage}`)
 
+  fetchActiveLegalBasis()
   checkAuth()
 })
 </script>
@@ -299,7 +324,7 @@ onMounted(() => {
         <div class="topbar-right">
           <div class="legal-version-pill">
             <i class="ti ti-shield-check"></i>
-            <span>Chuẩn pháp lý: NĐ 48/2026 & VBHN 49</span>
+            <span>{{ legalBasis.badgeText }}</span>
           </div>
 
           <div class="user-profile-bar">
@@ -324,9 +349,9 @@ onMounted(() => {
 
       <!-- Nội dung chính -->
       <main class="app-content">
-        <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" @law-loaded="pendingLawId = null" />
-        <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
-        <ClassifyTab v-else-if="activePage === 'classify'" :currentUser="currentUser" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
+        <LawsTab v-if="activePage === 'laws'" :loadLawId="pendingLawId" :legalBasis="legalBasis" @law-loaded="pendingLawId = null" />
+        <DashboardTab v-else-if="activePage === 'dashboard'" :currentUser="currentUser" :legalBasis="legalBasis" @view-project="handleViewProject" @view-qcvn-sample="handleViewQcvnSample" @navigate="handlePageChange" />
+        <ClassifyTab v-else-if="activePage === 'classify'" :currentUser="currentUser" :legalBasis="legalBasis" :loadProjectId="pendingProjectId" @project-loaded="pendingProjectId = null" @view-qcvn-sample="handleViewQcvnSample" @view-law="handleViewLaw" />
         <QCVNTab v-else-if="activePage === 'qcvn'" :loadSampleId="pendingSampleId" @sample-loaded="pendingSampleId = null" />
         <MapTab v-else-if="activePage === 'map'" @view-project="handleViewProject" />
         <AdminTab v-else-if="activePage === 'admin'" :currentUser="currentUser" />
@@ -335,7 +360,7 @@ onMounted(() => {
       <!-- Chân trang -->
       <footer class="app-footer">
         <span>&copy; 2026 ETC Environmental Consulting Hub. Hệ thống quản trị hồ sơ & đối chiếu quy chuẩn môi trường.</span>
-        <span>Dữ liệu đồng bộ theo chuỗi Nghị định 08/2022/NĐ-CP & 48/2026/NĐ-CP</span>
+        <span>{{ legalBasis.footerText }}</span>
       </footer>
     </div>
 

@@ -34,14 +34,14 @@ async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
   }
 
   const isExpired = eventAction === 'AUTO_CRAWL_EXPIRE';
-  const severity = isExpired ? 'HIGH' : 'MEDIUM';
+  const severity = isExpired ? 'cao' : 'trung_binh';
   const searchTokens = normalizeSearchTokens({ so, ten: lawTitle });
   const createdImpacts = [];
 
   async function recordImpact({ targetType, targetId, targetLabel, impactReason }) {
     const dupCheck = await db.query(
       `SELECT id FROM law_rule_impacts
-       WHERE law_id = $1 AND target_type = $2 AND target_id = $3 AND status = 'OPEN'`,
+       WHERE law_id = $1 AND target_type = $2 AND target_id = $3 AND status IN ('OPEN', 'dang_mo')`,
       [lawId, targetType, String(targetId)]
     );
     if (dupCheck && dupCheck.rowCount > 0) return null;
@@ -49,7 +49,7 @@ async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
     const ins = await db.query(
       `INSERT INTO law_rule_impacts (
          law_id, law_title, event_action, target_type, target_id, target_label, severity, impact_reason, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'OPEN')
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'dang_mo')
        RETURNING *`,
       [lawId, lawTitle, eventAction, targetType, String(targetId), targetLabel || String(targetId), severity, impactReason]
     );
@@ -71,7 +71,7 @@ async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
     const thrRes = await db.query(
       `SELECT id, industry_code, process_stage, project_group, legal_doc_required, legal_ref
        FROM classification_thresholds
-       WHERE COALESCE(publication_status, 'PUBLISHED') <> 'ARCHIVED'
+       WHERE COALESCE(publication_status, 'da_cong_bo') NOT IN ('ARCHIVED', 'luu_tru')
          AND (${extraClauses.join(' OR ')})`,
       thresholdQueryParams
     );
@@ -105,7 +105,7 @@ async function detectImpactedRules(lawEvent = {}, { db = defaultDb } = {}) {
       const qcvnRes = await db.query(
         `SELECT id, ten, standard_code
          FROM qcvns
-         WHERE COALESCE(publication_status, 'PUBLISHED') <> 'ARCHIVED'
+         WHERE COALESCE(publication_status, 'da_cong_bo') NOT IN ('ARCHIVED', 'luu_tru')
            AND (${qcvnConds.join(' OR ')})`,
         qcvnParams
       );
@@ -168,7 +168,7 @@ async function extractRuleCandidatesFromLaw(docData = {}, { db = defaultDb } = {
         lawStatus: docData.status || null,
         requiresManualTableEntry: true,
       },
-      extractionConfidence: 'LOW',
+      extractionConfidence: 'thap',
       sourceExcerpt: matchingClause ? `${matchingClause.tieu_de || ''}: ${String(matchingClause.noi_dung || '').slice(0, 400)}` : lawTitle.slice(0, 300),
     });
   }
@@ -197,7 +197,7 @@ async function extractRuleCandidatesFromLaw(docData = {}, { db = defaultDb } = {
         lawNumber: docData.so || null,
         requiresAdminThresholdVerification: true,
       },
-      extractionConfidence: 'LOW',
+      extractionConfidence: 'thap',
       sourceExcerpt: firstClause
         ? `${firstClause.tieu_de || ''}: ${String(firstClause.noi_dung || '').slice(0, 400)}`
         : String(docData.mo_ta || lawTitle).slice(0, 350),
@@ -210,7 +210,7 @@ async function extractRuleCandidatesFromLaw(docData = {}, { db = defaultDb } = {
       const dup = await db.query(
         `SELECT id FROM rule_candidates
          WHERE law_id = $1 AND target_type = $2 AND target_code = $3
-           AND status IN ('PENDING_REVIEW', 'EXTRACTED')`,
+           AND status IN ('PENDING_REVIEW', 'EXTRACTED', 'cho_duyet', 'da_trich_xuat')`,
         [lawId, cand.targetType, cand.targetCode]
       );
       if (dup && dup.rowCount > 0) continue;
@@ -219,7 +219,7 @@ async function extractRuleCandidatesFromLaw(docData = {}, { db = defaultDb } = {
         `INSERT INTO rule_candidates (
            law_id, law_title, target_type, target_code, title,
            proposed_data, diff_summary, extraction_confidence, source_excerpt, status
-         ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, 'PENDING_REVIEW')
+         ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, 'cho_duyet')
          RETURNING *`,
         [
           lawId,

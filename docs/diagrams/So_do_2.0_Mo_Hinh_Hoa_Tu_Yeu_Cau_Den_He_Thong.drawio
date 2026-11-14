@@ -1,0 +1,77 @@
+<mxfile host="Electron" agent="Mozilla/5.0">
+  <diagram id="sd20_concept_modeling" name="Sơ đồ mô hình hóa từ yêu cầu thực tế đến chức năng hệ thống">
+    <mxGraphModel dx="2441" dy="754" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="670" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t0" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" value="SƠ ĐỒ MÔ HÌNH HÓA TỪ YÊU CẦU THỰC TẾ ĐẾN CHỨC NĂNG HỆ THỐNG" vertex="1">
+          <mxGeometry height="35" width="1000" x="45" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="col_req" parent="1" style="shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#D97706;fillColor=#FFFBEB;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=14;" value="1. BÀI TOÁN &amp; YÊU CẦU THỰC TẾ" vertex="1">
+          <mxGeometry height="570" width="370" x="-130" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="col_sol" parent="1" style="shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#2563EB;fillColor=#EFF6FF;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=14;" value="2. GIẢI PHÁP MÔ HÌNH HÓA" vertex="1">
+          <mxGeometry height="570" width="350" x="380" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="col_sys" parent="1" style="shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#16A34A;fillColor=#F0FDF4;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=14;" value="3. CHỨC NĂNG TRONG HỆ THỐNG" vertex="1">
+          <mxGeometry height="570" width="330" x="870" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="req_1" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Tra cứu thủ công nhiều văn bản để xác định &#xa;loại hồ sơ và thẩm quyền gây tốn thời gian" vertex="1">
+          <mxGeometry height="78" width="330" x="-110" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="sol_1" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Chuẩn hóa quy định thành tập quy tắc &#xa;và xây dựng bộ suy diễn cây quyết định" vertex="1">
+          <mxGeometry height="78" width="310" x="400" y="106" as="geometry" />
+        </mxCell>
+        <mxCell id="sys_1" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;fontSize=14;" value="Chức năng Phân loại hồ sơ môi trường " vertex="1">
+          <mxGeometry height="78" width="290" x="890" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="req_2" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="So sánh thủ công số liệu quan trắc chất thải với &#xa;các bảng quy chuẩn kỹ thuật tốn nhiều thời gian" vertex="1">
+          <mxGeometry height="78" width="330" x="-110" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="sol_2" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Cấu trúc hóa bảng giới hạn thông số và &#xa;tự động tính toán mức đạt hoặc vượt chuẩn" vertex="1">
+          <mxGeometry height="78" width="310" x="400" y="211" as="geometry" />
+        </mxCell>
+        <mxCell id="sys_2" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;fontSize=14;" value="Chức năng Đối chiếu quy chuẩn kỹ thuật &#xa;(Đánh giá mẫu quan trắc)" vertex="1">
+          <mxGeometry height="78" width="290" x="890" y="220" as="geometry" />
+        </mxCell>
+        <mxCell id="req_3" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Văn bản pháp luật thường xuyên sửa đổi, &#xa;cập nhật thủ công dễ bỏ sót quy định mới" vertex="1">
+          <mxGeometry height="78" width="330" x="-110" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="sol_3" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Thu thập văn bản từ nguồn trực tuyến&#xa;do nhân viên trong đơn vị cung cấp " vertex="1">
+          <mxGeometry height="78" width="310" x="400" y="316" as="geometry" />
+        </mxCell>
+        <mxCell id="sys_3" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;fontSize=14;" value="Chức năng Tra cứu &amp; Đồng bộ pháp lý " vertex="1">
+          <mxGeometry height="78" width="290" x="890" y="325" as="geometry" />
+        </mxCell>
+        <mxCell id="req_4" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Thiếu công cụ trực quan quản lý vị trí dự án " vertex="1">
+          <mxGeometry height="78" width="330" x="-110" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="sol_4" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Lưu trữ tọa độ địa lý &#xa;và hiển thị trên bản đồ tương tác" vertex="1">
+          <mxGeometry height="78" width="310" x="400" y="421" as="geometry" />
+        </mxCell>
+        <mxCell id="sys_4" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;fontSize=14;" value="Chức năng Quản lý dự án &amp; Bản đồ số&#xa;" vertex="1">
+          <mxGeometry height="78" width="290" x="890" y="430" as="geometry" />
+        </mxCell>
+        <mxCell id="req_5" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Khó theo dõi thời hạn báo cáo, quan trắc định kỳ &#xa;của nhiều dự án và thiếu số liệu tổng hợp" vertex="1">
+          <mxGeometry height="78" width="330" x="-110" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="sol_5" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;fontSize=14;" value="Mô hình hóa chu kỳ nghĩa vụ, quét hạn &#xa;mỗi ngày và tổng hợp biểu đồ" vertex="1">
+          <mxGeometry height="78" width="310" x="400" y="526" as="geometry" />
+        </mxCell>
+        <mxCell id="sys_5" parent="1" style="shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;fontSize=14;" value="Chức năng Nhắc hạn tuân thủ &amp; Thống kê " vertex="1">
+          <mxGeometry height="78" width="290" x="890" y="535" as="geometry" />
+        </mxCell>
+        <mxCell id="e20_3a" edge="1" parent="1" source="col_req" style="endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;fontSize=16;fontStyle=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="col_sol" value="Mô hình hóa">
+          <mxGeometry relative="1" y="15" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e20_3b" edge="1" parent="1" source="col_sol" style="endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;fontSize=16;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontStyle=1" target="col_sys" value="Hiện thực hóa">
+          <mxGeometry relative="1" x="0.0435" y="15" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

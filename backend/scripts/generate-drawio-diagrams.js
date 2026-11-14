@@ -178,7 +178,10 @@ function generateSvgFromDiagram(diag) {
       if (isTitle) {
         svg += `  <text x="${cell.x + cell.w / 2}" y="${cell.y + cell.h / 2 + 6}" text-anchor="middle" font-size="15" font-weight="800" fill="#0F172A">${escapeXml(cell.value)}</text>\n`;
       } else if (isSwimlane) {
-        svg += `  <text x="${cell.x + 16}" y="${cell.y + 22}" text-anchor="start" font-size="12" font-weight="700" fill="${stroke}">${escapeXml(lines[0])}</text>\n`;
+        const isCentered = style.includes('align=center');
+        const tx = isCentered ? (cell.x + cell.w / 2) : (cell.x + 16);
+        const anchor = isCentered ? 'middle' : 'start';
+        svg += `  <text x="${tx}" y="${cell.y + 24}" text-anchor="${anchor}" font-size="12" font-weight="700" fill="${stroke}">${escapeXml(lines[0])}</text>\n`;
       } else if (isERD) {
         let textY = cell.y + 18;
         for (let i = 0; i < lines.length; i++) {
@@ -265,8 +268,66 @@ function generateSvgFromDiagram(diag) {
 }
 
 // ==================================================================================================
-// ĐỊNH NGHĨA 9 SƠ ĐỒ TINH GIẢN, KHÔNG DÂY CHỒNG CHÉO
+// ĐỊNH NGHĨA BỘ SƠ ĐỒ TINH GIẢN, KHÔNG DÂY CHỒNG CHÉO
 // ==================================================================================================
+
+// 0. Sơ đồ 2.0: Mô hình hóa từ yêu cầu thực tế đến chức năng hệ thống (3 cột song song, 5 hàng 1-1)
+const sd20 = {
+  id: 'sd20_concept_modeling',
+  filename: 'So_do_2.0_Mo_Hinh_Hoa_Tu_Yeu_Cau_Den_He_Thong',
+  title: 'Sơ đồ mô hình hóa từ yêu cầu thực tế đến chức năng hệ thống',
+  width: 1200,
+  height: 670,
+  cells: [
+    { id: 't0', value: 'SƠ ĐỒ MÔ HÌNH HÓA TỪ YÊU CẦU THỰC TẾ ĐẾN CHỨC NĂNG HỆ THỐNG', style: 'text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;', x: 100, y: 20, w: 1000, h: 35 },
+
+    // 3 Khung cột lớn (Trái -> Giữa -> Phải)
+    { id: 'col_req', value: '1. BÀI TOÁN & YÊU CẦU THỰC TẾ', style: 'shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#D97706;fillColor=#FFFBEB;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=12;', x: 35, y: 70, w: 330, h: 570 },
+    { id: 'col_sol', value: '2. GIẢI PHÁP MÔ HÌNH HÓA', style: 'shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#2563EB;fillColor=#EFF6FF;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=12;', x: 435, y: 70, w: 330, h: 570 },
+    { id: 'col_sys', value: '3. CHỨC NĂNG TRONG HỆ THỐNG', style: 'shape=rect;rounded=1;dashed=1;strokeWidth=1.8;strokeColor=#16A34A;fillColor=#F0FDF4;align=center;verticalAlign=top;spacingTop=10;fontStyle=1;fontSize=12;', x: 835, y: 70, w: 330, h: 570 },
+
+    // Hàng 1: Phân loại hồ sơ & thẩm quyền
+    { id: 'req_1', value: 'Tra cứu thủ công nhiều văn bản để xác định\nloại hồ sơ và thẩm quyền gây tốn thời gian', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;', x: 55, y: 115, w: 290, h: 78 },
+    { id: 'sol_1', value: 'Chuẩn hóa quy định thành tập quy tắc\nvà xây dựng bộ suy diễn cây quyết định', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;', x: 455, y: 115, w: 290, h: 78 },
+    { id: 'sys_1', value: 'Chức năng Phân loại hồ sơ môi trường\n(Xác định nhóm, hồ sơ, thẩm quyền & căn cứ)', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;', x: 855, y: 115, w: 290, h: 78 },
+
+    // Hàng 2: Đối chiếu quy chuẩn kỹ thuật
+    { id: 'req_2', value: 'So sánh thủ công số liệu quan trắc chất thải\nvới các bảng quy chuẩn kỹ thuật dễ sai sót', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;', x: 55, y: 220, w: 290, h: 78 },
+    { id: 'sol_2', value: 'Cấu trúc hóa bảng giới hạn thông số\nvà tự động tính toán mức đạt hoặc vượt chuẩn', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;', x: 455, y: 220, w: 290, h: 78 },
+    { id: 'sys_2', value: 'Chức năng Đối chiếu quy chuẩn kỹ thuật\n(Đánh giá mẫu quan trắc & xuất báo cáo)', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;', x: 855, y: 220, w: 290, h: 78 },
+
+    // Hàng 3: Cập nhật văn bản pháp luật
+    { id: 'req_3', value: 'Văn bản pháp luật thường xuyên sửa đổi,\ncập nhật thủ công dễ bỏ sót quy định mới', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;', x: 55, y: 325, w: 290, h: 78 },
+    { id: 'sol_3', value: 'Thu thập tự động văn bản từ nguồn trực tuyến\nkết hợp bước quản trị viên duyệt quy tắc', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;', x: 455, y: 325, w: 290, h: 78 },
+    { id: 'sys_3', value: 'Chức năng Tra cứu & Đồng bộ pháp lý\n(Thư viện luật, quét cập nhật & duyệt quy tắc)', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;', x: 855, y: 325, w: 290, h: 78 },
+
+    // Hàng 4: Quản lý không gian bản đồ số
+    { id: 'req_4', value: 'Thiếu công cụ trực quan quản lý vị trí dự án\nvà kiểm tra khoảng cách tới vùng nhạy cảm', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;', x: 55, y: 430, w: 290, h: 78 },
+    { id: 'sol_4', value: 'Lưu trữ tọa độ địa lý, tính khoảng cách\nkhông gian và hiển thị trên bản đồ tương tác', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;', x: 455, y: 430, w: 290, h: 78 },
+    { id: 'sys_4', value: 'Chức năng Quản lý dự án & Bản đồ số\n(Định vị dự án, vùng đệm & lọc theo khu vực)', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;', x: 855, y: 430, w: 290, h: 78 },
+
+    // Hàng 5: Nhắc hạn & Thống kê
+    { id: 'req_5', value: 'Khó theo dõi thời hạn báo cáo, quan trắc\nđịnh kỳ của nhiều dự án và thiếu số liệu tổng hợp', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=0;', x: 55, y: 535, w: 290, h: 78 },
+    { id: 'sol_5', value: 'Mô hình hóa chu kỳ nghĩa vụ, tự động\nquét hạn mỗi ngày và tổng hợp biểu đồ', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=0;', x: 455, y: 535, w: 290, h: 78 },
+    { id: 'sys_5', value: 'Chức năng Nhắc hạn tuân thủ & Thống kê\n(Cảnh báo thời hạn, biểu đồ & nhật ký hệ thống)', style: 'shape=rect;rounded=1;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.8;fontStyle=1;', x: 855, y: 535, w: 290, h: 78 },
+
+    // Mũi tên kết nối thẳng hàng ngang (Zero Line Crossing)
+    { id: 'e20_1a', isEdge: true, source: 'req_1', target: 'sol_1', value: 'Mô hình hóa', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;' },
+    { id: 'e20_1b', isEdge: true, source: 'sol_1', target: 'sys_1', value: 'Hiện thực hóa', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;' },
+
+    { id: 'e20_2a', isEdge: true, source: 'req_2', target: 'sol_2', value: 'Mô hình hóa', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;' },
+    { id: 'e20_2b', isEdge: true, source: 'sol_2', target: 'sys_2', value: 'Hiện thực hóa', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;' },
+
+    { id: 'e20_3a', isEdge: true, source: 'req_3', target: 'sol_3', value: 'Mô hình hóa', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;' },
+    { id: 'e20_3b', isEdge: true, source: 'sol_3', target: 'sys_3', value: 'Hiện thực hóa', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;' },
+
+    { id: 'e20_4a', isEdge: true, source: 'req_4', target: 'sol_4', value: 'Mô hình hóa', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;' },
+    { id: 'e20_4b', isEdge: true, source: 'sol_4', target: 'sys_4', value: 'Hiện thực hóa', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;' },
+
+    { id: 'e20_5a', isEdge: true, source: 'req_5', target: 'sol_5', value: 'Mô hình hóa', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.5;' },
+    { id: 'e20_5b', isEdge: true, source: 'sol_5', target: 'sys_5', value: 'Hiện thực hóa', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.5;' }
+  ]
+};
 
 // 1. Sơ đồ 2.1: Use Case tổng quát (Phong cách Ảnh 1 Mẫu của người dùng)
 const sd21 = {
@@ -361,53 +422,37 @@ const sd22 = {
   ]
 };
 
-// 3. Sơ đồ 2.3: Luồng dữ liệu DFD (Mức 0 và Mức 1)
+// 3. Sơ đồ 2.3: Luồng dữ liệu DFD Mức 0 (Gọn gàng, chuẩn mẫu orthogonal zero-crossing)
 const sd23 = {
   id: 'sd23_dfd',
   filename: 'So_do_2.3_Luong_Du_Lieu_DFD',
-  title: 'Sơ đồ 2.3: Sơ đồ Luồng dữ liệu DFD (Mức 0 và Mức 1)',
-  width: 1100,
-  height: 800,
+  title: 'Sơ đồ 2.3: Sơ đồ Luồng dữ liệu DFD Mức 0',
+  width: 1000,
+  height: 520,
   cells: [
-    { id: 't3', value: 'SƠ ĐỒ 2.3: LUỒNG DỮ LIỆU DFD (MỨC 0 NGỮ CẢNH & MỨC 1 PHÂN RÃ)', style: 'text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;', x: 100, y: 20, w: 900, h: 35 },
+    { id: 't3', value: 'SƠ ĐỒ 2.3: SƠ ĐỒ LUỒNG DỮ LIỆU DFD MỨC 0', style: 'text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#1E293B;', x: 100, y: 20, w: 800, h: 35 },
 
-    // Part A: DFD Level 0 (Context)
-    { id: 'b_dfd0', value: 'A. SƠ ĐỒ NGỮ CẢNH (DFD MỨC 0)', style: 'shape=rect;rounded=1;dashed=1;strokeColor=#64748B;fillColor=#F8FAFC;align=left;spacingLeft=14;spacingTop=8;fontStyle=1;fontSize=11.5;', x: 80, y: 65, w: 940, h: 220 },
-    
-    { id: 'ent_staff', value: 'Chuyên viên tư vấn', style: 'shape=rect;fillColor=#FFFFFF;strokeColor=#16A34A;strokeWidth=1.5;fontStyle=1;', x: 120, y: 150, w: 150, h: 60 },
-    { id: 'proc_0', value: '0.0\nHỆ THỐNG QUẢN LÝ &\nGIÁM SÁT PHÁP LÝ MÔI TRƯỜNG\n(ETC LEGALHUB)', style: 'ellipse;fillColor=#286B4F;strokeColor=#1E563F;strokeWidth=2;fontStyle=1;fontColor=#FFFFFF;align=center;', x: 420, y: 120, w: 260, h: 120 },
-    { id: 'ent_admin', value: 'Quản trị viên', style: 'shape=rect;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;', x: 820, y: 105, w: 150, h: 55 },
-    { id: 'ent_web', value: 'Cổng luatmoitruong.vn', style: 'shape=rect;fillColor=#FFFFFF;strokeColor=#D97706;strokeWidth=1.5;fontStyle=1;', x: 820, y: 200, w: 150, h: 55 },
+    // Hàng trên (Luồng chính)
+    { id: 'ent_staff', value: 'Chuyên viên\ntư vấn', style: 'shape=rect;fillColor=#A5B4FC;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 90, y: 105, w: 140, h: 65 },
+    { id: 'proc_login', value: 'Đăng\nnhập', style: 'ellipse;fillColor=#DCFCE7;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 375, y: 92, w: 92, h: 92 },
+    { id: 'proc_data', value: 'Xử lý dữ liệu\nhồ sơ & QCVN', style: 'ellipse;fillColor=#DCFCE7;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 600, y: 88, w: 105, h: 100 },
+    { id: 'ent_display', value: 'Hiển thị\nkết quả', style: 'shape=rect;fillColor=#BAE6FD;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 805, y: 105, w: 140, h: 65 },
 
-    { id: 'e_df0_1', isEdge: true, source: 'ent_staff', target: 'proc_0', value: 'Thông số dự án & số đo QCVN', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.4;' },
-    { id: 'e_df0_2', isEdge: true, source: 'proc_0', target: 'ent_staff', value: 'Hồ sơ ĐTM/GPMT & Bản đồ GIS', style: 'endArrow=classic;html=1;strokeColor=#16A34A;strokeWidth=1.4;' },
-    { id: 'e_df0_3', isEdge: true, source: 'ent_admin', target: 'proc_0', value: 'Lệnh đồng bộ & Kiểm duyệt luật', style: 'endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;' },
-    { id: 'e_df0_4', isEdge: true, source: 'ent_web', target: 'proc_0', value: 'Văn bản pháp lý mới', style: 'endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;' },
+    // Giữa (Quản trị viên)
+    { id: 'ent_admin', value: 'Quản trị viên', style: 'shape=rect;fillColor=#BAE6FD;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 351, y: 265, w: 140, h: 65 },
 
-    // Part B: DFD Level 1 (Decomposition)
-    { id: 'b_dfd1', value: 'B. SƠ ĐỒ PHÂN RÃ CHỨC NĂNG (DFD MỨC 1)', style: 'shape=rect;rounded=1;dashed=1;strokeColor=#286B4F;fillColor=#F8FAFC;align=left;spacingLeft=14;spacingTop=8;fontStyle=1;fontSize=11.5;', x: 80, y: 310, w: 940, h: 460 },
+    // Hàng dưới (Nguồn dữ liệu ngoài -> Truy vấn dữ liệu)
+    { id: 'ent_ext', value: 'Nguồn dữ liệu ngoài\n(GIS & Văn bản luật)', style: 'shape=rect;fillColor=#A5B4FC;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 90, y: 390, w: 155, h: 65 },
+    { id: 'proc_query', value: 'Truy vấn &\nđồng bộ', style: 'ellipse;fillColor=#DCFCE7;strokeColor=#1E293B;strokeWidth=1.5;fontStyle=1;fontColor=#1E293B;align=center;', x: 600, y: 375, w: 100, h: 95 },
 
-    // 4 Functional Processes (Clean 2x2 grid)
-    { id: 'p1', value: '1.0: Xác thực &\nPhân quyền', style: 'ellipse;fillColor=#EFF6FF;strokeColor=#2563EB;fontStyle=1;', x: 150, y: 360, w: 160, h: 70 },
-    { id: 'p2', value: '2.0: Phân loại hồ sơ\n& Xác định thẩm quyền', style: 'ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;', x: 470, y: 360, w: 170, h: 70 },
-    { id: 'p3', value: '3.0: Đối chiếu QCVN\n& Đánh giá mẫu đo', style: 'ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;', x: 780, y: 360, w: 170, h: 70 },
-
-    { id: 'p4', value: '4.0: Quản lý dự án\n& Bản đồ GIS', style: 'ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;', x: 150, y: 640, w: 160, h: 70 },
-    { id: 'p5', value: '5.0: Giám sát nhắc hạn\n& Dashboard KPI', style: 'ellipse;fillColor=#ECFDF5;strokeColor=#059669;fontStyle=1;', x: 470, y: 640, w: 170, h: 70 },
-    { id: 'p6', value: '6.0: Đồng bộ pháp lý\n(Web Crawler)', style: 'ellipse;fillColor=#FEF3C7;strokeColor=#D97706;fontStyle=1;', x: 780, y: 640, w: 170, h: 70 },
-
-    // Central Data Stores (horizontal bar in the middle)
-    { id: 'ds1', value: 'D1: Kho người dùng (users)', style: 'shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#2563EB;strokeWidth=1.5;fontStyle=1;', x: 130, y: 500, w: 200, h: 40 },
-    { id: 'ds2', value: 'D2: Kho tri thức luật & QCVN', style: 'shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#059669;strokeWidth=1.5;fontStyle=1;', x: 450, y: 500, w: 210, h: 40 },
-    { id: 'ds3', value: 'D3: Kho dự án & Mẫu quan trắc', style: 'shape=partialRectangle;top=0;bottom=0;left=1;right=1;fillColor=#FFFFFF;strokeColor=#059669;strokeWidth=1.5;fontStyle=1;', x: 760, y: 500, w: 210, h: 40 },
-
-    // Direct vertical connectors (NO CROSSING!)
-    { id: 'e_df1_1', isEdge: true, source: 'p1', target: 'ds1', style: 'endArrow=classic;html=1;strokeColor=#2563EB;strokeWidth=1.4;' },
-    { id: 'e_df1_2', isEdge: true, source: 'p2', target: 'ds2', style: 'endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;' },
-    { id: 'e_df1_3', isEdge: true, source: 'p3', target: 'ds3', style: 'endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;' },
-    { id: 'e_df1_4', isEdge: true, source: 'p4', target: 'ds3', style: 'endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;' },
-    { id: 'e_df1_5', isEdge: true, source: 'p5', target: 'ds3', style: 'endArrow=classic;html=1;strokeColor=#059669;strokeWidth=1.4;' },
-    { id: 'e_df1_6', isEdge: true, source: 'p6', target: 'ds2', style: 'endArrow=classic;html=1;strokeColor=#D97706;strokeWidth=1.4;' }
+    // Đường luồng dữ liệu (vuông góc, không giao cắt)
+    { id: 'e_df0_1', isEdge: true, source: 'ent_staff', target: 'proc_login', value: 'Tài khoản &\nmật khẩu', style: 'endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;' },
+    { id: 'e_df0_err', isEdge: true, source: 'proc_login', target: 'ent_staff', value: 'Sai mật khẩu / Từ chối', style: 'edgeStyle=orthogonalEdgeStyle;endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;exitX=0.5;exitY=1;entryX=0.5;entryY=1;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;', points: [{ x: 421, y: 225 }, { x: 160, y: 225 }] },
+    { id: 'e_df0_admin', isEdge: true, source: 'ent_admin', target: 'proc_login', value: 'Quản trị', style: 'endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;exitX=0.5;exitY=0;entryX=0.5;entryY=1;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;' },
+    { id: 'e_df0_2', isEdge: true, source: 'proc_login', target: 'proc_data', value: 'Nhập dữ liệu hồ sơ\n& mẫu quan trắc', style: 'endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;' },
+    { id: 'e_df0_3', isEdge: true, source: 'proc_data', target: 'ent_display', value: 'Hiển thị', style: 'endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;' },
+    { id: 'e_df0_4', isEdge: true, source: 'ent_ext', target: 'proc_query', value: 'Nhập dữ liệu ranh giới GIS, văn bản pháp luật', style: 'endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;' },
+    { id: 'e_df0_5', isEdge: true, source: 'proc_query', target: 'ent_display', value: 'Hiển thị\ntrực quan', style: 'edgeStyle=orthogonalEdgeStyle;endArrow=classic;html=1;strokeColor=#1E293B;strokeWidth=1.4;exitX=1;exitY=0.5;entryX=0.5;entryY=1;fontColor=#1E293B;labelBackgroundColor=#FFFFFF;', points: [{ x: 875, y: 422 }] }
   ]
 };
 
@@ -646,6 +691,7 @@ const sd29 = {
 };
 
 const ALL_DIAGRAMS = [
+  sd20,
   sd21,
   sd22,
   sd23,

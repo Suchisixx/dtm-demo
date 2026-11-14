@@ -10,6 +10,7 @@ const {
   evaluateStoredProject,
 } = require('./classification-service');
 const { loadClassificationCatalog, loadGisLayers } = require('./rule-repository');
+const { toCanonicalVerificationStatus, toCanonicalSampleStatus } = require('./repository-shared');
 const { listComplianceObligations, ALERT_LEVEL } = require('./compliance-reminder-service');
 
 // Nhãn hiển thị ngắn gọn cho 39 ngành nghề (đồng bộ 1-1 với INDUSTRY_META)
@@ -78,11 +79,11 @@ function hasVerifiedSampleEvaluationMetadata(sample = {}) {
   return Boolean(
     details.ruleSource === 'DATABASE'
     && details.ruleVersion
-    && details.verificationStatus === 'VERIFIED'
+    && toCanonicalVerificationStatus(details.verificationStatus) === 'VERIFIED'
     && details.evaluationDate
-    && sample.overall_status === 'PASS'
+    && toCanonicalSampleStatus(sample.overall_status) === 'PASS'
     && sample.evaluated_rule_version
-    && sample.evaluated_verification_status === 'VERIFIED'
+    && toCanonicalVerificationStatus(sample.evaluated_verification_status) === 'VERIFIED'
   );
 }
 
@@ -94,7 +95,10 @@ async function loadSensitiveVerifMap() {
     );
     const map = new Map();
     for (const r of (res?.rows || [])) {
-      map.set(Number(r.project_id), r);
+      map.set(Number(r.project_id), {
+        ...r,
+        verification_status: toCanonicalVerificationStatus(r.verification_status),
+      });
     }
     return map;
   } catch {
@@ -453,8 +457,8 @@ async function getDashboardStats({ userId, isAdmin = false, filterUserId = null,
     let amendedLaws = 0;
     lawsRes.rows.forEach(r => {
       totalLaws += r.count;
-      if (r.status === 'valid') validLaws += r.count;
-      if (r.status === 'amended') amendedLaws += r.count;
+      if (r.status === 'con_hieu_luc' || r.status === 'valid') validLaws += r.count;
+      if (r.status === 'da_sua_doi' || r.status === 'amended') amendedLaws += r.count;
     });
 
     // Sắp xếp Top ngành nghề & Top tỉnh thành

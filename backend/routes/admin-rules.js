@@ -248,6 +248,11 @@ router.put('/thresholds/:id', async (req, res) => {
     await logAudit(req.user.id, ACTIONS.UPDATE_RULE || 'UPDATE_RULE', req, {
       id: rule.id,
       industry_code: rule.industry_code,
+      min_value: rule.min_value,
+      max_value: rule.max_value,
+      legal_doc_required: rule.legal_doc_required,
+      tq: rule.tq,
+      legal_ref: rule.legal_ref,
       verification_status: rule.verification_status,
       asDraft,
     });

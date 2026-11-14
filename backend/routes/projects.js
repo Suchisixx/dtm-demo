@@ -21,6 +21,7 @@ const {
   reviewProjectSensitiveVerification,
 } = require('../services/rule-repository');
 const { syncProjectDefaultObligations } = require('../services/compliance-reminder-service');
+const { toCanonicalVerificationStatus } = require('../services/repository-shared');
 
 async function loadSensitiveVerificationMap() {
   try {
@@ -30,7 +31,10 @@ async function loadSensitiveVerificationMap() {
     );
     const map = new Map();
     for (const r of (res?.rows || [])) {
-      map.set(Number(r.project_id), r);
+      map.set(Number(r.project_id), {
+        ...r,
+        verification_status: toCanonicalVerificationStatus(r.verification_status),
+      });
     }
     return map;
   } catch {

@@ -40,6 +40,61 @@ const laws = ref([])
 const lawSearchQuery = ref('')
 const lawFilterType = ref('all')
 
+// Trạng thái Truy vết dữ liệu (nhat_ky_kiem_toan + lich_su_cap_nhat_van_ban)
+const auditLogs = ref([])
+const auditLoading = ref(false)
+const auditScope = ref('all')
+const auditSearch = ref('')
+const expandedAuditUid = ref(null)
+
+const fetchAuditLogs = async () => {
+  auditLoading.value = true
+  try {
+    const params = new URLSearchParams({
+      scope: auditScope.value || 'all',
+      limit: '150',
+    })
+    if (auditSearch.value.trim()) {
+      params.set('search', auditSearch.value.trim())
+    }
+    const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, {
+      credentials: 'include',
+    })
+    if (res.ok) {
+      const data = await res.json()
+      auditLogs.value = Array.isArray(data.logs) ? data.logs : []
+    }
+  } catch (err) {
+    logger.error('Lỗi tải nhật ký truy vết dữ liệu:', err)
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+const toggleAuditDetail = (uid) => {
+  expandedAuditUid.value = expandedAuditUid.value === uid ? null : uid
+}
+
+const getAuditCategoryBadgeClass = (category) => {
+  if (category === 'legal') return 'chip-blue'
+  if (category === 'projects') return 'chip-green'
+  return 'chip-gray'
+}
+
+const formatAuditDateTime = (ts) => {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return String(ts)
+  return d.toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 // Trạng thái hộp thoại người dùng
 const showUserModal = ref(false)
 const userForm = ref({
@@ -60,7 +115,7 @@ const lawForm = ref({
   year: new Date().getFullYear(),
   sortDate: '',
   so: '',
-  status: 'valid',
+  status: 'con_hieu_luc',
   ten: '',
   hieuluc: '',
   mo_ta: '',
@@ -673,6 +728,9 @@ const switchSubpage = (subpage) => {
     fetchCrawlerSettings()
     fetchCrawlHistory()
   }
+  else if (subpage === 'audit') {
+    fetchAuditLogs()
+  }
 }
 
 // Thao tác người dùng
@@ -782,7 +840,7 @@ const openAddLawModal = () => {
     year: new Date().getFullYear(),
     sortDate: '',
     so: '',
-    status: 'valid',
+    status: 'con_hieu_luc',
     ten: '',
     hieuluc: '',
     mo_ta: '',
@@ -802,7 +860,7 @@ const openEditLawModal = (law) => {
     year: law.year,
     sortDate: law.sortDate || '',
     so: law.so,
-    status: law.status || 'valid',
+    status: law.status || 'con_hieu_luc',
     ten: law.ten,
     hieuluc: law.hieuluc || '',
     mo_ta: law.mo_ta || '',
@@ -960,7 +1018,11 @@ onMounted(() => {
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'crawler' }" @click="switchSubpage('crawler')">
         <i class="ti ti-refresh"></i>
-        <span>Đồng bộ dữ liệu tự động</span>
+        <span>Đồng bộ dữ liệu pháp lý</span>
+      </button>
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'audit' }" @click="switchSubpage('audit')">
+        <i class="ti ti-history"></i>
+        <span>Truy vết dữ liệu</span>
       </button>
     </div>
 
@@ -1153,7 +1215,7 @@ onMounted(() => {
                 </td>
                 <td>
                   <span class="chip-status" :class="l.status">
-                    {{ l.status === 'valid' ? 'Hiệu lực' : (l.status === 'amended' ? 'Sửa đổi' : 'Hết HL') }}
+                    {{ (l.status === 'con_hieu_luc' || l.status === 'valid') ? 'Hiệu lực' : ((l.status === 'da_sua_doi' || l.status === 'amended') ? 'Sửa đổi' : 'Hết HL') }}
                   </span>
                 </td>
                 <td style="text-align:right">
@@ -1198,24 +1260,25 @@ onMounted(() => {
       <!-- Trang con: crawler -->
       <div v-if="currentSubpage === 'crawler'" id="admin-crawler" class="admin-subpage">
         <div class="admin-section-header">
-          <div class="admin-section-title">Cấu hình đồng bộ văn bản pháp lý tự động</div>
+          <div class="admin-section-title">Đồng bộ cơ sở dữ liệu văn bản pháp lý</div>
         </div>
 
         <div style="padding:20px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px">
           <div style="font-size:14.5px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:8px">
             <i class="ti ti-cloud-download" style="color:var(--accent);font-size:18px"></i>
-            <span>Trình đồng bộ Sitemap &amp; Bóc tách Điều khoản tự động (luatmoitruong.vn)</span>
+            <span>Trình kiểm tra &amp; đồng bộ văn bản pháp lý (luatmoitruong.vn)</span>
           </div>
           <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-            Hệ thống vận hành theo kiến trúc <strong>Đồng bộ 2 tầng (Human-in-the-loop Regulatory Governance)</strong>:
-            Tầng 1 tự động quét <code>sitemap-pages.xml</code> định kỳ (ngày 01 hàng tháng lúc 00:00), đối chiếu dấu thời gian <code>lastmod</code> với bộ nhớ đệm PostgreSQL, tự động bóc tách điều khoản theo thứ tự tự nhiên và phát hiện văn bản hết hiệu lực. Tầng 2 ghi nhận nhật ký biến động để Quản trị viên rà soát và cập nhật có kiểm soát các thông số định lượng QCVN hoặc ngưỡng phân loại dự án.
+            Hệ thống vận hành theo cơ chế <strong>Đồng bộ 2 tầng theo yêu cầu (On-demand &amp; Human-in-the-loop)</strong>:
+            Tầng 1 chạy khi Quản trị viên kích hoạt kiểm tra, quét <code>sitemap-pages.xml</code> và đối chiếu dấu thời gian <code>lastmod</code> với bộ nhớ đệm PostgreSQL (bỏ qua nhanh văn bản không đổi), đồng thời bóc tách điều khoản và phát hiện văn bản hết hiệu lực.
+            Tầng 2 ghi nhận nhật ký biến động, cảnh báo tác động và đề xuất quy tắc chờ duyệt để Quản trị viên rà soát — không tự động ghi đè ngưỡng phân loại hay QCVN đang hiệu lực.
           </p>
 
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;padding-top:10px;border-top:1px solid var(--border)">
-            <label style="display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;color:var(--text);cursor:pointer">
-              <input type="checkbox" v-model="autoCrawlEnabled" @change="toggleAutoCrawl" style="width:16px;height:16px;accent-color:var(--accent)" />
-              <span>Kích hoạt tự động quét định kỳ hàng tháng (Cron Scheduler: 00:00 ngày 01)</span>
-            </label>
+            <div style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--text2)">
+              <i class="ti ti-hand-click" style="color:var(--accent);font-size:16px"></i>
+              <span><strong>Chế độ vận hành:</strong> Kích hoạt thủ công theo yêu cầu (không chạy lịch tự động ngầm)</span>
+            </div>
 
             <button type="button" class="btn-primary" :disabled="isCrawling" @click="triggerCrawlNow">
               <i class="ti" :class="isCrawling ? 'ti-loader' : 'ti-player-play'"></i>
@@ -1671,6 +1734,101 @@ onMounted(() => {
         </div>
         </div> <!-- Kết thúc khối chỉ hiện khi SHOW_ADVANCED_RULE_TOOLS bật -->
       </div>
+
+      <!-- Trang con: Truy vết dữ liệu (nhat_ky_kiem_toan & lich_su_cap_nhat_van_ban) -->
+      <div v-if="currentSubpage === 'audit'" id="admin-audit" class="admin-subpage">
+        <div class="admin-section-header">
+          <div>
+            <div class="admin-section-title">Truy vết thao tác &amp; Sửa đổi văn bản pháp lý</div>
+            <div style="font-size:12.5px;color:var(--text3);margin-top:2px">
+              Tổng hợp từ bảng <code>nhat_ky_kiem_toan</code> và <code>lich_su_cap_nhat_van_ban</code>: sửa luật gì, nội dung sửa đổi, thời gian và người thực hiện.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select v-model="auditScope" @change="fetchAuditLogs" style="width:auto;min-width:190px">
+              <option value="all">Tất cả thao tác</option>
+              <option value="legal">Văn bản pháp lý &amp; Quy tắc</option>
+              <option value="projects">Hồ sơ dự án &amp; Quan trắc</option>
+              <option value="system">Tài khoản &amp; Hệ thống</option>
+            </select>
+            <input
+              type="text"
+              v-model="auditSearch"
+              @keyup.enter="fetchAuditLogs"
+              placeholder="Tìm số hiệu luật, người sửa, nội dung..."
+              style="width:240px"
+            />
+            <button type="button" class="btn-secondary btn-sm" @click="fetchAuditLogs" :disabled="auditLoading">
+              <i class="ti ti-refresh"></i>
+              <span>{{ auditLoading ? 'Đang tải...' : 'Làm mới' }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;margin-top:10px">
+          <div class="table-wrap" style="border:none;border-radius:0;max-height:560px;overflow-y:auto">
+            <table class="saas-table">
+              <thead>
+                <tr>
+                  <th style="width:165px">Thời gian</th>
+                  <th style="width:170px">Người thực hiện</th>
+                  <th style="width:190px">Thao tác</th>
+                  <th style="width:180px">Luật / Đối tượng</th>
+                  <th>Thông tin sửa đổi / Chi tiết</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="auditLoading && auditLogs.length === 0">
+                  <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Đang tải nhật ký truy vết...</td>
+                </tr>
+                <tr v-else-if="auditLogs.length === 0">
+                  <td colspan="5" style="text-align:center;color:var(--text3);padding:32px">Chưa có bản ghi truy vết nào khớp điều kiện lọc.</td>
+                </tr>
+                <template v-for="item in auditLogs" :key="item.uid">
+                  <tr>
+                    <td style="font-size:12px;color:var(--text2);white-space:nowrap">
+                      {{ formatAuditDateTime(item.created_at) }}
+                    </td>
+                    <td>
+                      <div style="font-weight:600;color:var(--text);font-size:13px">{{ item.actor_name }}</div>
+                      <div v-if="item.actor_username" style="font-size:11.5px;color:var(--text3)">@{{ item.actor_username }}</div>
+                    </td>
+                    <td>
+                      <span class="chip" :class="getAuditCategoryBadgeClass(item.category)">
+                        {{ item.action_label }}
+                      </span>
+                    </td>
+                    <td style="font-weight:500;color:var(--text)">
+                      {{ item.target_label }}
+                    </td>
+                    <td>
+                      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+                        <span style="font-size:12.5px;color:var(--text2);line-height:1.45">{{ item.summary }}</span>
+                        <button
+                          v-if="item.details && Object.keys(item.details).length > 0"
+                          type="button"
+                          class="btn-secondary btn-sm"
+                          style="padding:2px 8px;font-size:11.5px;flex-shrink:0"
+                          @click="toggleAuditDetail(item.uid)"
+                        >
+                          {{ expandedAuditUid === item.uid ? 'Ẩn' : 'Chi tiết' }}
+                        </button>
+                      </div>
+                      <div
+                        v-if="expandedAuditUid === item.uid"
+                        style="margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-family:monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word;color:var(--text2)"
+                      >
+                        <div><strong>Nguồn bảng:</strong> {{ item.source }} <span v-if="item.ip_address">· <strong>IP:</strong> {{ item.ip_address }}</span></div>
+                        <pre style="margin:6px 0 0;font-family:inherit;white-space:pre-wrap">{{ JSON.stringify(item.details, null, 2) }}</pre>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Hộp thoại thêm/sửa nhân viên -->
@@ -1764,9 +1922,9 @@ onMounted(() => {
             <div class="form-group">
               <label class="form-label">Trạng thái hiệu lực</label>
               <select v-model="lawForm.status">
-                <option value="valid">Còn hiệu lực</option>
-                <option value="amended">Đã sửa đổi</option>
-                <option value="expired">Hết hiệu lực</option>
+                <option value="con_hieu_luc">Còn hiệu lực</option>
+                <option value="da_sua_doi">Đã sửa đổi</option>
+                <option value="het_hieu_luc">Hết hiệu lực</option>
               </select>
             </div>
           </div>

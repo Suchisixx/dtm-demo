@@ -160,9 +160,9 @@ test.before(async () => {
 
     await pgPool.query(
       `INSERT INTO laws (id, type, year, so, ten, status)
-     VALUES ('luat_bvmt_2020', 'luat', 2020, '72/2020/QH14', 'Luat BVMT 2020', 'valid'),
-            ('nd_08_2022', 'nd', 2022, '08/2022/ND-CP', 'Nghi dinh 08/2022/ND-CP', 'valid'),
-            ('vbhn_49_2026', 'vbhn', 2026, '49/VBHN-BNNMT', 'VBHN 49/VBHN-BNNMT', 'valid')
+     VALUES ('luat_bvmt_2020', 'luat', 2020, '72/2020/QH14', 'Luat BVMT 2020', 'con_hieu_luc'),
+            ('nd_08_2022', 'nd', 2022, '08/2022/ND-CP', 'Nghi dinh 08/2022/ND-CP', 'con_hieu_luc'),
+            ('vbhn_49_2026', 'vbhn', 2026, '49/VBHN-BNNMT', 'VBHN 49/VBHN-BNNMT', 'con_hieu_luc')
      ON CONFLICT (id) DO NOTHING`
     );
 

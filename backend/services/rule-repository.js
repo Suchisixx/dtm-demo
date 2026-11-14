@@ -6,10 +6,27 @@ const {
   defaultDb,
   EXCLUDED_PUBLICATION_STATUSES,
   isActivePublicationStatus,
+  isVerifiedStatusValue,
   isVietnamesePhysicalSchema,
   parseJsonSafe,
   formatDateOnly,
   slugifyId,
+  toDbVerificationStatus,
+  toCanonicalVerificationStatus,
+  toDbPublicationStatus,
+  toCanonicalPublicationStatus,
+  toDbScale,
+  toCanonicalScale,
+  toDbQcvnStatus,
+  toCanonicalQcvnStatus,
+  toDbImpactStatus,
+  toCanonicalImpactStatus,
+  toDbCandidateStatus,
+  toCanonicalCandidateStatus,
+  toDbSeverity,
+  toCanonicalSeverity,
+  toDbProcessStage,
+  toCanonicalProcessStage,
 } = require('./repository-shared');
 
 /**
@@ -193,9 +210,9 @@ function inferQcvnMetadata(id, qcvn) {
     else if (/_b2$/.test(id)) columnCode = 'B2';
   }
   if (!flowRange) {
-    if (id.endsWith('_f1')) flowRange = 'F1 (<=50 m3/ngay)';
-    else if (id.endsWith('_low')) flowRange = 'F2 (50-2000 m3/ngay)';
-    else if (id.endsWith('_high')) flowRange = 'F3 (>=2000 m3/ngay)';
+    if (id.endsWith('_f1')) flowRange = 'F1 (<= 50 m³/ngày)';
+    else if (id.endsWith('_low')) flowRange = 'F2 (50 - 2000 m³/ngày)';
+    else if (id.endsWith('_high')) flowRange = 'F3 (>= 2000 m³/ngày)';
   }
 
   return {
@@ -220,7 +237,7 @@ function inferQcvnMetadata(id, qcvn) {
  * - Không bao giờ chạy TRUNCATE.
  * - Không ghi đè bản ghi đã VERIFIED / có verified_by hoặc đang ở luồng duyệt khác ngoài cập nhật metadata thiếu khi chưa duyệt.
  */
-async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-audit', force = false } = {}) {
+async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-audit', force = false, defaultVerified = false } = {}) {
   await ensureQcvnSchema(client);
 
   let inserted = 0;
@@ -230,6 +247,9 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
   for (const id of Object.keys(qcvnData)) {
     const qcvn = qcvnData[id];
     const meta = inferQcvnMetadata(id, qcvn);
+    if (defaultVerified && meta.verificationStatus !== 'VERIFIED') {
+      meta.verificationStatus = 'VERIFIED';
+    }
     const checkRes = await client.query(
       'SELECT id, standard_code, verification_status, publication_status, verified_by FROM qcvns WHERE id = $1',
       [id]
@@ -246,7 +266,7 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
           $1, $2, $3, $4,
           $5, $6, $7, $8, $9, $10,
           $11, $12, $13, $14, $15,
-          $16, 'PUBLISHED', $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+          $16, $17, $18, $19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
         )`,
         [
           id,
@@ -255,7 +275,7 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
           JSON.stringify(qcvn.tham_so || []),
           meta.standardCode,
           meta.standardVersion,
-          meta.status,
+          toDbQcvnStatus(meta.status),
           meta.sourceType,
           meta.columnCode,
           meta.flowRange,
@@ -264,7 +284,8 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
           meta.mandatoryForAllFrom,
           meta.replaces ? JSON.stringify(meta.replaces) : null,
           meta.transitionRules ? JSON.stringify(meta.transitionRules) : null,
-          meta.verificationStatus,
+          toDbVerificationStatus(meta.verificationStatus),
+          toDbPublicationStatus('PUBLISHED'),
           meta.sourceDocument,
           ruleVersion,
         ]
@@ -274,9 +295,9 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
     }
 
     const existing = checkRes.rows[0];
-    const isLocked = existing.verification_status === 'VERIFIED'
+    const isLocked = isVerifiedStatusValue(existing.verification_status)
       || Boolean(existing.verified_by)
-      || EXCLUDED_PUBLICATION_STATUSES.has(String(existing.publication_status || '').toUpperCase());
+      || !isActivePublicationStatus(existing.publication_status);
 
     if (isLocked) {
       skippedVerified++;
@@ -339,7 +360,7 @@ async function seedQcvnCatalog(client, { qcvnData = {}, ruleVersion = '2026.2-au
  * Seed danh mục ngành và toàn bộ ngưỡng (bao gồm industry.t và industry.processRules).
  * Không chạy TRUNCATE, không ghi đè bản ghi VERIFIED / có approved_by.
  */
-async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}, ruleVersion = '2026.2-audit', force = false } = {}) {
+async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}, ruleVersion = '2026.2-audit', force = false, defaultVerified = false } = {}) {
   await ensureClassificationSchema(client);
 
   const lawsRes = await client.query('SELECT id FROM laws');
@@ -356,8 +377,10 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
     const displayName = meta.name || industry.lbl.replace(/\s*\(.*\)\s*$/, '').trim() || code;
     const unitMatch = industry.lbl ? industry.lbl.match(/\((.*)\)/) : null;
     const unit = unitMatch ? unitMatch[1] : '';
-    const processStagesMeta = meta.processStages ? JSON.stringify(meta.processStages) : null;
-    const indVerification = industry.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION';
+    const processStagesMeta = Array.isArray(meta.processStages)
+      ? JSON.stringify(meta.processStages.map(st => ({ ...st, key: toDbProcessStage(st.key) || st.key })))
+      : null;
+    const indVerification = (industry.verificationStatus === 'VERIFIED' || defaultVerified) ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION';
 
     const unaccented = String(displayName || '')
       .toLowerCase()
@@ -381,11 +404,11 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
         `INSERT INTO industries (
           code, name, risk_level, display_name, aliases, capacity_label, unit, note, audit_note,
           process_stages_meta, verification_status, publication_status, rule_version, updated_at
-        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, 'PUBLISHED', $12, CURRENT_TIMESTAMP)`,
+        ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)`,
         [
           code,
           displayName,
-          'medium',
+          toDbSeverity('medium'),
           displayName,
           aliasesJson,
           industry.lbl || '',
@@ -393,15 +416,16 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
           industry.note || null,
           industry.auditNote || null,
           processStagesMeta,
-          indVerification,
+          toDbVerificationStatus(indVerification),
+          toDbPublicationStatus('PUBLISHED'),
           ruleVersion,
         ]
       );
       industriesInserted++;
     } else {
       const existingInd = existingIndRes.rows[0];
-      const indLocked = existingInd.verification_status === 'VERIFIED'
-        || EXCLUDED_PUBLICATION_STATUSES.has(String(existingInd.publication_status || '').toUpperCase());
+      const indLocked = isVerifiedStatusValue(existingInd.verification_status)
+        || !isActivePublicationStatus(existingInd.publication_status);
 
       if (!indLocked && (force || !existingInd.display_name || !existingInd.aliases)) {
         await client.query(
@@ -438,17 +462,18 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
 
     for (const bucket of buckets) {
       const stage = bucket.processStage;
+      const dbStage = stage ? (toDbProcessStage(stage) || stage) : '';
       const existingTiersRes = await client.query(
         `SELECT id, tq, verification_status, publication_status, approved_by
          FROM classification_thresholds
-         WHERE industry_code = $1 AND COALESCE(process_stage, '') = $2`,
-        [code, stage]
+         WHERE industry_code = $1 AND COALESCE(process_stage, '') IN ($2, $3)`,
+        [code, stage, dbStage]
       );
 
       const hasLockedRow = existingTiersRes.rows.some(
-        r => r.verification_status === 'VERIFIED'
+        r => isVerifiedStatusValue(r.verification_status)
           || Boolean(r.approved_by)
-          || EXCLUDED_PUBLICATION_STATUSES.has(String(r.publication_status || '').toUpperCase())
+          || !isActivePublicationStatus(r.publication_status)
       );
 
       if (hasLockedRow) {
@@ -468,10 +493,10 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
         await client.query(
           `DELETE FROM classification_thresholds
            WHERE industry_code = $1
-             AND COALESCE(process_stage, '') = $2
-             AND COALESCE(verification_status, 'NEEDS_LEGAL_VERIFICATION') <> 'VERIFIED'
+             AND COALESCE(process_stage, '') IN ($2, $3)
+             AND COALESCE(verification_status, 'can_xac_minh_phap_ly') NOT IN ('VERIFIED', 'da_xac_minh')
              AND approved_by IS NULL`,
-          [code, stage]
+          [code, stage, dbStage]
         );
       }
 
@@ -541,16 +566,16 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
             $1, $2, $3, $4, $5, $6,
             $7, $8, $9, $10, $11,
             $12, $13, $14, $15, $16,
-            $17, 'PUBLISHED', $18, $19, $20, $21
+            $17, $18, $19, $20, $21, $22
           )`,
           [
             code,
-            stage,
+            dbStage,
             tier.min,
             maxValue,
             tier.operator || '>=',
             unit,
-            tier.capacityScale || null,
+            tier.capacityScale ? toDbScale(tier.capacityScale) : null,
             projectGroup,
             tier.hs,
             tier.tq,
@@ -560,7 +585,8 @@ async function seedClassificationCatalog(client, { indDb = {}, industryMeta = {}
             safeLawId,
             tier.effectiveFrom || null,
             tier.effectiveTo || null,
-            tier.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+            toDbVerificationStatus((tier.verificationStatus === 'VERIFIED' || defaultVerified) ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION'),
+            toDbPublicationStatus('PUBLISHED'),
             i,
             ruleVersion,
             tier.ref || null,
@@ -606,7 +632,10 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
     const catalog = {};
     for (const row of indRes.rows) {
       if (!isActivePublicationStatus(row.publication_status)) continue;
-      const processStagesMeta = parseJsonSafe(row.process_stages_meta, null);
+      const rawProcessStagesMeta = parseJsonSafe(row.process_stages_meta, null);
+      const processStagesMeta = Array.isArray(rawProcessStagesMeta)
+        ? rawProcessStagesMeta.map(st => ({ ...st, key: toCanonicalProcessStage(st.key) || st.key }))
+        : rawProcessStagesMeta;
       catalog[row.code] = {
         code: row.code,
         name: row.display_name || row.name || row.code,
@@ -617,7 +646,7 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
         note: row.note || '',
         auditNote: row.audit_note || '',
         processStagesMeta,
-        verificationStatus: row.verification_status === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+        verificationStatus: toCanonicalVerificationStatus(row.verification_status) === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
         ruleVersion: row.rule_version || '2026.2-audit',
         t: [],
         processRules: null,
@@ -639,7 +668,7 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
       const ind = catalog[code];
       const byStage = new Map();
       for (const r of rows) {
-        const stage = r.process_stage || '';
+        const stage = r.process_stage ? (toCanonicalProcessStage(r.process_stage) || r.process_stage) : '';
         if (!byStage.has(stage)) byStage.set(stage, []);
         byStage.get(stage).push({
           id: r.id,
@@ -647,7 +676,7 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
           max: r.max_value !== null && r.max_value !== undefined ? parseFloat(r.max_value) : null,
           operator: r.operator || '>=',
           projectGroup: r.project_group,
-          capacityScale: r.capacity_scale,
+          capacityScale: r.capacity_scale ? toCanonicalScale(r.capacity_scale) : null,
           hs: r.legal_doc_required,
           tq: r.tq,
           historicalTq: r.historical_tq || null,
@@ -656,7 +685,7 @@ async function loadClassificationCatalog({ db = defaultDb } = {}) {
           lawId: r.law_id || null,
           effectiveFrom: formatDateOnly(r.effective_from),
           effectiveTo: formatDateOnly(r.effective_to),
-          verificationStatus: r.verification_status === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+          verificationStatus: toCanonicalVerificationStatus(r.verification_status) === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
           ruleVersion: r.rule_version || ind.ruleVersion,
           approvedBy: r.approved_by || null,
           approvedAt: r.approved_at || null,
@@ -726,7 +755,7 @@ async function loadQcvnCatalog({ db = defaultDb } = {}) {
         tham_so: parseJsonSafe(row.tham_so, []),
         standardCode: row.standard_code || null,
         standardVersion: row.standard_version || null,
-        status: row.status || null,
+        status: row.status ? toCanonicalQcvnStatus(row.status) : null,
         sourceType: row.source_type || null,
         columnCode: row.column_code || null,
         flowRange: row.flow_range || null,
@@ -735,8 +764,8 @@ async function loadQcvnCatalog({ db = defaultDb } = {}) {
         mandatoryForAllFrom: formatDateOnly(row.mandatory_for_all_from),
         replaces: parseJsonSafe(row.replaces, null),
         transitionRules: parseJsonSafe(row.transition_rules, null),
-        verificationStatus: row.verification_status === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
-        publicationStatus: row.publication_status || 'PUBLISHED',
+        verificationStatus: toCanonicalVerificationStatus(row.verification_status) === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+        publicationStatus: toCanonicalPublicationStatus(row.publication_status) || 'PUBLISHED',
         sourceDocument: row.source_document || null,
         ruleVersion: row.rule_version || '2026.2-audit',
         verifiedBy: row.verified_by || null,
@@ -811,32 +840,40 @@ async function ensureCrawlerSyncSchema(client) {
 
 async function listLawRuleImpacts({ status = null, limit = 100, db = defaultDb } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+  let res;
   if (status) {
-    const res = await db.query(
-      `SELECT * FROM law_rule_impacts WHERE status = $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
-      [String(status).toUpperCase(), safeLimit]
+    const canonical = toCanonicalImpactStatus(status);
+    const viStatus = toDbImpactStatus(canonical);
+    res = await db.query(
+      `SELECT * FROM law_rule_impacts WHERE status IN ($1, $2) ORDER BY created_at DESC, id DESC LIMIT $3`,
+      [canonical, viStatus, safeLimit]
     );
-    return res.rows;
+  } else {
+    res = await db.query(
+      `SELECT * FROM law_rule_impacts ORDER BY CASE WHEN status IN ('OPEN', 'dang_mo') THEN 0 ELSE 1 END, created_at DESC, id DESC LIMIT $1`,
+      [safeLimit]
+    );
   }
-  const res = await db.query(
-    `SELECT * FROM law_rule_impacts ORDER BY CASE WHEN status = 'OPEN' THEN 0 ELSE 1 END, created_at DESC, id DESC LIMIT $1`,
-    [safeLimit]
-  );
-  return res.rows;
+  return res.rows.map(row => ({
+    ...row,
+    status: toCanonicalImpactStatus(row.status),
+    severity: toCanonicalSeverity(row.severity),
+  }));
 }
 
 async function resolveLawRuleImpact(client, { impactId, resolvedBy, resolutionNote = null, status = 'RESOLVED' } = {}) {
   const numericId = Number(impactId);
   if (!Number.isInteger(numericId) || numericId <= 0) throw new Error('INVALID_IMPACT_ID');
-  const nextStatus = ['RESOLVED', 'IGNORED', 'OPEN'].includes(String(status).toUpperCase())
-    ? String(status).toUpperCase()
+  const canonicalStatus = ['RESOLVED', 'IGNORED', 'OPEN'].includes(toCanonicalImpactStatus(status))
+    ? toCanonicalImpactStatus(status)
     : 'RESOLVED';
+  const nextStatus = toDbImpactStatus(canonicalStatus);
 
   const res = await client.query(
     `UPDATE law_rule_impacts
      SET status = $1::varchar,
          resolved_by = $2,
-         resolved_at = CASE WHEN $1::text = 'OPEN' THEN NULL ELSE CURRENT_TIMESTAMP END,
+         resolved_at = CASE WHEN $1::text IN ('OPEN', 'dang_mo') THEN NULL ELSE CURRENT_TIMESTAMP END,
          resolution_note = COALESCE($3, resolution_note),
          updated_at = CURRENT_TIMESTAMP
      WHERE id = $4
@@ -844,22 +881,33 @@ async function resolveLawRuleImpact(client, { impactId, resolvedBy, resolutionNo
     [nextStatus, resolvedBy || null, resolutionNote, numericId]
   );
   if (res.rowCount === 0) throw new Error('IMPACT_NOT_FOUND');
-  return res.rows[0];
+  return {
+    ...res.rows[0],
+    status: toCanonicalImpactStatus(res.rows[0].status),
+    severity: toCanonicalSeverity(res.rows[0].severity),
+  };
 }
 
 async function listRuleCandidates({ status = null, limit = 100, db = defaultDb } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
-  const res = status
-    ? await db.query(
-        `SELECT * FROM rule_candidates WHERE status = $1 ORDER BY created_at DESC, id DESC LIMIT $2`,
-        [String(status).toUpperCase(), safeLimit]
-      )
-    : await db.query(
-        `SELECT * FROM rule_candidates ORDER BY CASE WHEN status IN ('PENDING_REVIEW','EXTRACTED') THEN 0 ELSE 1 END, created_at DESC, id DESC LIMIT $1`,
-        [safeLimit]
-      );
+  let res;
+  if (status) {
+    const canonical = toCanonicalCandidateStatus(status);
+    const viStatus = toDbCandidateStatus(canonical);
+    res = await db.query(
+      `SELECT * FROM rule_candidates WHERE status IN ($1, $2) ORDER BY created_at DESC, id DESC LIMIT $3`,
+      [canonical, viStatus, safeLimit]
+    );
+  } else {
+    res = await db.query(
+      `SELECT * FROM rule_candidates ORDER BY CASE WHEN status IN ('PENDING_REVIEW','EXTRACTED','cho_duyet','da_trich_xuat') THEN 0 ELSE 1 END, created_at DESC, id DESC LIMIT $1`,
+      [safeLimit]
+    );
+  }
   return res.rows.map(row => ({
     ...row,
+    status: toCanonicalCandidateStatus(row.status),
+    extraction_confidence: toCanonicalSeverity(row.extraction_confidence),
     proposed_data: parseJsonSafe(row.proposed_data, {}),
     diff_summary: parseJsonSafe(row.diff_summary, {}),
   }));
@@ -998,7 +1046,7 @@ async function verifyAndPublishQcvn(client, payload = {}) {
     cleanSourceDoc,
     ruleVersion,
     String(verifiedBy),
-    String(publicationStatus || 'PUBLISHED').toUpperCase(),
+    toDbPublicationStatus(publicationStatus || 'PUBLISHED'),
   ];
 
   if (!existing) {
@@ -1011,7 +1059,7 @@ async function verifyAndPublishQcvn(client, payload = {}) {
        ) VALUES (
          $1, $2, $3, $4::jsonb, $5, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14::jsonb, $15::jsonb, 'VERIFIED', $19, $16,
+         $14::jsonb, $15::jsonb, 'da_xac_minh', $19, $16,
          $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
        )
        RETURNING *`,
@@ -1036,7 +1084,7 @@ async function verifyAndPublishQcvn(client, payload = {}) {
          mandatory_for_all_from = $13,
          replaces = $14::jsonb,
          transition_rules = $15::jsonb,
-         verification_status = 'VERIFIED',
+         verification_status = 'da_xac_minh',
          publication_status = $19,
          source_document = $16,
          rule_version = $17,
@@ -1096,8 +1144,8 @@ async function verifyAndPublishIndustryRules(
                effective_to = COALESCE($6, effective_to),
                legal_ref = COALESCE($7, legal_ref),
                source_ref = $8,
-               verification_status = 'VERIFIED',
-               publication_status = 'PUBLISHED',
+               verification_status = 'da_xac_minh',
+               publication_status = 'da_cong_bo',
                approved_by = $9,
                approved_at = CURRENT_TIMESTAMP,
                rule_version = $10,
@@ -1124,8 +1172,8 @@ async function verifyAndPublishIndustryRules(
 
   await client.query(
     `UPDATE classification_thresholds
-     SET verification_status = 'VERIFIED',
-         publication_status = 'PUBLISHED',
+     SET verification_status = 'da_xac_minh',
+         publication_status = 'da_cong_bo',
          legal_ref = COALESCE($1, legal_ref),
          source_ref = $2,
          approved_by = $3,
@@ -1133,14 +1181,14 @@ async function verifyAndPublishIndustryRules(
          rule_version = $4,
          updated_at = CURRENT_TIMESTAMP
      WHERE industry_code = $5
-       AND COALESCE(publication_status, 'PUBLISHED') <> 'ARCHIVED'`,
+       AND COALESCE(publication_status, 'da_cong_bo') NOT IN ('ARCHIVED', 'luu_tru')`,
     [legalRef, cleanSourceDoc, String(verifiedBy), ruleVersion, cleanCode]
   );
 
   const updInd = await client.query(
     `UPDATE industries
-     SET verification_status = 'VERIFIED',
-         publication_status = 'PUBLISHED',
+     SET verification_status = 'da_xac_minh',
+         publication_status = 'da_cong_bo',
          note = COALESCE($1, note),
          source_document = $2,
          verified_by = $3,
@@ -1166,7 +1214,7 @@ async function approveRuleCandidate(
   if (candRes.rowCount === 0) throw new Error('CANDIDATE_NOT_FOUND');
 
   const cand = candRes.rows[0];
-  if (!['PENDING_REVIEW', 'EXTRACTED'].includes(String(cand.status || '').toUpperCase())) {
+  if (!['PENDING_REVIEW', 'EXTRACTED'].includes(toCanonicalCandidateStatus(cand.status))) {
     throw new Error(`CANDIDATE_ALREADY_PROCESSED:${cand.status}`);
   }
 
@@ -1231,7 +1279,7 @@ async function approveRuleCandidate(
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11,
          $12, $13, $14, $15, $16,
-         'VERIFIED', 'PUBLISHED', $17, $18, $19, $20, CURRENT_TIMESTAMP, TRUE
+         'da_xac_minh', 'da_cong_bo', $17, $18, $19, $20, CURRENT_TIMESTAMP, TRUE
        )
        RETURNING *`,
       [
@@ -1241,7 +1289,7 @@ async function approveRuleCandidate(
         maxVal,
         proposed.operator || '>=',
         proposed.unit || null,
-        proposed.capacityScale || proposed.capacity_scale || null,
+        (proposed.capacityScale || proposed.capacity_scale) ? toDbScale(proposed.capacityScale || proposed.capacity_scale) : null,
         proposed.projectGroup || proposed.project_group || 'Nhóm III',
         proposed.hs || proposed.legal_doc_required || 'GPMT',
         proposed.tq || 'cap_so',
@@ -1264,7 +1312,7 @@ async function approveRuleCandidate(
 
   const updCand = await client.query(
     `UPDATE rule_candidates
-     SET status = 'APPROVED',
+     SET status = 'da_duyet',
          reviewed_by = $1,
          reviewed_at = CURRENT_TIMESTAMP,
          review_note = COALESCE($2, review_note),
@@ -1274,7 +1322,13 @@ async function approveRuleCandidate(
     [reviewedBy || null, reviewNote, numericId]
   );
 
-  return { candidate: updCand.rows[0], appliedRecord };
+  return {
+    candidate: {
+      ...updCand.rows[0],
+      status: toCanonicalCandidateStatus(updCand.rows[0].status),
+    },
+    appliedRecord,
+  };
 }
 
 async function rejectRuleCandidate(client, { candidateId, reviewedBy, reviewNote = null } = {}) {
@@ -1282,7 +1336,7 @@ async function rejectRuleCandidate(client, { candidateId, reviewedBy, reviewNote
   if (!Number.isInteger(numericId) || numericId <= 0) throw new Error('INVALID_CANDIDATE_ID');
   const res = await client.query(
     `UPDATE rule_candidates
-     SET status = 'REJECTED',
+     SET status = 'tu_choi',
          reviewed_by = $1,
          reviewed_at = CURRENT_TIMESTAMP,
          review_note = COALESCE($2, review_note),
@@ -1292,7 +1346,10 @@ async function rejectRuleCandidate(client, { candidateId, reviewedBy, reviewNote
     [reviewedBy || null, reviewNote, numericId]
   );
   if (res.rowCount === 0) throw new Error('CANDIDATE_NOT_FOUND');
-  return res.rows[0];
+  return {
+    ...res.rows[0],
+    status: toCanonicalCandidateStatus(res.rows[0].status),
+  };
 }
 
 async function getRuleManagementCatalog({ db = defaultDb } = {}) {
@@ -1323,8 +1380,12 @@ async function getRuleManagementCatalog({ db = defaultDb } = {}) {
 
   const industries = (indRes.rows || []).map(r => ({
     ...r,
+    verification_status: toCanonicalVerificationStatus(r.verification_status),
+    publication_status: toCanonicalPublicationStatus(r.publication_status),
     thresholds: (thrRes.rows || []).filter(t => t.industry_code === r.code).map(t => ({
       ...t,
+      verification_status: toCanonicalVerificationStatus(t.verification_status),
+      publication_status: toCanonicalPublicationStatus(t.publication_status),
       effective_from: formatDateOnly(t.effective_from),
       effective_to: formatDateOnly(t.effective_to),
     })),
@@ -1332,6 +1393,9 @@ async function getRuleManagementCatalog({ db = defaultDb } = {}) {
 
   const qcvns = (qcvnRes.rows || []).map(q => ({
     ...q,
+    status: q.status ? toCanonicalQcvnStatus(q.status) : null,
+    verification_status: toCanonicalVerificationStatus(q.verification_status),
+    publication_status: toCanonicalPublicationStatus(q.publication_status),
     tham_so: parseJsonSafe(q.tham_so, []),
     effective_from: formatDateOnly(q.effective_from),
     effective_to: formatDateOnly(q.effective_to),
@@ -1368,19 +1432,20 @@ async function listThresholdRules({ status = null, db = defaultDb } = {}) {
   `;
   const params = [];
   if (status && status !== 'ALL') {
-    if (status === 'NEEDS_REVIEW') {
-      params.push('NEEDS_LEGAL_VERIFICATION');
-      query += ` WHERE ct.verification_status = $1`;
-    } else {
-      params.push(status);
-      query += ` WHERE ct.verification_status = $1`;
-    }
+    const canonical = status === 'NEEDS_REVIEW'
+      ? 'NEEDS_LEGAL_VERIFICATION'
+      : toCanonicalVerificationStatus(status);
+    const viStatus = toDbVerificationStatus(canonical);
+    params.push(canonical, viStatus);
+    query += ` WHERE ct.verification_status IN ($1, $2)`;
   }
   query += ` ORDER BY ct.industry_code, COALESCE(ct.process_stage, ''), ct.tier_order ASC, ct.min_value DESC`;
 
   const res = await db.query(query, params);
   return (res.rows || []).map(r => ({
     ...r,
+    verification_status: toCanonicalVerificationStatus(r.verification_status),
+    publication_status: toCanonicalPublicationStatus(r.publication_status),
     min_value: parseFloat(r.min_value),
     max_value: r.max_value !== null && r.max_value !== undefined ? parseFloat(r.max_value) : null,
     effective_from: formatDateOnly(r.effective_from),
@@ -1416,22 +1481,23 @@ async function updateThresholdRule(id, patch = {}, { asDraft = false, user = nul
   const effectiveFrom = patch.effective_from !== undefined ? patch.effective_from : existing.effective_from;
   const effectiveTo = patch.effective_to !== undefined ? patch.effective_to : existing.effective_to;
 
-  let newStatus = existing.verification_status;
+  const currentCanonical = toCanonicalVerificationStatus(existing.verification_status);
+  let newCanonicalStatus = currentCanonical;
   let approvedBy = existing.approved_by;
   let approvedAt = existing.approved_at;
 
   if (asDraft) {
-    newStatus = 'DRAFT';
+    newCanonicalStatus = 'DRAFT';
     approvedBy = null;
     approvedAt = null;
   } else {
     // Sửa quy tắc đã VERIFIED -> tự động thu hồi xác minh và chuyển về NEEDS_LEGAL_VERIFICATION
-    if (existing.verification_status === 'VERIFIED') {
-      newStatus = 'NEEDS_LEGAL_VERIFICATION';
+    if (currentCanonical === 'VERIFIED') {
+      newCanonicalStatus = 'NEEDS_LEGAL_VERIFICATION';
       approvedBy = null;
       approvedAt = null;
-    } else if (existing.verification_status === 'DRAFT') {
-      newStatus = 'NEEDS_LEGAL_VERIFICATION';
+    } else if (currentCanonical === 'DRAFT') {
+      newCanonicalStatus = 'NEEDS_LEGAL_VERIFICATION';
     }
   }
 
@@ -1448,12 +1514,17 @@ async function updateThresholdRule(id, patch = {}, { asDraft = false, user = nul
       minValue, maxValue, operator, unit,
       projectGroup, legalDocRequired, tq, processStage,
       phuLuc, legalRef, effectiveFrom || null, effectiveTo || null,
-      newStatus, approvedBy, approvedAt,
+      toDbVerificationStatus(newCanonicalStatus), approvedBy, approvedAt,
       id
     ]
   );
 
-  return updateRes.rows[0];
+  const row = updateRes.rows[0];
+  return row ? {
+    ...row,
+    verification_status: toCanonicalVerificationStatus(row.verification_status),
+    publication_status: toCanonicalPublicationStatus(row.publication_status),
+  } : row;
 }
 
 /**
@@ -1480,8 +1551,8 @@ async function verifyThresholdRule(id, { verifiedBy, legalRef = null, effectiveF
 
   const updateRes = await db.query(
     `UPDATE classification_thresholds
-     SET verification_status = 'VERIFIED',
-         publication_status = 'PUBLISHED',
+     SET verification_status = 'da_xac_minh',
+         publication_status = 'da_cong_bo',
          approved_by = $1,
          approved_at = CURRENT_TIMESTAMP,
          legal_ref = $2,
@@ -1492,7 +1563,12 @@ async function verifyThresholdRule(id, { verifiedBy, legalRef = null, effectiveF
     [verifiedBy || 'admin', finalLegalRef, finalEffectiveFrom, id]
   );
 
-  return updateRes.rows[0];
+  const row = updateRes.rows[0];
+  return row ? {
+    ...row,
+    verification_status: toCanonicalVerificationStatus(row.verification_status),
+    publication_status: toCanonicalPublicationStatus(row.publication_status),
+  } : row;
 }
 
 module.exports = {
