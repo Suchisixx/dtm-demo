@@ -75,9 +75,9 @@
    DB_HOST=localhost
    DB_PORT=5432
    DB_USER=postgres
-   DB_PASSWORD=mat-khau-postgresql-cua-ban
+   DB_PASSWORD= mật khẩu DB
    DB_NAME=etc_legalhub
-   JWT_SECRET=chuoi-bi-mat-jwt-cua-ban
+   JWT_SECRET= chuỗi JWT
    PORT=3000
    NODE_ENV=development
    ```
