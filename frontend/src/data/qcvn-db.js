@@ -90,7 +90,7 @@ function buildQcvn40Params(col, flowTier) {
   };
 
   return [
-    { nhom: `Thông số chung — Cột ${col} (${flowTier}) [NEEDS_LEGAL_VERIFICATION]` },
+    { nhom: `Thông số chung — Cột ${col} (${flowTier})` },
     { key: 'Temp', ten: 'Nhiệt độ', don_vi: '°C', gioi_han: 40, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'pH', ten: 'pH', don_vi: '—', min: isColA ? 6 : 5.5, max: 9, loai: 'range', note: isColA ? '6–9' : '5,5–9', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'Color', ten: 'Độ màu (pH = 7)', don_vi: 'Pt-Co', gioi_han: isColA ? 50 : 150, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -108,7 +108,7 @@ function buildQcvn40Params(col, flowTier) {
     { key: 'Cl_du', ten: 'Clo dư', don_vi: 'mg/L', gioi_han: isColA ? 1 : 2, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'Oil', ten: 'Tổng dầu mỡ khoáng', don_vi: 'mg/L', gioi_han: isColA ? 5 : 10, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'Coliform', ten: 'Coliform', don_vi: 'MPN/100mL', gioi_han: isColA ? 3000 : 5000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-    { nhom: 'Kim loại nặng & Hóa chất độc hại [NEEDS_LEGAL_VERIFICATION]' },
+    { nhom: 'Kim loại nặng & Hóa chất độc hại' },
     { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: isColA ? 0.05 : 0.25, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/L', gioi_han: isColA ? 0.005 : 0.01, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: isColA ? 0.1 : 0.5, loai: 'max', required: false, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -128,7 +128,7 @@ function buildQcvn14Params(col, isUrban = false) {
   const isColA = col === 'A';
   const isColB = col === 'B';
   return [
-    { nhom: `Nước thải ${isUrban ? 'đô thị, khu dân cư tập trung (Bảng 1)' : 'sinh hoạt dự án/cơ sở (Bảng 2)'} — Cột ${col} [NEEDS_LEGAL_VERIFICATION]` },
+    { nhom: `Nước thải ${isUrban ? 'đô thị, khu dân cư tập trung (Bảng 1)' : 'sinh hoạt dự án/cơ sở (Bảng 2)'} — Cột ${col}` },
     { key: 'pH', ten: 'pH', don_vi: '—', min: 5, max: 9, loai: 'range', note: '5–9', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'BOD5', ten: 'BOD₅ (20°C)', don_vi: 'mg/L', gioi_han: isColA ? 30 : isColB ? 35 : 40, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
     { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: isColA ? 80 : isColB ? 90 : 100, loai: 'max', required: true, averagingPeriod: 'composite', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -166,13 +166,13 @@ export const QCVN_DATA = {
   // ── 1. QCVN 08:2023/BTNMT — CHẤT LƯỢNG NƯỚC MẶT (Q01) ──
   qcvn08_a: {
     ten: 'QCVN 08:2023/BTNMT — Mức A',
-    ap_dung: 'Nước mặt chất lượng tốt; sử dụng cho mục đích cấp nước sinh hoạt (sau khử trùng/xử lý thông thường) và bảo tồn động thực vật thủy sinh [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước mặt chất lượng tốt; sử dụng cho mục đích cấp nước sinh hoạt (sau khử trùng/xử lý thông thường) và bảo tồn động thực vật thủy sinh',
     status: 'current',
     effectiveFrom: '2023-09-12',
     replaces: ['QCVN 08-MT:2015/BTNMT'],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức A) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức A)' },
       { key: 'pH', ten: 'pH', don_vi: '—', min: 6.5, max: 8.5, loai: 'range', note: '6,5–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 6, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 25, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -182,7 +182,7 @@ export const QCVN_DATA = {
       { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: 0.6, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: 0.1, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', gioi_han: 1000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người' },
       { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.02, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -196,13 +196,13 @@ export const QCVN_DATA = {
   },
   qcvn08_b: {
     ten: 'QCVN 08:2023/BTNMT — Mức B',
-    ap_dung: 'Nước mặt chất lượng trung bình; sử dụng cho cấp nước sinh hoạt sau khi áp dụng công nghệ xử lý phù hợp, công nghiệp, nông nghiệp [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước mặt chất lượng trung bình; sử dụng cho cấp nước sinh hoạt sau khi áp dụng công nghệ xử lý phù hợp, công nghiệp, nông nghiệp',
     status: 'current',
     effectiveFrom: '2023-09-12',
     replaces: ['QCVN 08-MT:2015/BTNMT'],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức B) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức B)' },
       { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 5, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 100, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -212,7 +212,7 @@ export const QCVN_DATA = {
       { key: 'TotalN', ten: 'Tổng Nitơ (T-N)', don_vi: 'mg/L', gioi_han: 1.5, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TotalP', ten: 'Tổng Phốt pho (T-P)', don_vi: 'mg/L', gioi_han: 0.3, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Coliform', ten: 'Tổng Coliform', don_vi: 'MPN/100mL', gioi_han: 5000, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 1 — Thông số ảnh hưởng sức khỏe con người' },
       { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.02, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -221,13 +221,13 @@ export const QCVN_DATA = {
   },
   qcvn08_c: {
     ten: 'QCVN 08:2023/BTNMT — Mức C',
-    ap_dung: 'Nước mặt phục vụ tưới tiêu nông nghiệp, bảo tồn thủy sinh, giao thông thủy và các mục đích có yêu cầu chất lượng nước thấp [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước mặt phục vụ tưới tiêu nông nghiệp, bảo tồn thủy sinh, giao thông thủy và các mục đích có yêu cầu chất lượng nước thấp',
     status: 'current',
     effectiveFrom: '2023-09-12',
     replaces: ['QCVN 08-MT:2015/BTNMT'],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức C) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức C)' },
       { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 4, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TSS', ten: 'Tổng chất rắn lơ lửng (TSS)', don_vi: 'mg/L', gioi_han: 100, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -239,13 +239,13 @@ export const QCVN_DATA = {
   },
   qcvn08_d: {
     ten: 'QCVN 08:2023/BTNMT — Mức D',
-    ap_dung: 'Nước mặt có chất lượng rất xấu; sử dụng cho giao thông thủy và các mục đích không tiếp xúc trực tiếp, cần giải pháp cải tạo phục hồi [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước mặt có chất lượng rất xấu; sử dụng cho giao thông thủy và các mục đích không tiếp xúc trực tiếp, cần giải pháp cải tạo phục hồi',
     status: 'current',
     effectiveFrom: '2023-09-12',
     replaces: ['QCVN 08-MT:2015/BTNMT'],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức D) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Bảng 2 — Phân loại chất lượng nước mặt (Mức D)' },
       { key: 'pH', ten: 'pH', don_vi: '—', min: 6.0, max: 8.5, loai: 'range', note: '6,0–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'DO', ten: 'Oxy hòa tan (DO)', don_vi: 'mg/L', gioi_han: 2, loai: 'min', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'COD', ten: 'COD', don_vi: 'mg/L', gioi_han: 40, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -326,7 +326,7 @@ export const QCVN_DATA = {
   // ── 2. QCVN 40:2025/BTNMT — NƯỚC THẢI CÔNG NGHIỆP (Q03) ──
   qcvn40_a_f1: {
     ten: 'QCVN 40:2025/BTNMT — Cột A (F1: F ≤ 50 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≤ 50 m³/ngày',
     status: 'current',
     column: 'A',
     flowRange: { code: 'F1', min: 0, max: 50 },
@@ -338,7 +338,7 @@ export const QCVN_DATA = {
   },
   qcvn40_a_low: {
     ten: 'QCVN 40:2025/BTNMT — Cột A (F2: 50 < F < 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng 50 < F < 2.000 m³/ngày',
     status: 'current',
     column: 'A',
     flowRange: { code: 'F2', min: 50, max: 2000 },
@@ -350,7 +350,7 @@ export const QCVN_DATA = {
   },
   qcvn40_a_high: {
     ten: 'QCVN 40:2025/BTNMT — Cột A (F3: F ≥ 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A), lưu lượng F ≥ 2.000 m³/ngày',
     status: 'current',
     column: 'A',
     flowRange: { code: 'F3', min: 2000, max: null },
@@ -362,7 +362,7 @@ export const QCVN_DATA = {
   },
   qcvn40_b_f1: {
     ten: 'QCVN 40:2025/BTNMT — Cột B (F1: F ≤ 50 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≤ 50 m³/ngày',
     status: 'current',
     column: 'B',
     flowRange: { code: 'F1', min: 0, max: 50 },
@@ -374,7 +374,7 @@ export const QCVN_DATA = {
   },
   qcvn40_b_low: {
     ten: 'QCVN 40:2025/BTNMT — Cột B (F2: 50 < F < 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng 50 < F < 2.000 m³/ngày',
     status: 'current',
     column: 'B',
     flowRange: { code: 'F2', min: 50, max: 2000 },
@@ -386,7 +386,7 @@ export const QCVN_DATA = {
   },
   qcvn40_b_high: {
     ten: 'QCVN 40:2025/BTNMT — Cột B (F3: F ≥ 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột B, lưu lượng F ≥ 2.000 m³/ngày',
     status: 'current',
     column: 'B',
     flowRange: { code: 'F3', min: 2000, max: null },
@@ -398,7 +398,7 @@ export const QCVN_DATA = {
   },
   qcvn40_c_f1: {
     ten: 'QCVN 40:2025/BTNMT — Cột C (F1: F ≤ 50 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≤ 50 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≤ 50 m³/ngày',
     status: 'current',
     column: 'C',
     flowRange: { code: 'F1', min: 0, max: 50 },
@@ -410,7 +410,7 @@ export const QCVN_DATA = {
   },
   qcvn40_c_low: {
     ten: 'QCVN 40:2025/BTNMT — Cột C (F2: 50 < F < 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng 50 < F < 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng 50 < F < 2.000 m³/ngày',
     status: 'current',
     column: 'C',
     flowRange: { code: 'F2', min: 50, max: 2000 },
@@ -422,7 +422,7 @@ export const QCVN_DATA = {
   },
   qcvn40_c_high: {
     ten: 'QCVN 40:2025/BTNMT — Cột C (F3: F ≥ 2.000 m³/ngày)',
-    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≥ 2.000 m³/ngày [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải công nghiệp xả vào nguồn nước Cột C, lưu lượng F ≥ 2.000 m³/ngày',
     status: 'current',
     column: 'C',
     flowRange: { code: 'F3', min: 2000, max: null },
@@ -436,7 +436,7 @@ export const QCVN_DATA = {
   // ── 3. QCVN 14:2025/BTNMT — NƯỚC THẢI SINH HOẠT & ĐÔ THỊ (Q04) ──
   qcvn14_a: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột A',
-    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A) [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước dùng cho mục đích cấp nước sinh hoạt (Cột A)',
     status: 'current',
     column: 'A',
     effectiveFrom: '2025-09-01',
@@ -447,7 +447,7 @@ export const QCVN_DATA = {
   },
   qcvn14_b: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột B',
-    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột B [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột B',
     status: 'current',
     column: 'B',
     effectiveFrom: '2025-09-01',
@@ -458,7 +458,7 @@ export const QCVN_DATA = {
   },
   qcvn14_c: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 2 (Dự án/Cơ sở) — Cột C',
-    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột C [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải sinh hoạt của dự án đầu tư, cơ sở xả vào nguồn nước Cột C',
     status: 'current',
     column: 'C',
     effectiveFrom: '2025-09-01',
@@ -469,7 +469,7 @@ export const QCVN_DATA = {
   },
   qcvn14_urban_a: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột A',
-    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột A [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột A',
     status: 'current',
     column: 'A',
     effectiveFrom: '2025-09-01',
@@ -480,7 +480,7 @@ export const QCVN_DATA = {
   },
   qcvn14_urban_b: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột B',
-    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột B [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột B',
     status: 'current',
     column: 'B',
     effectiveFrom: '2025-09-01',
@@ -491,7 +491,7 @@ export const QCVN_DATA = {
   },
   qcvn14_urban_c: {
     ten: 'QCVN 14:2025/BTNMT — Bảng 1 (Đô thị/Khu dân cư tập trung) — Cột C',
-    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột C [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Nước thải đô thị, khu dân cư tập trung xả vào nguồn nước Cột C',
     status: 'current',
     column: 'C',
     effectiveFrom: '2025-09-01',
@@ -504,7 +504,7 @@ export const QCVN_DATA = {
   // ── 4. QCVN 19:2024/BTNMT — KHÍ THẢI CÔNG NGHIỆP (Q07) ──
   qcvn19_2024_a: {
     ten: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột A',
-    ap_dung: 'Khí thải công nghiệp xả vào vùng bảo vệ nghiêm ngặt / khu vực nhạy cảm [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Khí thải công nghiệp xả vào vùng bảo vệ nghiêm ngặt / khu vực nhạy cảm',
     status: 'current',
     column: 'A',
     effectiveFrom: '2025-07-01',
@@ -519,7 +519,7 @@ export const QCVN_DATA = {
     ],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Khí thải công nghiệp chung — Cột A [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Khí thải công nghiệp chung — Cột A' },
       { key: 'Dust', ten: 'Bụi tổng', don_vi: 'mg/Nm³', gioi_han: 50, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'SO2', ten: 'Lưu huỳnh đioxit (SO₂)', don_vi: 'mg/Nm³', gioi_han: 150, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'NOx', ten: 'Nitơ oxit (NOₓ tính theo NO₂)', don_vi: 'mg/Nm³', gioi_han: 250, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -535,7 +535,7 @@ export const QCVN_DATA = {
   },
   qcvn19_2024_b: {
     ten: 'QCVN 19:2024/BTNMT — Khí thải công nghiệp — Cột B',
-    ap_dung: 'Khí thải công nghiệp xả vào vùng hạn chế phát thải / khu vực khác [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Khí thải công nghiệp xả vào vùng hạn chế phát thải / khu vực khác',
     status: 'current',
     column: 'B',
     effectiveFrom: '2025-07-01',
@@ -550,7 +550,7 @@ export const QCVN_DATA = {
     ],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Khí thải công nghiệp chung — Cột B [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Khí thải công nghiệp chung — Cột B' },
       { key: 'Dust', ten: 'Bụi tổng', don_vi: 'mg/Nm³', gioi_han: 100, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'SO2', ten: 'Lưu huỳnh đioxit (SO₂)', don_vi: 'mg/Nm³', gioi_han: 300, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'NOx', ten: 'Nitơ oxit (NOₓ tính theo NO₂)', don_vi: 'mg/Nm³', gioi_han: 400, loai: 'max', required: true, averagingPeriod: '1h', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -580,13 +580,13 @@ export const QCVN_DATA = {
   // ── 5. QCVN 09:2023/BTNMT — NƯỚC DƯỚI ĐẤT (Q02) ──
   qcvn09: {
     ten: 'QCVN 09:2023/BTNMT — Chất lượng nước dưới đất',
-    ap_dung: 'Đánh giá và giám sát chất lượng nước dưới đất (thay thế QCVN 09-MT:2015/BTNMT từ 12/09/2023) [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Đánh giá và giám sát chất lượng nước dưới đất (thay thế QCVN 09-MT:2015/BTNMT từ 12/09/2023)',
     status: 'current',
     effectiveFrom: '2023-09-12',
     replaces: ['QCVN 09-MT:2015/BTNMT'],
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
     tham_so: [
-      { nhom: 'Thông số vật lý & hóa học cơ bản (QCVN 09:2023/BTNMT) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Thông số vật lý & hóa học cơ bản (QCVN 09:2023/BTNMT)' },
       { key: 'pH', ten: 'pH', don_vi: '—', min: 5.5, max: 8.5, loai: 'range', note: '5,5–8,5', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TDS', ten: 'Tổng chất rắn hòa tan (TDS)', don_vi: 'mg/L', gioi_han: 1500, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Hardness', ten: 'Độ cứng tổng (tính theo CaCO₃)', don_vi: 'mg/L', gioi_han: 500, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -598,7 +598,7 @@ export const QCVN_DATA = {
       { key: 'F', ten: 'Florua (F⁻)', don_vi: 'mg/L', gioi_han: 1.0, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'SO4', ten: 'Sunfat (SO₄²⁻)', don_vi: 'mg/L', gioi_han: 400, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Kim loại nặng & Vi sinh (QCVN 09:2023/BTNMT) [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Kim loại nặng & Vi sinh (QCVN 09:2023/BTNMT)' },
       { key: 'As', ten: 'Asen (As)', don_vi: 'mg/L', gioi_han: 0.05, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Cd', ten: 'Cadimi (Cd)', don_vi: 'mg/L', gioi_han: 0.005, loai: 'max', required: false, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Pb', ten: 'Chì (Pb)', don_vi: 'mg/L', gioi_han: 0.01, loai: 'max', required: true, averagingPeriod: 'grab', verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -695,7 +695,7 @@ export const QCVN_DATA = {
   // ── 7. QCVN 03:2023/BTNMT — CHẤT LƯỢNG ĐẤT (Q06) ──
   qcvn03_type1: {
     ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 1',
-    ap_dung: 'Đất nông nghiệp, đất rừng, đất khu bảo tồn thiên nhiên, đất di sản [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Đất nông nghiệp, đất rừng, đất khu bảo tồn thiên nhiên, đất di sản',
     status: 'current',
     effectiveFrom: '2023-09-12',
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
@@ -711,7 +711,7 @@ export const QCVN_DATA = {
       { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 0.5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 70, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 1.0, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu' },
       { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 1.0, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 0.5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 500, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -721,7 +721,7 @@ export const QCVN_DATA = {
   },
   qcvn03_type2: {
     ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 2',
-    ap_dung: 'Đất ở, đất đô thị, đất khu vui chơi giải trí, công cộng, thương mại dịch vụ [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Đất ở, đất đô thị, đất khu vui chơi giải trí, công cộng, thương mại dịch vụ',
     status: 'current',
     effectiveFrom: '2023-09-12',
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
@@ -737,7 +737,7 @@ export const QCVN_DATA = {
       { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 150, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu' },
       { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 2, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 1000, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
@@ -746,7 +746,7 @@ export const QCVN_DATA = {
   },
   qcvn03_type3: {
     ten: 'QCVN 03:2023/BTNMT — Đất Nhóm 3',
-    ap_dung: 'Đất khu công nghiệp, cụm công nghiệp, cơ sở sản xuất kinh doanh, kho tàng, bến bãi [NEEDS_LEGAL_VERIFICATION]',
+    ap_dung: 'Đất khu công nghiệp, cụm công nghiệp, cơ sở sản xuất kinh doanh, kho tàng, bến bãi',
     status: 'current',
     effectiveFrom: '2023-09-12',
     verificationStatus: 'NEEDS_LEGAL_VERIFICATION',
@@ -762,7 +762,7 @@ export const QCVN_DATA = {
       { key: 'Hg', ten: 'Thủy ngân (Hg)', don_vi: 'mg/kg đất khô', gioi_han: 10, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Ni', ten: 'Niken (Ni)', don_vi: 'mg/kg đất khô', gioi_han: 300, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'CN', ten: 'Xyanua (CN⁻)', don_vi: 'mg/kg đất khô', gioi_han: 20, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
-      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu [NEEDS_LEGAL_VERIFICATION]' },
+      { nhom: 'Hợp chất hữu cơ & Hóa chất BVTV tồn lưu' },
       { key: 'Phenol', ten: 'Phenol', don_vi: 'mg/kg đất khô', gioi_han: 20, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'Benzene', ten: 'Benzen', don_vi: 'mg/kg đất khô', gioi_han: 5, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },
       { key: 'TPH', ten: 'Tổng hiđrocacbon dầu mỏ (TPH)', don_vi: 'mg/kg đất khô', gioi_han: 2500, loai: 'max', required: false, verificationStatus: 'NEEDS_LEGAL_VERIFICATION' },

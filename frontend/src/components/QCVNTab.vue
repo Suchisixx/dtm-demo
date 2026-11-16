@@ -293,6 +293,21 @@ const requestServerQcvnSelection = async ({ projectOverride = null, clearSourceT
   }
 }
 
+const cleanQcvnDisplayText = (text) => {
+  if (!text) return ''
+  return String(text)
+    .replace(/\s*\[NEEDS_LEGAL_VERIFICATION\]\s*/gi, '')
+    .replace(/\s*\[CAN_XAC_MINH_PHAP_LY\]\s*/gi, '')
+    .trim()
+}
+
+const parseMeasuredNumeric = (rawVal) => {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return NaN
+  if (typeof rawVal === 'number') return rawVal
+  const normalized = String(rawVal).trim().replace(/,/g, '.')
+  return normalized ? parseFloat(normalized) : NaN
+}
+
 const requestServerQcvnEvaluation = async () => {
   if (!currentQcvn.value) {
     serverEvaluation.value = null
@@ -303,9 +318,9 @@ const requestServerQcvnEvaluation = async () => {
     const finalValues = {}
     currentQcvn.value.tham_so.forEach(p => {
       if (p.nhom) return
-      const val = measuredValues.value[p.key]
-      if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
-        finalValues[p.key] = parseFloat(val)
+      const val = parseMeasuredNumeric(measuredValues.value[p.key])
+      if (!Number.isNaN(val)) {
+        finalValues[p.key] = val
       }
     })
     const selCtx = buildQcvnSelectionPayload()
@@ -322,7 +337,7 @@ const requestServerQcvnEvaluation = async () => {
     })
     if (res.ok) {
       const data = await res.json()
-      serverEvaluation.value = data.evaluation || null
+      serverEvaluation.value = data.evaluation ? { ...data.evaluation, qcvnId: selectedSubType.value } : null
       if (data.serverSelection) {
         serverSelection.value = data.serverSelection
       }
@@ -344,6 +359,18 @@ const requestServerQcvnEvaluation = async () => {
   }
 }
 
+const localSampleEvaluation = computed(() => {
+  return evaluateQcvnSample({
+    qcvnId: selectedSubType.value,
+    measuredValues: measuredValues.value,
+    samplingPeriods: activeSamplingPeriods.value,
+    permitLimits: effectivePermitLimits.value,
+    receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
+    qcvnDatabase: runtimeQcvnData.value,
+    ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
+  })
+})
+
 const sampleEvaluation = computed(() => {
   if (!currentQcvn.value) {
     return {
@@ -363,25 +390,28 @@ const sampleEvaluation = computed(() => {
   }
 
   if (serverEvaluation.value && serverEvaluation.value.qcvnId === selectedSubType.value) {
-    return serverEvaluation.value
+    const srvParams = serverEvaluation.value.evaluatedParams
+    const srvSummary = serverEvaluation.value.summary
+    return {
+      ...serverEvaluation.value,
+      evaluatedParams: (Array.isArray(srvParams) && srvParams.length > 0)
+        ? srvParams
+        : localSampleEvaluation.value.evaluatedParams,
+      summary: (srvSummary && srvSummary.total > 0)
+        ? srvSummary
+        : localSampleEvaluation.value.summary,
+    }
   }
 
-  return evaluateQcvnSample({
-    qcvnId: selectedSubType.value,
-    measuredValues: measuredValues.value,
-    samplingPeriods: activeSamplingPeriods.value,
-    permitLimits: effectivePermitLimits.value,
-    receivingWaterConfirmed: needsReceivingConfirmation.value ? receivingWaterConfirmed.value : true,
-    qcvnDatabase: runtimeQcvnData.value,
-    ruleSource: qcvnRuleSource.value === 'LOADING' ? 'DATABASE' : qcvnRuleSource.value,
-  })
+  return localSampleEvaluation.value
 })
 
 const evaluatedParams = computed(() => {
   if (!currentQcvn.value || !Array.isArray(currentQcvn.value.tham_so)) return []
 
-  // Dùng kết quả từ 1 evaluator chuẩn (nếu bị gate nguồn tiếp nhận trả mảng rỗng -> vẫn render cấu trúc bảng thông số để người dùng nhập)
-  const rawEvaluated = sampleEvaluation.value.evaluatedParams
+  const rawEvaluated = (Array.isArray(sampleEvaluation.value.evaluatedParams) && sampleEvaluation.value.evaluatedParams.length > 0)
+    ? sampleEvaluation.value.evaluatedParams
+    : localSampleEvaluation.value.evaluatedParams
   const evalMap = new Map()
   if (Array.isArray(rawEvaluated) && rawEvaluated.length > 0) {
     rawEvaluated.forEach(item => {
@@ -390,13 +420,18 @@ const evaluatedParams = computed(() => {
   }
 
   return currentQcvn.value.tham_so.map(p => {
-    if (p.nhom) return p
+    if (p.nhom) {
+      return {
+        ...p,
+        nhom: cleanQcvnDisplayText(p.nhom),
+      }
+    }
 
     const evalItem = evalMap.get(p.key)
     const rawVal = measuredValues.value
       ? (measuredValues.value[p.key] !== undefined ? measuredValues.value[p.key] : (p.key === 'Cr_tong' ? measuredValues.value.Cr3 : undefined))
       : undefined
-    const val = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? parseFloat(rawVal) : NaN
+    const val = parseMeasuredNumeric(rawVal)
 
     let status = 'empty'
     let label = '—'
@@ -471,7 +506,7 @@ const evaluatedParams = computed(() => {
 })
 
 const summary = computed(() => {
-  return sampleEvaluation.value.summary || { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0, invalidPermitLimits: 0 }
+  return sampleEvaluation.value.summary || localSampleEvaluation.value.summary || { total: 0, pass: 0, near: 0, fail: 0, missingRequired: 0, periodMismatch: 0, invalidPermitLimits: 0 }
 })
 
 const handleQuickPaste = () => {
@@ -596,9 +631,9 @@ const saveSample = async () => {
   if (currentQcvn.value) {
     currentQcvn.value.tham_so.forEach(p => {
       if (p.nhom) return
-      const val = measuredValues.value[p.key]
-      if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
-        finalValues[p.key] = parseFloat(val)
+      const val = parseMeasuredNumeric(measuredValues.value[p.key])
+      if (!Number.isNaN(val)) {
+        finalValues[p.key] = val
       }
     })
   }
@@ -666,12 +701,20 @@ const selectSample = async (sample) => {
   sampleName.value = sample.name
   selectedType.value = sample.type
   selectedSubType.value = sample.sub_type
-  measuredValues.value = sample.values || {}
+  const rawSampleValues = sample.values && typeof sample.values === 'object' ? sample.values : {}
+  const normalizedSampleValues = {}
+  for (const [k, v] of Object.entries(rawSampleValues)) {
+    const parsed = parseMeasuredNumeric(v)
+    normalizedSampleValues[k] = Number.isNaN(parsed) ? v : parsed
+  }
+  measuredValues.value = normalizedSampleValues
   const details = sample.evaluation_details || {}
-  receivingWaterConfirmed.value = Boolean(details.receivingWaterConfirmed)
-  flowRate.value = details.serverSelectionContext?.flowRate ?? null
-  receivingWaterClass.value = details.serverSelectionContext?.receivingWaterClass || ''
-  isExistingFacility.value = Boolean(details.serverSelectionContext?.isExistingFacility)
+  const fd = sample.project_form_data || {}
+  receivingWaterConfirmed.value = Boolean(details.receivingWaterConfirmed ?? fd.receivingWaterConfirmed)
+  flowRate.value = details.serverSelectionContext?.flowRate ?? (fd.nt ? Number(fd.nt) : null)
+  const inferredColMatch = String(sample.sub_type || '').match(/_([abc])(?:_|$)/i)
+  receivingWaterClass.value = details.serverSelectionContext?.receivingWaterClass || fd.receivingWaterClass || (inferredColMatch ? inferredColMatch[1].toUpperCase() : '')
+  isExistingFacility.value = Boolean(details.serverSelectionContext?.isExistingFacility ?? fd.isExistingFacility)
   isUrbanArea.value = Boolean(details.serverSelectionContext?.isUrbanArea)
   evaluationDate.value = details.evaluationDate || new Date().toISOString().slice(0, 10)
   serverSelection.value = details.serverSelection || null
@@ -682,14 +725,10 @@ const selectSample = async (sample) => {
   samplingPeriods.value = details.samplingPeriods && details.samplingPeriods._default
     ? { _default: details.samplingPeriods._default }
     : { _default: '' }
-  await nextTick()
-  isAutoMatching.value = false
-  unsavedChanges.value = false
 
   // Khôi phục liên kết dự án
   if (sample.project_id && sample.project_name) {
     const cr = sample.project_classification_result || {}
-    const fd = sample.project_form_data || {}
     linkedProject.value = {
       id: sample.project_id,
       ten_du_an: sample.project_name,
@@ -701,6 +740,11 @@ const selectSample = async (sample) => {
   } else {
     linkedProject.value = null
   }
+
+  await nextTick()
+  isAutoMatching.value = false
+  unsavedChanges.value = false
+  await requestServerQcvnEvaluation()
 }
 
 const handleDeleteSample = async (id) => {
@@ -733,7 +777,7 @@ const exportTxt = () => {
     `Ngày: ${now}`,
     `Tên mẫu / Vị trí: ${sampleName.value || 'Mẫu không rõ tên'}`,
     `QCVN áp dụng: ${currentQcvn.value.ten}`,
-    `Mục đích: ${currentQcvn.value.ap_dung}`,
+    `Mục đích: ${cleanQcvnDisplayText(currentQcvn.value.ap_dung)}`,
     `Nguồn quy chuẩn: ${getRuleSourceLabel(sampleEvaluation.value.ruleSource)} | Phiên bản: ${sampleEvaluation.value.ruleVersion || '—'}`,
     ...(linkedProject.value ? [
       `Dự án liên kết: ${linkedProject.value.ten_du_an}`,
@@ -885,7 +929,7 @@ const showQuickPaste = ref(false)
             </tr>
             <tr>
               <th style="padding: 4px 0; color: #526158;">Áp dụng cho:</th>
-              <td style="padding: 4px 0; color: #192A21;">{{ currentQcvn.ap_dung }}</td>
+              <td style="padding: 4px 0; color: #192A21;">{{ cleanQcvnDisplayText(currentQcvn.ap_dung) }}</td>
             </tr>
             <tr v-if="linkedProject">
               <th style="padding: 4px 0; color: #526158;">Dự án liên kết:</th>
@@ -1279,7 +1323,7 @@ const showQuickPaste = ref(false)
           <tbody>
             <template v-for="(p, i) in paginatedParams" :key="i">
               <tr v-if="p.nhom">
-                <td class="param-group-head" :colspan="showPermitLimits ? 7 : 6">{{ p.nhom }}</td>
+                <td class="param-group-head" :colspan="showPermitLimits ? 7 : 6">{{ cleanQcvnDisplayText(p.nhom) }}</td>
               </tr>
 
               <tr v-else :class="{ 'row-pass': p.status === 'pass', 'row-fail': p.status === 'fail', 'row-near': p.status === 'near' }">
@@ -1345,7 +1389,7 @@ const showQuickPaste = ref(false)
       <!-- Ghi chú cuối bảng -->
       <div style="padding:12px 20px;border-top:1px solid var(--border);background:var(--bg);font-size:12px;color:var(--text3);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <span class="no-print">Nhập giá trị vào cột "Kết quả đo" — kết luận đối chiếu được tính toán theo thời gian thực.</span>
-        <span>Áp dụng: {{ currentQcvn.ap_dung }}</span>
+        <span>Áp dụng: {{ cleanQcvnDisplayText(currentQcvn.ap_dung) }}</span>
       </div>
     </div>
 

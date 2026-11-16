@@ -462,6 +462,60 @@ async function migrateEnglishValuesToVietnameseOnce(db) {
   );
 }
 
+async function sanitizeLawTextFieldsInDb(db) {
+  const {
+    normalizeLawNote,
+    normalizeLawDescription,
+    normalizeLawProvisions,
+  } = require('./repository-shared');
+  const res = await db.query('SELECT id, note, mo_ta, dieu_khoang FROM laws WHERE note IS NOT NULL OR mo_ta IS NOT NULL');
+  for (const row of res.rows || []) {
+    const cleanNote = normalizeLawNote(row.note);
+    const cleanMoTa = normalizeLawDescription(row.mo_ta);
+    const parsedProvisions = Array.isArray(row.dieu_khoang)
+      ? row.dieu_khoang
+      : (typeof row.dieu_khoang === 'string' ? JSON.parse(row.dieu_khoang) : []);
+    const cleanProvisions = normalizeLawProvisions(parsedProvisions);
+    if (
+      (row.note || null) !== cleanNote ||
+      (row.mo_ta || null) !== cleanMoTa ||
+      JSON.stringify(parsedProvisions) !== JSON.stringify(cleanProvisions)
+    ) {
+      await db.query(
+        'UPDATE laws SET note = $1, mo_ta = $2, dieu_khoang = $3 WHERE id = $4',
+        [cleanNote, cleanMoTa, JSON.stringify(cleanProvisions || []), row.id]
+      );
+    }
+  }
+}
+
+async function sanitizeQcvnTextFieldsInDb(db) {
+  const {
+    stripInternalVerificationTags,
+    sanitizeQcvnThamSo,
+    parseJsonSafe,
+  } = require('./repository-shared');
+  const res = await db.query('SELECT id, ten, ap_dung, source_document, tham_so FROM qcvns');
+  for (const row of res.rows || []) {
+    const cleanTen = stripInternalVerificationTags(row.ten);
+    const cleanApDung = row.ap_dung ? stripInternalVerificationTags(row.ap_dung) : row.ap_dung;
+    const cleanSourceDoc = row.source_document ? stripInternalVerificationTags(row.source_document) : row.source_document;
+    const parsedThamSo = parseJsonSafe(row.tham_so, []);
+    const cleanThamSo = sanitizeQcvnThamSo(parsedThamSo);
+    if (
+      (row.ten || null) !== (cleanTen || null) ||
+      (row.ap_dung || null) !== (cleanApDung || null) ||
+      (row.source_document || null) !== (cleanSourceDoc || null) ||
+      JSON.stringify(parsedThamSo) !== JSON.stringify(cleanThamSo)
+    ) {
+      await db.query(
+        'UPDATE qcvns SET ten = $1, ap_dung = $2, source_document = $3, tham_so = $4::jsonb WHERE id = $5',
+        [cleanTen, cleanApDung, cleanSourceDoc, JSON.stringify(cleanThamSo || []), row.id]
+      );
+    }
+  }
+}
+
 async function loadQcvnSeedModule() {
   try {
     return require('../../frontend/src/data/qcvn-db.js');
@@ -555,6 +609,8 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
 
     await promoteBaselineCatalogOnce(db);
     await migrateEnglishValuesToVietnameseOnce(db);
+    await sanitizeLawTextFieldsInDb(db);
+    await sanitizeQcvnTextFieldsInDb(db);
 
     if (
       qcvnStats.inserted > 0 || qcvnStats.enriched > 0

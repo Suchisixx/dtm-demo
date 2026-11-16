@@ -184,6 +184,83 @@ function slugifyId(text) {
     .slice(0, 80);
 }
 
+function normalizeLawNote(note) {
+  if (note === undefined || note === null) return null;
+  let cleaned = String(note)
+    .replace(/[⭐⚠️🌟]/g, '')
+    .trim()
+    .replace(/\bDoanh nghiệp có EPR obligation\b/gi, 'Doanh nghiệp thuộc diện phải thực hiện trách nhiệm tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\bEPR obligation\b/gi, 'nghĩa vụ tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\bEPR\b/g, 'trách nhiệm tái chế, xử lý của nhà sản xuất, nhập khẩu')
+    .replace(/^Thay\s+QCVN\s+/i, 'Thay thế QCVN ')
+    .replace(/^Mới\s+2025,\s*thay\s+/i, 'Ban hành mới năm 2025, thay thế ')
+    .replace(/^Mới\s*—\s*hiệu lực\s*01\/08\/2025\.\s*Rà soát trước khi lập hồ sơ dự án từ\s*8\/2025\./i, 'Mới ban hành — có hiệu lực từ 01/08/2025. Cần rà soát trước khi lập hồ sơ dự án từ tháng 08/2025.')
+    .replace(/^QUAN TRỌNG NHẤT\s*—/i, 'Quan trọng nhất —')
+    .replace(/^QUAN TRỌNG\s*—/i, 'Quan trọng —')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || null;
+}
+
+function normalizeLawDescription(moTa) {
+  if (moTa === undefined || moTa === null) return null;
+  let cleaned = String(moTa)
+    .replace(/[⭐⚠️🌟]/g, '')
+    .replace(/\bPre-2020,\s*vẫn còn hiệu lực\./gi, 'Ban hành trước năm 2020, vẫn còn hiệu lực.')
+    .replace(/\bquan trắc tự động liên tục\s*\(CEMS\)/gi, 'quan trắc tự động, liên tục')
+    .replace(/\bEPR obligation\b/gi, 'trách nhiệm tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || null;
+}
+
+function normalizeLawProvisions(dieuKhoang) {
+  if (!Array.isArray(dieuKhoang)) return dieuKhoang;
+  return dieuKhoang.map((item) => {
+    if (typeof item === 'string') {
+      return item
+        .replace(/[⭐⚠️🌟]/g, '')
+        .replace(/\bliên quan EPR\b/gi, 'liên quan trách nhiệm tái chế, xử lý của nhà sản xuất, nhập khẩu')
+        .replace(/\bEPR obligation\b/gi, 'nghĩa vụ tái chế, xử lý của nhà sản xuất, nhập khẩu')
+        .trim();
+    }
+    if (item && typeof item === 'object') {
+      return {
+        ...item,
+        tieu_de: item.tieu_de ? String(item.tieu_de).replace(/[⭐⚠️🌟]/g, '').trim() : item.tieu_de,
+      };
+    }
+    return item;
+  });
+}
+
+function stripInternalVerificationTags(text) {
+  if (text === undefined || text === null) return text;
+  return String(text)
+    .replace(/\s*\[NEEDS_LEGAL_VERIFICATION\]\s*/gi, '')
+    .replace(/\s*\[CAN_XAC_MINH_PHAP_LY\]\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function sanitizeQcvnThamSo(thamSo) {
+  if (!Array.isArray(thamSo)) return [];
+  return thamSo.map((item) => {
+    if (!item || typeof item !== 'object') return item;
+    const cleaned = { ...item };
+    if (cleaned.nhom) {
+      cleaned.nhom = stripInternalVerificationTags(cleaned.nhom);
+    }
+    if (cleaned.ten) {
+      cleaned.ten = stripInternalVerificationTags(cleaned.ten);
+    }
+    if (cleaned.note) {
+      cleaned.note = stripInternalVerificationTags(cleaned.note);
+    }
+    return cleaned;
+  });
+}
+
 module.exports = {
   defaultDb,
   EXCLUDED_PUBLICATION_STATUSES,
@@ -192,6 +269,11 @@ module.exports = {
   parseJsonSafe,
   formatDateOnly,
   slugifyId,
+  normalizeLawNote,
+  normalizeLawDescription,
+  normalizeLawProvisions,
+  stripInternalVerificationTags,
+  sanitizeQcvnThamSo,
   toDbVerificationStatus: VERIFICATION_STATUS_MAPPER.toDb,
   toCanonicalVerificationStatus: VERIFICATION_STATUS_MAPPER.toCanonical,
   toDbPublicationStatus: PUBLICATION_STATUS_MAPPER.toDb,

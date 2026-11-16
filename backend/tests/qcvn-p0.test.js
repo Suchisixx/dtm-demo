@@ -500,3 +500,48 @@ test('Phase 2 Items 7 & 8: Server QCVN selection by industry, transitional gate 
   assert.equal(selTransOk.status, 'OK');
   assert.equal(selTransOk.qcvnId, 'qcvn40_2011_b');
 });
+
+test('Per-parameter ratio evaluation for saved samples, comma decimals, and clean Vietnamese group labels', () => {
+  const res = evaluateQcvnSample({
+    qcvnId: 'qcvn40_a_low',
+    measuredValues: {
+      Temp: 32,
+      pH: '7,2',
+      Color: 42,
+      BOD5: 22,
+      COD: 52,
+      TSS: 36,
+      NH4N: '3,5',
+    },
+    receivingWaterConfirmed: false,
+    qcvnDatabase: QCVN_DATA,
+    ruleSource: 'DATABASE',
+  });
+
+  // Vẫn giữ nguyên chốt chặn Fail-Closed ở cấp mẫu khi chưa xác nhận nguồn tiếp nhận
+  assert.equal(res.overallStatus, 'NEEDS_REVIEW');
+  assert.equal(res.reason, 'MISSING_RECEIVING_SOURCE');
+  assert.equal(res.isOfficialConclusion, false);
+
+  // Nhưng từng dòng thông số vẫn được tính toán kết luận kỹ thuật và tổng hợp
+  assert.equal(res.summary.total, 7);
+  const phItem = res.evaluatedParams.find(p => p.key === 'pH');
+  const nh4Item = res.evaluatedParams.find(p => p.key === 'NH4N');
+  const bodItem = res.evaluatedParams.find(p => p.key === 'BOD5');
+  assert.equal(phItem.value, 7.2);
+  assert.equal(phItem.status, 'pass');
+  assert.equal(nh4Item.value, 3.5);
+  assert.equal(nh4Item.status, 'pass');
+  assert.equal(bodItem.value, 22);
+  assert.equal(bodItem.status, 'near');
+
+  // Không còn nhãn tiếng Anh [NEEDS_LEGAL_VERIFICATION] trong nhom hoặc ap_dung
+  for (const qcvn of Object.values(QCVN_DATA)) {
+    assert.equal(String(qcvn.ap_dung || '').includes('[NEEDS_LEGAL_VERIFICATION]'), false);
+    for (const p of qcvn.tham_so || []) {
+      if (p.nhom) {
+        assert.equal(String(p.nhom).includes('[NEEDS_LEGAL_VERIFICATION]'), false);
+      }
+    }
+  }
+});

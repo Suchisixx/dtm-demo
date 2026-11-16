@@ -366,6 +366,7 @@ router.post('/samples', requireAuth, async (req, res) => {
       unverifiedReasons: serverEvaluation.unverifiedReasons || [],
       qcvnComplianceStatus: serverEvaluation.qcvnComplianceStatus,
       permitComplianceStatus: serverEvaluation.permitComplianceStatus,
+      evaluatedParams: serverEvaluation.evaluatedParams || [],
       summary: serverEvaluation.summary,
       samplingPeriods,
       permitLimits,

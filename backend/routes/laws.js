@@ -5,13 +5,23 @@ const { requireAdmin } = require('../middleware/auth');
 const { logAudit, logLawHistory } = require('../utils/audit');
 const logger = require('../utils/logger');
 const { ACTIONS } = require('../utils/constants');
-const { toDbLawStatus } = require('../services/repository-shared');
+const {
+  toDbLawStatus,
+  normalizeLawNote,
+  normalizeLawDescription,
+  normalizeLawProvisions,
+} = require('../services/repository-shared');
 
 function formatLawRecord(row) {
+  const parsedProvisions = Array.isArray(row.dieu_khoang)
+    ? row.dieu_khoang
+    : (typeof row.dieu_khoang === 'string' ? JSON.parse(row.dieu_khoang) : []);
   return {
     ...row,
     year: parseInt(row.year, 10),
-    dieu_khoang: Array.isArray(row.dieu_khoang) ? row.dieu_khoang : (typeof row.dieu_khoang === 'string' ? JSON.parse(row.dieu_khoang) : []),
+    mo_ta: normalizeLawDescription(row.mo_ta),
+    note: normalizeLawNote(row.note),
+    dieu_khoang: normalizeLawProvisions(parsedProvisions),
     sortDate: row.sort_date || (row.year ? new Date(parseInt(row.year, 10), 0).getTime() : 0)
   };
 }
@@ -73,10 +83,17 @@ router.get('/', async (req, res) => {
   try {
     const result = await db.query('SELECT * FROM laws ORDER BY sort_date DESC, id DESC');
     
-    // Ánh xạ sort_date -> sortDate và bảo đảm dieu_khoang là mảng
-    const laws = result.rows.map(row => {
+    // Ánh xạ sort_date -> sortDate và bảo đảm dieu_khoang là mảng, đồng thời đồng bộ bản ghi đã chuẩn hóa vào DB nếu còn ký tự sao/tiếng Anh cũ
+    const laws = [];
+    for (const row of result.rows) {
       const formatted = formatLawRecord(row);
-      return {
+      if ((row.note || null) !== formatted.note || (row.mo_ta || null) !== formatted.mo_ta) {
+        db.query(
+          'UPDATE laws SET note = $1, mo_ta = $2, dieu_khoang = $3 WHERE id = $4',
+          [formatted.note, formatted.mo_ta, JSON.stringify(formatted.dieu_khoang || []), row.id]
+        ).catch(() => {});
+      }
+      laws.push({
         id: formatted.id,
         type: formatted.type,
         year: formatted.year,
@@ -89,8 +106,8 @@ router.get('/', async (req, res) => {
         dieu_khoang: formatted.dieu_khoang,
         note: formatted.note,
         link: formatted.link
-      };
-    });
+      });
+    }
 
     return res.json(laws);
   } catch (error) {
@@ -128,9 +145,9 @@ router.post('/', requireAdmin, async (req, res) => {
         ten,
         hieuluc || null,
         toDbLawStatus(status, 'con_hieu_luc'),
-        mo_ta || null,
-        JSON.stringify(dieu_khoang || []),
-        note || null,
+        normalizeLawDescription(mo_ta),
+        JSON.stringify(normalizeLawProvisions(dieu_khoang || [])),
+        normalizeLawNote(note),
         link || null
       ]
     );
@@ -180,9 +197,9 @@ router.put('/:id', requireAdmin, async (req, res) => {
         ten,
         hieuluc || null,
         toDbLawStatus(status, 'con_hieu_luc'),
-        mo_ta || null,
-        JSON.stringify(dieu_khoang || []),
-        note || null,
+        normalizeLawDescription(mo_ta),
+        JSON.stringify(normalizeLawProvisions(dieu_khoang || [])),
+        normalizeLawNote(note),
         link || null,
         targetId
       ]

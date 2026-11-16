@@ -1175,6 +1175,33 @@ test('GET /api/laws/active-basis: dynamically synthesizes 49/VBHN-BNNMT and 55/V
     assert.equal(data.ttVbhnSo, '55/VBHN-BNNMT');
     assert.ok(data.badgeText.includes('49/VBHN-BNNMT'));
     assert.ok(data.badgeText.includes('55/VBHN-BNNMT'));
+
+    db.query = async () => ({
+      rowCount: 1,
+      rows: [
+        {
+          id: 'nd_110_2026',
+          type: 'nd',
+          year: 2026,
+          sort_date: '2026-03-01',
+          so: '110/2026/NĐ-CP',
+          ten: 'Nghị định 110/2026/NĐ-CP',
+          status: 'con_hieu_luc',
+          mo_ta: 'Pre-2020, vẫn còn hiệu lực.',
+          note: '⭐ Mới nhất. Doanh nghiệp có EPR obligation phải bổ sung nội dung này vào hồ sơ GPMT.',
+          dieu_khoang: ['Bổ sung hành vi vi phạm mới liên quan EPR'],
+        },
+      ],
+    });
+    const listRes = await fetch(`http://127.0.0.1:${port}/api/laws`);
+    assert.equal(listRes.status, 200);
+    const lawsList = await listRes.json();
+    assert.equal(lawsList.length, 1);
+    assert.ok(!lawsList[0].note.includes('⭐'));
+    assert.ok(!/EPR obligation/i.test(lawsList[0].note));
+    assert.ok(lawsList[0].note.includes('trách nhiệm tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu'));
+    assert.ok(!/Pre-2020/i.test(lawsList[0].mo_ta));
+    assert.ok(!/\bEPR\b/.test(lawsList[0].dieu_khoang[0]));
   } finally {
     db.query = origQuery;
     await new Promise(resolve => server.close(resolve));

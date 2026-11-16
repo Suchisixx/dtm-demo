@@ -26,6 +26,8 @@ ReDesign.md
 caption_qa/
 docs/_erd-render/
 docs/diagrams/
+docs/bao-cao-word/
+docs/testing-evidence/
 backend/backups/
 *.docx
 

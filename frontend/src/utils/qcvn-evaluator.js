@@ -36,6 +36,15 @@ function emptySummary() {
   };
 }
 
+function parseNumericInput(rawVal) {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return undefined;
+  if (typeof rawVal === 'number') return Number.isNaN(rawVal) ? undefined : rawVal;
+  const normalized = String(rawVal).trim().replace(/,/g, '.');
+  if (!normalized) return undefined;
+  const num = parseFloat(normalized);
+  return Number.isNaN(num) ? undefined : num;
+}
+
 /**
  * Chuẩn hóa giới hạn GPMT (hỗ trợ max, min và khoảng giá trị).
  * Với giới hạn khoảng (ví dụ pH), không nhận một số đơn lẻ để tránh bỏ sót cận trên/dưới.
@@ -399,25 +408,6 @@ export function evaluateQcvnSample({
     };
   }
 
-  const needReceivingConfirmation = requiresReceivingWaterConfirmation(qcvnId, qcvn);
-  if (receivingWaterConfirmed === false || (needReceivingConfirmation && receivingWaterConfirmed !== true)) {
-    return {
-      overallStatus: 'NEEDS_REVIEW',
-      conclusionStatus: 'NEEDS_REVIEW',
-      preliminaryStatus: null,
-      trang_thai_tong_quat: 'can_ra_soat',
-      reason: 'MISSING_RECEIVING_SOURCE',
-      isOfficialConclusion: false,
-      canExportOfficialReport: false,
-      verificationStatus: qcvn.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
-      ruleSource,
-      ruleVersion: qcvn.ruleVersion || null,
-      unverifiedReasons: ['Chưa xác nhận nguồn tiếp nhận nước thải / nước mặt (Cột A, B hoặc C). Hệ thống không mặc định đạt hay chọn cột thay.'],
-      evaluatedParams: [],
-      summary: emptySummary(),
-    };
-  }
-
   let pass = 0;
   let near = 0;
   let fail = 0;
@@ -430,12 +420,17 @@ export function evaluateQcvnSample({
   let hasUnverifiedParam = false;
 
   const evaluatedParams = (qcvn.tham_so || []).map(p => {
-    if (p.nhom) return p;
+    if (p.nhom) {
+      return {
+        ...p,
+        nhom: String(p.nhom).replace(/\s*\[NEEDS_LEGAL_VERIFICATION\]\s*/g, '').trim(),
+      };
+    }
 
     const rawVal = measuredValues[p.key] !== undefined
       ? measuredValues[p.key]
       : (p.key === 'Cr_tong' ? measuredValues.Cr3 : undefined);
-    const val = (rawVal !== undefined && rawVal !== '' && rawVal !== null) ? parseFloat(rawVal) : undefined;
+    const val = parseNumericInput(rawVal);
     const isRequired = p.required !== false;
 
     if (val === undefined || Number.isNaN(val)) {
@@ -542,6 +537,37 @@ export function evaluateQcvnSample({
   });
 
   const total = pass + near + fail + invalidPermitLimits;
+  const computedSummary = {
+    total,
+    pass,
+    near,
+    fail,
+    qcvnFail,
+    permitFail,
+    missingRequired,
+    missingOptional,
+    periodMismatch,
+    invalidPermitLimits,
+  };
+
+  const needReceivingConfirmation = requiresReceivingWaterConfirmation(qcvnId, qcvn);
+  if (receivingWaterConfirmed === false || (needReceivingConfirmation && receivingWaterConfirmed !== true)) {
+    return {
+      overallStatus: 'NEEDS_REVIEW',
+      conclusionStatus: 'NEEDS_REVIEW',
+      preliminaryStatus: null,
+      trang_thai_tong_quat: 'can_ra_soat',
+      reason: 'MISSING_RECEIVING_SOURCE',
+      isOfficialConclusion: false,
+      canExportOfficialReport: false,
+      verificationStatus: qcvn.verificationStatus === 'VERIFIED' ? 'VERIFIED' : 'NEEDS_LEGAL_VERIFICATION',
+      ruleSource,
+      ruleVersion: qcvn.ruleVersion || null,
+      unverifiedReasons: ['Chưa xác nhận nguồn tiếp nhận nước thải / nước mặt (Cột A, B hoặc C). Hệ thống không mặc định đạt hay chọn cột thay.'],
+      evaluatedParams,
+      summary: computedSummary,
+    };
+  }
   let preliminaryStatus = 'PASS';
   if (fail > 0) {
     preliminaryStatus = 'FAIL';

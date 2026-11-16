@@ -82,11 +82,44 @@ watch(() => props.loadLawId, (newId) => {
   }
 }, { immediate: true })
 
+const formatLawNoteText = (note) => {
+  if (!note) return ''
+  return String(note)
+    .replace(/[⭐⚠️🌟]/g, '')
+    .trim()
+    .replace(/\bDoanh nghiệp có EPR obligation\b/gi, 'Doanh nghiệp thuộc diện phải thực hiện trách nhiệm tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\bEPR obligation\b/gi, 'nghĩa vụ tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\bEPR\b/g, 'trách nhiệm tái chế, xử lý của nhà sản xuất, nhập khẩu')
+    .replace(/^Thay\s+QCVN\s+/i, 'Thay thế QCVN ')
+    .replace(/^Mới\s+2025,\s*thay\s+/i, 'Ban hành mới năm 2025, thay thế ')
+    .replace(/^Mới\s*—\s*hiệu lực\s*01\/08\/2025\.\s*Rà soát trước khi lập hồ sơ dự án từ\s*8\/2025\./i, 'Mới ban hành — có hiệu lực từ 01/08/2025. Cần rà soát trước khi lập hồ sơ dự án từ tháng 08/2025.')
+    .replace(/^QUAN TRỌNG NHẤT\s*—/i, 'Quan trọng nhất —')
+    .replace(/^QUAN TRỌNG\s*—/i, 'Quan trọng —')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+const formatLawDescText = (moTa) => {
+  if (!moTa) return ''
+  return String(moTa)
+    .replace(/[⭐⚠️🌟]/g, '')
+    .replace(/\bPre-2020,\s*vẫn còn hiệu lực\./gi, 'Ban hành trước năm 2020, vẫn còn hiệu lực.')
+    .replace(/\bquan trắc tự động liên tục\s*\(CEMS\)/gi, 'quan trắc tự động, liên tục')
+    .replace(/\bEPR obligation\b/gi, 'trách nhiệm tái chế, xử lý sản phẩm, bao bì của nhà sản xuất, nhập khẩu')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 const fetchLaws = async () => {
   try {
     const res = await fetch(API.LAWS)
     if (res.ok) {
-      laws.value = await res.json()
+      const rawLaws = await res.json()
+      laws.value = (Array.isArray(rawLaws) ? rawLaws : []).map(item => ({
+        ...item,
+        note: formatLawNoteText(item.note) || null,
+        mo_ta: formatLawDescText(item.mo_ta) || item.mo_ta
+      }))
       if (props.loadLawId) {
         checkAndOpenLaw(props.loadLawId)
       }
@@ -103,9 +136,12 @@ onMounted(() => {
 })
 
 const getProvisionTitle = (d) => {
-  if (typeof d === 'string') return d
-  if (d && typeof d === 'object' && d.tieu_de) return d.tieu_de
-  return String(d)
+  const raw = typeof d === 'string' ? d : (d && typeof d === 'object' && d.tieu_de ? d.tieu_de : String(d))
+  return String(raw)
+    .replace(/[⭐⚠️🌟]/g, '')
+    .replace(/\bliên quan EPR\b/gi, 'liên quan trách nhiệm tái chế, xử lý của nhà sản xuất, nhập khẩu')
+    .replace(/\bEPR obligation\b/gi, 'nghĩa vụ tái chế, xử lý của nhà sản xuất, nhập khẩu')
+    .trim()
 }
 
 const getProvisionContent = (d) => {
@@ -129,7 +165,9 @@ const getTypeLabel = (type) => {
     nd: 'Nghị định',
     tt: 'Thông tư',
     qcvn: 'QCVN',
-    vbhn: 'VBHN'
+    vbhn: 'VBHN',
+    qd: 'Quyết định',
+    nq: 'Nghị quyết'
   }[type] || type.toUpperCase()
 }
 
@@ -545,10 +583,10 @@ const getDirectLawLink = (l) => {
           </div>
 
           <!-- Ghi chú nếu có -->
-          <div v-if="selectedLaw.note" style="margin-bottom:18px">
+          <div v-if="formatLawNoteText(selectedLaw.note)" style="margin-bottom:18px">
             <div style="font-size:13px;color:var(--warn);padding:10px 14px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:var(--radius);display:flex;align-items:flex-start;gap:8px">
               <i class="ti ti-alert-triangle" style="font-size:16px;margin-top:2px"></i>
-              <div><strong>Lưu ý:</strong> {{ selectedLaw.note }}</div>
+              <div><strong>Lưu ý:</strong> {{ formatLawNoteText(selectedLaw.note) }}</div>
             </div>
           </div>
 
