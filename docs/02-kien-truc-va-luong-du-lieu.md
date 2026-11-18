@@ -89,7 +89,8 @@ QCVNTab.vue
 ## Luồng GIS và địa giới
 
 - `MapTab.vue` lấy dự án có tọa độ từ `GET /api/projects/geo` và lớp không gian qua API GIS.
-- `spatial-gis-service.js` đọc lớp GIS đã xác minh trong DB và phân tích khoảng cách/ngữ cảnh.
+- `spatial-gis-service.js` gọi repository PostGIS để kiểm tra điểm trong/trên polygon bằng `ST_Covers` và đo khoảng cách bằng geography. Lớp chỉ có tọa độ tâm/bán kính được phân biệt rõ là ước lượng tham khảo; hiện seed GIS không cung cấp ranh giới polygon chính thức nên chưa thể khẳng định điểm thuộc ranh giới pháp lý.
+- PostgreSQL lưu `Point` SRID 4326 cho vị trí dự án và geometry cho lớp GIS, có chỉ mục GiST. Migration backfill từ tọa độ và GeoJSON hiện có; trigger đồng bộ geometry khi tọa độ/GeoJSON thay đổi. Nếu server chưa cài hoặc DB không có quyền bật PostGIS, bootstrap giữ schema cũ và phân tích chuyển sang `FALLBACK_UNVERIFIED`.
 - `ClassifyTab.vue` dùng `vietnam-divisions.json` để chọn tỉnh và 3.321 xã/phường/đặc khu.
 - `GET /api/classification/administrative-units/:code/boundary` tải GeoJSON theo mã địa giới qua `administrative-boundary-service.js`; backend chuẩn hóa tọa độ và cache theo mã.
 - `GET /api/classification/administrative-units/locate?lat=...&lng=...` truy vấn dịch vụ bản đồ chính thức để tìm đơn vị chứa tọa độ.

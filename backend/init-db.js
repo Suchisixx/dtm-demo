@@ -501,6 +501,7 @@ async function initDatabase() {
     await ensureGisSchema(targetClient);
     await ensureCrawlerSyncSchema(targetClient);
     await migrateVietnameseSchema(targetClient);
+    await ensureGisSchema(targetClient);
     console.log('✔ Đã đổi tên schema PostgreSQL sang tiếng Việt và tạo lớp tương thích SQL.');
     console.log('✔ Đã kiểm tra và bổ sung các cột metadata pháp lý, xác minh nhạy cảm, GIS & crawler sync (migration an toàn, không xóa dữ liệu).');
 

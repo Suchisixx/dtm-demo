@@ -2,6 +2,8 @@
 
 ## PostgreSQL và quy ước dữ liệu
 
+Phân hệ GIS dùng extension PostGIS trên PostgreSQL. Khởi tạo/migration gọi `CREATE EXTENSION IF NOT EXISTS postgis` (máy chủ cần cài PostGIS và tài khoản DB cần quyền tương ứng), thêm geometry SRID 4326 và chỉ mục GiST, rồi backfill dữ liệu tọa độ/GeoJSON cũ mà không xóa cột tương thích. Nếu extension chưa có, bootstrap giữ schema cũ và phân tích vị trí trả nguồn `FALLBACK_UNVERIFIED`. GeoJSON polygon được dùng để kiểm tra `ST_Covers`; các lớp hiện chỉ có tâm/bán kính vẫn là cảnh báo ước lượng, không phải ranh giới pháp lý.
+
 Backend dùng thư viện `pg` với `Pool`. Tên bảng/cột vật lý viết tiếng Việt không dấu, chữ thường, `snake_case`. Mã ứng dụng hiện vẫn truy vấn qua tên SQL tương thích tiếng Anh; sau migration, các tên này là view chiếu lên bảng vật lý. Các key của JSONB và key API được giữ nguyên để tương thích.
 
 ### Các bảng vật lý hiện có

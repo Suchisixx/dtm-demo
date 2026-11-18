@@ -36,8 +36,8 @@
   <text x="530" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Nhận GET /api/projects/geo</text>
   <text x="530" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Xác thực phiên đăng nhập JWT</text>
   <rect x="760" y="120" width="210" height="60" fill="#FFFFFF" stroke="#7C3AED" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
-  <text x="865" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Thực thi SQL không gian:</text>
-  <text x="865" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Lấy tọa độ &amp; mẫu đo gần nhất</text>
+  <text x="865" y="147.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">PostGIS truy vấn điểm/polygon</text>
+  <text x="865" y="162.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">ST_Covers, ST_Distance, GiST</text>
   <rect x="420" y="250" width="220" height="60" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
   <text x="530" y="277.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Phân tích bán kính tác động R</text>
   <text x="530" y="292.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">&amp; Đóng gói mảng GeoJSON</text>
@@ -45,8 +45,8 @@
   <text x="190" y="277.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Dựng ghim Marker theo màu:</text>
   <text x="190" y="292.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">🟢 Đạt · 🟡 Cảnh báo · 🔴 Vượt</text>
   <rect x="80" y="370" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
-  <text x="190" y="397.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Vẽ vòng tròn bán kính R &amp;</text>
-  <text x="190" y="412.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Chồng lớp đa giác KCN, bảo vệ</text>
+  <text x="190" y="397.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Hiển thị polygon khi có nguồn</text>
+  <text x="190" y="412.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Tâm/bán kính chỉ là ước lượng</text>
   <rect x="80" y="480" width="220" height="60" fill="#FFFFFF" stroke="#16A34A" stroke-width="1.5" rx="6" ry="6" stroke-dasharray="none" />
   <text x="190" y="507.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Gắn Popup thông tin dự án &amp;</text>
   <text x="190" y="522.5" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">Nút xem chi tiết hồ sơ</text>

@@ -6,7 +6,7 @@
   </defs>
   <rect width="100%" height="100%" fill="#FFFFFF"/>
   <text x="480" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#111827">SƠ ĐỒ 2.9. LUỒNG TRUY VẤN VÀ HIỂN THỊ DỮ LIỆU KHÔNG GIAN (GIS)</text>
-  <text x="480" y="54" text-anchor="middle" font-size="12" fill="#4B5563">Chuẩn hóa tọa độ WGS84, truy vấn PostgreSQL (du_an, lop_ban_do), tính khoảng cách Haversine &amp; hiển thị Leaflet.js</text>
+  <text x="480" y="54" text-anchor="middle" font-size="12" fill="#4B5563">PostGIS truy vấn điểm/vùng; polygon dùng ST_Covers, khoảng cách dùng geography; lớp thiếu polygon chỉ ước lượng tâm/bán kính</text>
 
   <g>
     <polyline points="450,118 450,145" fill="none" stroke="#374151" stroke-width="1.5" stroke-linejoin="round" marker-end="url(#arrow)"/>
@@ -68,11 +68,11 @@
       <path d="M 275 416 L 275 462 A 175 8 0 0 0 625 462 L 625 416 Z" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
       <ellipse cx="450" cy="416" rx="175" ry="8" fill="#F3E8FF" stroke="#6D28D9" stroke-width="1.5"/>
     
-    <text x="450" y="438.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">Truy vấn bảng du_an (vi_do, kinh_do NUMERIC)</text>
-    <text x="450" y="453.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">&amp; lop_ban_do (vi_do, kinh_do, hinh_hoc JSONB)</text></g>
+    <text x="450" y="438.275" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">du_an: Point SRID 4326; lop_ban_do: geometry SRID 4326</text>
+    <text x="450" y="453.775" text-anchor="middle" font-size="11.5" font-weight="600" fill="#111827">GeoJSON được giữ tương thích; truy vấn có chỉ mục GiST</text></g>
   <g id="proc_hav"><rect x="275" y="498" width="350" height="56" rx="6" ry="6" fill="#F8FAFC" stroke="#334155" stroke-width="1.5"/>
-    <text x="450" y="522.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tính khoảng cách Haversine (haversineDistanceKm)</text>
-    <text x="450" y="538.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">tới KCN, vùng nhạy cảm, biên giới &amp; tạo cảnh báo</text></g>
+    <text x="450" y="522.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">PostGIS: ST_Covers và ST_Distance trên geography</text>
+    <text x="450" y="538.2" text-anchor="middle" font-size="12" font-weight="500" fill="#111827">Tâm/bán kính thiếu polygon chỉ tạo cảnh báo ước lượng</text></g>
   <g id="io_map"><polygon points="291,582 625,582 609,640 275,640" fill="#FEF3C7" stroke="#B45309" stroke-width="1.5"/>
     <text x="450" y="607.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">Leaflet.js vẽ marker phân màu theo nhóm,</text>
     <text x="450" y="623.2" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">vùng đệm, ranh giới P/X &amp; popup chi tiết</text></g>

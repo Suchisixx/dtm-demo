@@ -325,9 +325,48 @@ async function reviewProjectSensitiveVerification(
  * Schema và kho lớp GIS lấy từ PostgreSQL
  */
 async function ensureGisSchema(client) {
-  if (await isVietnamesePhysicalSchema(client)) return;
+  const vietnamese = await isVietnamesePhysicalSchema(client);
+  try {
+    await client.query('CREATE EXTENSION IF NOT EXISTS postgis');
+  } catch (error) {
+    const unavailable = error?.code === '0A000' || error?.code === '42501'
+      || /extension ["']?postgis["']? is not available|permission denied to create extension/i.test(String(error?.message || ''));
+    if (!unavailable) throw error;
+    if (!vietnamese) {
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS gis_layers (
+          id VARCHAR(120) PRIMARY KEY,
+          layer_type VARCHAR(40) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(100), flag_key VARCHAR(40),
+          latitude DOUBLE PRECISION NOT NULL, longitude DOUBLE PRECISION NOT NULL,
+          radius_km DOUBLE PRECISION NOT NULL DEFAULT 1, geometry_json JSONB,
+          province VARCHAR(150), legal_ref TEXT,
+          verification_status VARCHAR(50) NOT NULL DEFAULT 'NEEDS_LEGAL_VERIFICATION',
+          publication_status VARCHAR(30) NOT NULL DEFAULT 'PUBLISHED',
+          source_document TEXT, verified_by VARCHAR(100), verified_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    }
+    logger.warn('PostGIS chưa khả dụng; giữ schema GIS tương thích và mọi phân tích vị trí sẽ ở chế độ FALLBACK_UNVERIFIED.');
+    return { ok: false, code: 'POSTGIS_UNAVAILABLE' };
+  }
   await client.query(`
-    CREATE TABLE IF NOT EXISTS gis_layers (
+    CREATE OR REPLACE FUNCTION legalhub_geojson_polygon(input jsonb) RETURNS geometry AS $$
+    DECLARE payload jsonb; result geometry;
+    BEGIN
+      payload := CASE WHEN input->>'type' = 'Feature' THEN input->'geometry' ELSE input END;
+      IF payload IS NULL OR payload->>'type' NOT IN ('Polygon', 'MultiPolygon') THEN RETURN NULL; END IF;
+      result := ST_SetSRID(ST_GeomFromGeoJSON(payload::text), 4326);
+      IF NOT ST_IsValid(result) THEN RETURN NULL; END IF;
+      RETURN result;
+    EXCEPTION WHEN OTHERS THEN RETURN NULL;
+    END; $$ LANGUAGE plpgsql IMMUTABLE;
+  `);
+  if (!vietnamese) {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gis_layers (
       id VARCHAR(120) PRIMARY KEY,
       layer_type VARCHAR(40) NOT NULL,
       name VARCHAR(255) NOT NULL,
@@ -346,13 +385,131 @@ async function ensureGisSchema(client) {
       verified_at TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
+      );
+      ALTER TABLE gis_layers ADD COLUMN IF NOT EXISTS spatial_geometry geometry(Geometry, 4326);
+      CREATE INDEX IF NOT EXISTS gis_layers_spatial_geometry_gix ON gis_layers USING GIST (spatial_geometry);
+      ALTER TABLE projects ADD COLUMN IF NOT EXISTS spatial_geometry geometry(Point, 4326);
+      CREATE INDEX IF NOT EXISTS projects_spatial_geometry_gix ON projects USING GIST (spatial_geometry);
+    `);
+  } else {
+    await client.query(`
+      ALTER TABLE lop_ban_do ADD COLUMN IF NOT EXISTS hinh_hoc_khong_gian geometry(Geometry, 4326);
+      CREATE INDEX IF NOT EXISTS lop_ban_do_hinh_hoc_khong_gian_gix ON lop_ban_do USING GIST (hinh_hoc_khong_gian);
+      ALTER TABLE du_an ADD COLUMN IF NOT EXISTS vi_tri_khong_gian geometry(Point, 4326);
+      CREATE INDEX IF NOT EXISTS du_an_vi_tri_khong_gian_gix ON du_an USING GIST (vi_tri_khong_gian);
+    `);
+  }
+
+  await client.query(`
+    UPDATE ${vietnamese ? 'lop_ban_do' : 'gis_layers'}
+       SET ${vietnamese ? 'hinh_hoc_khong_gian' : 'spatial_geometry'} =
+         legalhub_geojson_polygon(${vietnamese ? 'hinh_hoc' : 'geometry_json'})
+     WHERE ${vietnamese ? 'hinh_hoc_khong_gian' : 'spatial_geometry'} IS NULL
+       AND ${vietnamese ? 'hinh_hoc' : 'geometry_json'} IS NOT NULL;
+    UPDATE ${vietnamese ? 'lop_ban_do' : 'gis_layers'}
+       SET ${vietnamese ? 'hinh_hoc_khong_gian' : 'spatial_geometry'} =
+         ST_SetSRID(ST_MakePoint(${vietnamese ? 'kinh_do' : 'longitude'}, ${vietnamese ? 'vi_do' : 'latitude'}), 4326)
+     WHERE ${vietnamese ? 'hinh_hoc_khong_gian' : 'spatial_geometry'} IS NULL
+       AND ${vietnamese ? 'vi_do' : 'latitude'} BETWEEN -90 AND 90
+       AND ${vietnamese ? 'kinh_do' : 'longitude'} BETWEEN -180 AND 180;
+    UPDATE ${vietnamese ? 'du_an' : 'projects'}
+       SET ${vietnamese ? 'vi_tri_khong_gian' : 'spatial_geometry'} =
+         ST_SetSRID(ST_MakePoint(${vietnamese ? 'kinh_do' : 'longitude'}, ${vietnamese ? 'vi_do' : 'latitude'}), 4326)
+     WHERE ${vietnamese ? 'vi_tri_khong_gian' : 'spatial_geometry'} IS NULL
+       AND ${vietnamese ? 'vi_do' : 'latitude'} BETWEEN -90 AND 90
+       AND ${vietnamese ? 'kinh_do' : 'longitude'} BETWEEN -180 AND 180;
   `);
+  const triggersSql = vietnamese ? `
+    CREATE OR REPLACE FUNCTION legalhub_sync_project_geometry_vi() RETURNS trigger AS $$
+    BEGIN
+      NEW.vi_tri_khong_gian := CASE WHEN NEW.vi_do BETWEEN -90 AND 90 AND NEW.kinh_do BETWEEN -180 AND 180
+        THEN ST_SetSRID(ST_MakePoint(NEW.kinh_do, NEW.vi_do), 4326) ELSE NULL END;
+      RETURN NEW;
+    END; $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS legalhub_project_geometry_sync ON du_an;
+    CREATE TRIGGER legalhub_project_geometry_sync BEFORE INSERT OR UPDATE OF vi_do, kinh_do
+    ON du_an FOR EACH ROW EXECUTE FUNCTION legalhub_sync_project_geometry_vi();
+    CREATE OR REPLACE FUNCTION legalhub_sync_layer_geometry_vi() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.hinh_hoc IS NOT NULL AND (NEW.hinh_hoc->>'type' IN ('Polygon', 'MultiPolygon', 'Feature')) THEN
+        NEW.hinh_hoc_khong_gian := legalhub_geojson_polygon(NEW.hinh_hoc);
+      ELSIF NEW.vi_do BETWEEN -90 AND 90 AND NEW.kinh_do BETWEEN -180 AND 180 THEN
+        NEW.hinh_hoc_khong_gian := ST_SetSRID(ST_MakePoint(NEW.kinh_do, NEW.vi_do), 4326);
+      ELSE NEW.hinh_hoc_khong_gian := NULL; END IF;
+      RETURN NEW;
+    END; $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS legalhub_layer_geometry_sync ON lop_ban_do;
+    CREATE TRIGGER legalhub_layer_geometry_sync BEFORE INSERT OR UPDATE OF hinh_hoc, vi_do, kinh_do
+    ON lop_ban_do FOR EACH ROW EXECUTE FUNCTION legalhub_sync_layer_geometry_vi();
+  ` : `
+    CREATE OR REPLACE FUNCTION legalhub_sync_project_geometry() RETURNS trigger AS $$
+    BEGIN
+      NEW.spatial_geometry := CASE WHEN NEW.latitude BETWEEN -90 AND 90 AND NEW.longitude BETWEEN -180 AND 180
+        THEN ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326) ELSE NULL END;
+      RETURN NEW;
+    END; $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS legalhub_project_geometry_sync ON projects;
+    CREATE TRIGGER legalhub_project_geometry_sync BEFORE INSERT OR UPDATE OF latitude, longitude
+    ON projects FOR EACH ROW EXECUTE FUNCTION legalhub_sync_project_geometry();
+    CREATE OR REPLACE FUNCTION legalhub_sync_layer_geometry() RETURNS trigger AS $$
+    BEGIN
+      IF NEW.geometry_json IS NOT NULL AND NEW.geometry_json->>'type' IN ('Polygon', 'MultiPolygon', 'Feature') THEN
+        NEW.spatial_geometry := legalhub_geojson_polygon(NEW.geometry_json);
+      ELSIF NEW.latitude BETWEEN -90 AND 90 AND NEW.longitude BETWEEN -180 AND 180 THEN
+        NEW.spatial_geometry := ST_SetSRID(ST_MakePoint(NEW.longitude, NEW.latitude), 4326);
+      ELSE NEW.spatial_geometry := NULL; END IF;
+      RETURN NEW;
+    END; $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS legalhub_layer_geometry_sync ON gis_layers;
+    CREATE TRIGGER legalhub_layer_geometry_sync BEFORE INSERT OR UPDATE OF geometry_json, latitude, longitude
+    ON gis_layers FOR EACH ROW EXECUTE FUNCTION legalhub_sync_layer_geometry();
+  `;
+  await client.query(triggersSql);
+  return { ok: true, code: 'POSTGIS_READY' };
+}
+
+async function evaluateSpatialLayers(lat, lng, { db = defaultDb } = {}) {
+  const vietnamese = await isVietnamesePhysicalSchema(db);
+  const table = vietnamese ? 'lop_ban_do' : 'gis_layers';
+  const id = vietnamese ? 'ma' : 'id';
+  const type = vietnamese ? 'loai_lop' : 'layer_type';
+  const name = vietnamese ? 'ten_lop' : 'name';
+  const category = vietnamese ? 'danh_muc' : 'category';
+  const flag = vietnamese ? 'ma_co' : 'flag_key';
+  const latitude = vietnamese ? 'vi_do' : 'latitude';
+  const longitude = vietnamese ? 'kinh_do' : 'longitude';
+  const radius = vietnamese ? 'ban_kinh_km' : 'radius_km';
+  const geom = vietnamese ? 'hinh_hoc_khong_gian' : 'spatial_geometry';
+  const json = vietnamese ? 'hinh_hoc' : 'geometry_json';
+  const province = vietnamese ? 'tinh' : 'province';
+  const legalRef = vietnamese ? 'can_cu_phap_ly' : 'legal_ref';
+  const verification = vietnamese ? 'trang_thai_xac_minh' : 'verification_status';
+  const publication = vietnamese ? 'trang_thai_cong_bo' : 'publication_status';
+  const source = vietnamese ? 'tai_lieu_nguon' : 'source_document';
+  const pointExpr = 'ST_SetSRID(ST_MakePoint($2, $1), 4326)';
+  const result = await db.query(
+    `SELECT ${id} AS id, ${type} AS layer_type, ${name} AS name, ${category} AS category,
+            ${flag} AS flag_key, ${latitude} AS latitude, ${longitude} AS longitude,
+            ${radius} AS radius_km, ${province} AS province, ${legalRef} AS legal_ref,
+            ${verification} AS verification_status, ${publication} AS publication_status,
+            ${source} AS source_document,
+            CASE WHEN GeometryType(${geom}) IN ('POLYGON', 'MULTIPOLYGON') THEN ST_AsGeoJSON(${geom})::jsonb ELSE ${json} END AS geometry_json,
+            GeometryType(${geom}) IN ('POLYGON', 'MULTIPOLYGON') AND ST_IsValid(${geom}) AS geometry_valid,
+            GeometryType(${geom}) IN ('POLYGON', 'MULTIPOLYGON') AND ST_IsValid(${geom}) AND ST_Covers(${geom}, ${pointExpr}) AS covers_point,
+            CASE WHEN GeometryType(${geom}) IN ('POLYGON', 'MULTIPOLYGON') AND ST_IsValid(${geom})
+                 THEN ST_Distance(${geom}::geography, ${pointExpr}::geography) / 1000.0
+                 ELSE ST_Distance(ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)::geography,
+                                  ${pointExpr}::geography) / 1000.0 END AS distance_km
+       FROM ${table}
+      ORDER BY ${type}, ${name}`,
+    [Number(lat), Number(lng)]
+  );
+  return (result.rows || []).filter(row => isActivePublicationStatus(row.publication_status));
 }
 
 async function seedGisLayers(client, { sensitiveZones = [], industrialParks = [], force = false } = {}) {
   const existingRes = await client.query(
-    'SELECT id, verification_status, publication_status, verified_by FROM gis_layers'
+    'SELECT id, verification_status, publication_status, verified_by, geometry_json FROM gis_layers'
   );
   const existingMap = new Map((existingRes?.rows || []).map(r => [r.id, r]));
 
@@ -455,6 +612,15 @@ async function seedGisLayers(client, { sensitiveZones = [], industrialParks = []
         ]
       );
       updated++;
+    } else if (item.geometry_json && !prev.geometry_json) {
+      await client.query(
+        `UPDATE gis_layers
+         SET geometry_json = COALESCE(geometry_json, $1::jsonb),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND geometry_json IS NULL`,
+        [JSON.stringify(item.geometry_json), item.id]
+      );
+      updated++;
     }
   }
 
@@ -524,4 +690,5 @@ module.exports = {
   ensureGisSchema,
   seedGisLayers,
   loadGisLayers,
+  evaluateSpatialLayers,
 };

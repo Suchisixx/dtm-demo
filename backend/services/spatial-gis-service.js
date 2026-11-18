@@ -5,6 +5,7 @@
 const EARTH_RADIUS_KM = 6371;
 const defaultDb = require('../config/db');
 const { loadGisLayers } = require('./rule-repository');
+const { evaluateSpatialLayers } = require('./project-verification-repository');
 
 function toRad(deg) {
   return (deg * Math.PI) / 180;
@@ -90,8 +91,36 @@ const VIETNAM_COASTLINE_POLYLINE = [
 // Danh mục các Khu vực Nhạy cảm Môi trường Trọng điểm tại Việt Nam (Điều 25 Luật BVMT 2020)
 const VIETNAM_SENSITIVE_ZONES = [
   // 1. Vườn Quốc gia & Khu Bảo tồn Thiên nhiên (bao_ton)
-  { id: 'vqg_cat_tien', name: 'Vườn Quốc gia Cát Tiên', category: 'bao_ton', flagKey: 'bao_ton', lat: 11.4232, lng: 107.4285, radiusKm: 18, province: 'Đồng Nai / Lâm Đồng / Bình Phước', ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
-  { id: 'kdt_can_gio', name: 'Khu Dự trữ Sinh quyển Rừng ngập mặn Cần Giờ', category: 'bao_ton', flagKey: 'bao_ton', lat: 10.5214, lng: 106.8856, radiusKm: 16, province: 'TP. Hồ Chí Minh', ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
+  {
+    id: 'vqg_cat_tien',
+    name: 'Vườn Quốc gia Cát Tiên',
+    category: 'bao_ton',
+    flagKey: 'bao_ton',
+    lat: 11.4232,
+    lng: 107.4285,
+    radiusKm: 18,
+    province: 'Đồng Nai / Lâm Đồng / Bình Phước',
+    ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[107.28, 11.30], [107.58, 11.30], [107.58, 11.55], [107.28, 11.55], [107.28, 11.30]]],
+    },
+  },
+  {
+    id: 'kdt_can_gio',
+    name: 'Khu Dự trữ Sinh quyển Rừng ngập mặn Cần Giờ',
+    category: 'bao_ton',
+    flagKey: 'bao_ton',
+    lat: 10.5214,
+    lng: 106.8856,
+    radiusKm: 16,
+    province: 'TP. Hồ Chí Minh',
+    ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[106.76, 10.42], [107.01, 10.42], [107.01, 10.62], [106.76, 10.62], [106.76, 10.42]]],
+    },
+  },
   { id: 'vqg_cuc_phuong', name: 'Vườn Quốc gia Cúc Phương', category: 'bao_ton', flagKey: 'bao_ton', lat: 20.3167, lng: 105.6083, radiusKm: 14, province: 'Ninh Bình / Hòa Bình / Thanh Hóa', ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
   { id: 'vqg_ba_vi', name: 'Vườn Quốc gia Ba Vì', category: 'bao_ton', flagKey: 'bao_ton', lat: 21.0667, lng: 105.3667, radiusKm: 10, province: 'Hà Nội', ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
   { id: 'vqg_tam_dao', name: 'Vườn Quốc gia Tam Đảo', category: 'bao_ton', flagKey: 'bao_ton', lat: 21.4583, lng: 105.6458, radiusKm: 14, province: 'Vĩnh Phúc / Thái Nguyên / Tuyên Quang', ref: 'Điểm a, Khoản 1, Điều 25 Luật BVMT 2020' },
@@ -127,7 +156,18 @@ const VIETNAM_SENSITIVE_ZONES = [
 const VIETNAM_INDUSTRIAL_PARKS = [
   // TP. Hồ Chí Minh
   { id: 'kcn_tan_tao', name: 'Khu công nghiệp Tân Tạo', lat: 10.7538, lng: 106.5912, radiusKm: 2.2, province: 'TP. Hồ Chí Minh' },
-  { id: 'kcn_hiep_phuoc', name: 'Khu công nghiệp Hiệp Phước', lat: 10.6315, lng: 106.7510, radiusKm: 3.5, province: 'TP. Hồ Chí Minh' },
+  {
+    id: 'kcn_hiep_phuoc',
+    name: 'Khu công nghiệp Hiệp Phước',
+    lat: 10.6315,
+    lng: 106.7510,
+    radiusKm: 3.5,
+    province: 'TP. Hồ Chí Minh',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[106.72, 10.60], [106.78, 10.60], [106.78, 10.66], [106.72, 10.66], [106.72, 10.60]]],
+    },
+  },
   { id: 'kcn_tan_binh', name: 'Khu công nghiệp Tân Bình', lat: 10.8165, lng: 106.6258, radiusKm: 1.8, province: 'TP. Hồ Chí Minh' },
   { id: 'kcn_vinh_loc', name: 'Khu công nghiệp Vĩnh Lộc', lat: 10.8220, lng: 106.5880, radiusKm: 2.0, province: 'TP. Hồ Chí Minh' },
   { id: 'kcn_shtp', name: 'Khu Công nghệ cao TP. Hồ Chí Minh (SHTP)', lat: 10.8550, lng: 106.7980, radiusKm: 2.8, province: 'TP. Hồ Chí Minh' },
@@ -135,7 +175,18 @@ const VIETNAM_INDUSTRIAL_PARKS = [
   { id: 'kcn_dong_nam', name: 'Khu công nghiệp Đông Nam Củ Chi', lat: 10.9950, lng: 106.6420, radiusKm: 2.2, province: 'TP. Hồ Chí Minh' },
   { id: 'kcn_cat_lai', name: 'Khu công nghiệp Cát Lái', lat: 10.7680, lng: 106.7880, radiusKm: 1.8, province: 'TP. Hồ Chí Minh' },
   // Bình Dương
-  { id: 'kcn_vsip_1', name: 'Khu công nghiệp VSIP I Bình Dương', lat: 10.9310, lng: 106.7160, radiusKm: 2.8, province: 'Bình Dương' },
+  {
+    id: 'kcn_vsip_1',
+    name: 'Khu công nghiệp VSIP I Bình Dương',
+    lat: 10.9310,
+    lng: 106.7160,
+    radiusKm: 2.8,
+    province: 'Bình Dương',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[[106.69, 10.91], [106.74, 10.91], [106.74, 10.95], [106.69, 10.95], [106.69, 10.91]]],
+    },
+  },
   { id: 'kcn_vsip_2', name: 'Khu công nghiệp VSIP II Bình Dương', lat: 11.0890, lng: 106.6850, radiusKm: 3.5, province: 'Bình Dương' },
   { id: 'kcn_my_phuoc', name: 'Khu công nghiệp Mỹ Phước 1 - 2 - 3', lat: 11.1450, lng: 106.6050, radiusKm: 4.5, province: 'Bình Dương' },
   { id: 'kcn_song_than', name: 'Khu công nghiệp Sóng Thần 1 - 2 - 3', lat: 10.8920, lng: 106.7480, radiusKm: 2.5, province: 'Bình Dương' },
@@ -219,6 +270,7 @@ function analyzeSpatialContext(lat, lng, options = {}) {
   const sensitiveZones = Array.isArray(options?.sensitiveZones) ? options.sensitiveZones : VIETNAM_SENSITIVE_ZONES;
   const industrialParks = Array.isArray(options?.industrialParks) ? options.industrialParks : VIETNAM_INDUSTRIAL_PARKS;
   const gisSource = options?.gisSource || 'STATIC_FIXTURE';
+  const spatialMatches = new Map((options?.spatialMatches || []).map(row => [row.id, row]));
 
   const numLat = parseFloat(lat);
   const numLng = parseFloat(lng);
@@ -248,14 +300,18 @@ function analyzeSpatialContext(lat, lng, options = {}) {
   };
 
   for (const zone of sensitiveZones) {
-    const dist = haversineDistanceKm(numLat, numLng, zone.lat, zone.lng);
-    const bufferThreshold = zone.radiusKm + 5; // Bao gồm vùng lõi + vùng đệm 5km
-    if (dist <= bufferThreshold) {
-      const inCore = dist <= zone.radiusKm;
+    const match = spatialMatches.get(zone.id);
+    const dist = match ? Number(match.distance_km) : haversineDistanceKm(numLat, numLng, zone.lat, zone.lng);
+    const hasPolygon = Boolean(match && match.geometry_valid && match.geometry_json && ['Polygon', 'MultiPolygon'].includes(match.geometry_json.type));
+    const bufferThreshold = hasPolygon ? 5 : zone.radiusKm + 5;
+    const inCore = hasPolygon ? match.covers_point === true : dist <= zone.radiusKm;
+    if (inCore || dist <= bufferThreshold) {
       detectedSensitiveZones.push({
         ...zone,
         distanceKm: Number(dist.toFixed(2)),
         inCore,
+        geometry: hasPolygon ? match.geometry_json : zone.geometry || null,
+        spatialMethod: hasPolygon ? 'POSTGIS_POLYGON' : match ? 'POSTGIS_CENTER_RADIUS_APPROXIMATION' : 'HAVERSINE_APPROXIMATION',
         statusLabel: inCore ? 'Nằm trong phạm vi vùng bảo vệ' : 'Nằm sát hành lang / vùng đệm'
       });
       if (zone.flagKey) autoFlags[zone.flagKey] = true;
@@ -268,13 +324,17 @@ function analyzeSpatialContext(lat, lng, options = {}) {
   let nearestKcn = null;
   let minKcnDist = Infinity;
   for (const kcn of industrialParks) {
-    const dist = haversineDistanceKm(numLat, numLng, kcn.lat, kcn.lng);
+    const match = spatialMatches.get(kcn.id);
+    const dist = match ? Number(match.distance_km) : haversineDistanceKm(numLat, numLng, kcn.lat, kcn.lng);
+    const hasPolygon = Boolean(match && match.geometry_valid && match.geometry_json && ['Polygon', 'MultiPolygon'].includes(match.geometry_json.type));
     if (dist < minKcnDist) {
       minKcnDist = dist;
       nearestKcn = {
         ...kcn,
         distanceKm: Number(dist.toFixed(2)),
-        insideKcn: dist <= kcn.radiusKm
+        insideKcn: hasPolygon ? match.covers_point === true : dist <= kcn.radiusKm,
+        geometry: hasPolygon ? match.geometry_json : kcn.geometry || null,
+        spatialMethod: hasPolygon ? 'POSTGIS_POLYGON' : match ? 'POSTGIS_CENTER_RADIUS_APPROXIMATION' : 'HAVERSINE_APPROXIMATION'
       };
     }
   }
@@ -307,11 +367,14 @@ function analyzeSpatialContext(lat, lng, options = {}) {
   }
 
   for (const z of detectedSensitiveZones) {
+    const measured = z.spatialMethod === 'POSTGIS_POLYGON'
+      ? `ranh giới polygon trong cơ sở dữ liệu (khoảng cách tới ranh giới ${z.distanceKm} km)`
+      : `tâm/bán kính ước lượng (cách tâm khoảng ${z.distanceKm} km)`;
     spatialAlerts.push({
       key: z.flagKey,
       level: z.inCore ? 'danger' : 'warn',
-      title: `${z.name} (cách tâm ~${z.distanceKm} km)`,
-      detail: `${z.statusLabel} (bán kính ước tính ${z.radiusKm} km) → Cần xác minh ranh giới pháp lý trong quyết định thành lập/công nhận và diện tích giao cắt thực tế (${z.ref}).`,
+      title: `${z.name} (${measured})`,
+      detail: `${z.statusLabel}; phép kiểm tra không gian: ${z.spatialMethod || 'HAVERSINE_APPROXIMATION'}. Dữ liệu vị trí chỉ là cảnh báo hỗ trợ; cần đối chiếu hồ sơ pháp lý và trạng thái xác minh của lớp GIS (${z.ref}).`,
       autoFlag: z.flagKey
     });
   }
@@ -320,7 +383,7 @@ function analyzeSpatialContext(lat, lng, options = {}) {
     spatialAlerts.push({
       key: 'kcn',
       level: 'info',
-      title: `Nằm trong phạm vi ${nearestKcn.name} (cách tâm ${nearestKcn.distanceKm} km)`,
+      title: `${nearestKcn.spatialMethod === 'POSTGIS_POLYGON' ? 'Điểm nằm trong ranh giới dữ liệu' : 'Điểm gần tâm/bán kính tham khảo'} ${nearestKcn.name} (${nearestKcn.distanceKm} km)`,
       detail: 'Dự án nằm trong KCN không tự động được miễn ĐTM. Cần kiểm tra quyết định phê duyệt ĐTM hạ tầng KCN, phân khu ngành nghề, công suất hệ thống XLNT tập trung và điều kiện đấu nối (NEEDS_LEGAL_VERIFICATION).',
       autoFlag: 'kcn'
     });
@@ -343,11 +406,24 @@ function analyzeSpatialContext(lat, lng, options = {}) {
 async function analyzeSpatialContextWithDb(lat, lng, { db = defaultDb } = {}) {
   const loaded = await loadGisLayers({ db });
   if (loaded.ok) {
-    return analyzeSpatialContext(lat, lng, {
-      sensitiveZones: loaded.sensitiveZones,
-      industrialParks: loaded.industrialParks,
-      gisSource: 'DATABASE',
-    });
+    try {
+      const spatialMatches = await evaluateSpatialLayers(lat, lng, { db });
+      return analyzeSpatialContext(lat, lng, {
+        sensitiveZones: loaded.sensitiveZones,
+        industrialParks: loaded.industrialParks,
+        spatialMatches,
+        gisSource: 'DATABASE',
+      });
+    } catch (error) {
+      return {
+        ...analyzeSpatialContext(lat, lng, {
+          sensitiveZones: VIETNAM_SENSITIVE_ZONES,
+          industrialParks: VIETNAM_INDUSTRIAL_PARKS,
+          gisSource: 'FALLBACK_UNVERIFIED',
+        }),
+        fallbackReason: error.message || 'POSTGIS_QUERY_FAILED',
+      };
+    }
   }
   return analyzeSpatialContext(lat, lng, {
     sensitiveZones: VIETNAM_SENSITIVE_ZONES,

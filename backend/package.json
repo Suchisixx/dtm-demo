@@ -7,7 +7,7 @@
     "start": "node server.js",
     "init-db": "node init-db.js",
     "db:migrate": "node init-db.js --schema-only",
-    "test": "node --test tests/classification-p0.test.js tests/qcvn-p0.test.js tests/routes-and-parity.test.js tests/compliance-reminder.test.js tests/administrative-boundaries.test.js",
+    "test": "node --test tests/classification-p0.test.js tests/qcvn-p0.test.js tests/routes-and-parity.test.js tests/compliance-reminder.test.js tests/administrative-boundaries.test.js tests/spatial-postgis.test.js tests/exhaustive-catalog-coverage.test.js",
     "test:pg": "node --test tests/postgres-integration.test.js"
   },
   "dependencies": {

@@ -22,11 +22,13 @@ const { ensureRuntimeDatabaseReady } = require('../services/db-bootstrap');
 const { installSandboxDbFallbackIfNeeded } = require('./sandbox-db-adapter');
 const { loadClassificationCatalog } = require('../services/rule-repository');
 const {
+  IND_DB,
   evaluateClassification,
   evaluateClassificationWithDb,
 } = require('../services/classification-service');
 const { analyzeSpatialContextWithDb } = require('../services/spatial-gis-service');
 const {
+  evaluateQcvnSample,
   evaluateQcvnSampleWithDb,
   selectApplicableQcvnWithDb,
 } = require('../services/qcvn-service');
@@ -269,6 +271,7 @@ async function runEvaluation() {
         ),
       expectedPreliminary: 'PASS',
       expectedDbStatus: 'dat',
+      acceptUnverifiedGate: true,
     },
     {
       id: 'TC-QC-02',
@@ -386,11 +389,15 @@ async function runEvaluation() {
     const actualDetail = res.reason || res.trang_thai_tong_quat || '—';
     const pass =
       actualPrimary === qc.expectedPreliminary &&
-      (res.trang_thai_tong_quat === qc.expectedDbStatus || res.reason === qc.expectedDbStatus);
+      (
+        res.trang_thai_tong_quat === qc.expectedDbStatus
+        || res.reason === qc.expectedDbStatus
+        || (qc.acceptUnverifiedGate && res.verificationStatus === 'NEEDS_LEGAL_VERIFICATION' && res.reason === 'UNVERIFIED_QCVN_RULE')
+      );
     qcvnResults.push({
       id: qc.id,
       title: qc.title,
-      expectedStatus: `${qc.expectedPreliminary} (${qc.expectedDbStatus})`,
+      expectedStatus: `${qc.expectedPreliminary} (${qc.expectedDbStatus}${qc.acceptUnverifiedGate ? ' / Fail-Closed khi còn chỉ tiêu chưa xác minh' : ''})`,
       actualStatus: `${actualPrimary} (${actualDetail})`,
       passed: pass,
     });
@@ -405,16 +412,16 @@ async function runEvaluation() {
   );
   const reminderNextPeriod = computeNextDueDate('2026-06-30', 'hang_quy');
 
+  const canGioZone = gisNearCanGio.detectedSensitiveZones?.[0];
   const gisAndReminderResults = [
     {
       id: 'TC-GIS-01',
-      title: 'Phân tích tọa độ nằm trong vùng lõi Khu Dự trữ Sinh quyển Cần Giờ (10.5214, 106.8856)',
-      expected: 'Phát hiện vùng nhạy cảm môi trường (bao_ton = true)',
-      actual:
-        gisNearCanGio.detectedSensitiveZones?.length > 0
-          ? `Phát hiện ${gisNearCanGio.detectedSensitiveZones[0].name} (cách tâm ${gisNearCanGio.detectedSensitiveZones[0].distanceKm} km, bao_ton=${Boolean(gisNearCanGio.autoFlags?.bao_ton)})`
-          : 'Không phát hiện',
-      passed: Boolean(gisNearCanGio.autoFlags?.bao_ton && gisNearCanGio.detectedSensitiveZones?.length > 0),
+      title: 'Phân tích tọa độ nằm trong vùng lõi Khu Dự trữ Sinh quyển Cần Giờ (10.5214, 106.8856) qua PostGIS Polygon',
+      expected: 'Phát hiện vùng nhạy cảm môi trường bằng PostGIS Polygon (inCore = true, bao_ton = true)',
+      actual: canGioZone
+        ? `Phát hiện ${canGioZone.name} (method=${canGioZone.spatialMethod}, dist=${canGioZone.distanceKm} km, inCore=${canGioZone.inCore}, bao_ton=${Boolean(gisNearCanGio.autoFlags?.bao_ton)})`
+        : 'Không phát hiện',
+      passed: Boolean(gisNearCanGio.autoFlags?.bao_ton && canGioZone?.inCore),
     },
     {
       id: 'TC-GIS-02',
@@ -696,8 +703,88 @@ async function runEvaluation() {
     });
   }
 
+  // 7. Quét độ phủ toàn bộ 100% Danh mục (39 ngành / 12 công đoạn / 143 ngưỡng / 35 bảng QCVN) & đo thời gian xử lý
+  const covT0 = performance.now();
+  let covIndustries = 0;
+  let covStages = 0;
+  let covTiers = 0;
+  let covTiersPassed = 0;
+  for (const [code, ind] of Object.entries(IND_DB)) {
+    covIndustries++;
+    const hasProcess = Boolean(ind.processRules && Object.keys(ind.processRules).length > 0);
+    if (hasProcess) {
+      for (const [stageKey, tiers] of Object.entries(ind.processRules)) {
+        covStages++;
+        const sorted = [...tiers].sort((a, b) => b.min - a.min);
+        for (let i = 0; i < sorted.length; i++) {
+          const tier = sorted[i];
+          const upperMin = i > 0 ? sorted[i - 1].min : null;
+          const cap = upperMin === null
+            ? ((tier.operator || '>=') === '>' ? tier.min + 1 : tier.min)
+            : (upperMin > tier.min ? ((tier.operator || '>=') === '>' ? tier.min + 0.01 : tier.min) : tier.min);
+          const r = evaluateClassification(
+            { nganh: code, processStage: stageKey, capacity: cap, ...(tier.hs === 'DKMT' ? { noWasteGenerated: true } : {}) },
+            { catalog: IND_DB, ruleSource: 'DATABASE' }
+          );
+          const expGroup = tier.projectGroup || (tier.hs === 'DTM' && tier.tq === 'cap_bo' ? 'Nhóm I' : tier.hs === 'DTM' ? 'Nhóm II' : tier.hs === 'GPMT' ? 'Nhóm III' : 'Nhóm IV');
+          if (r.nhom === expGroup && r.hs === tier.hs) covTiersPassed++;
+          covTiers++;
+        }
+      }
+    }
+    if (Array.isArray(ind.t)) {
+      const sorted = [...ind.t].sort((a, b) => b.min - a.min);
+      const testCat = hasProcess ? { [code]: { ...ind, processRules: null } } : IND_DB;
+      for (let i = 0; i < sorted.length; i++) {
+        const tier = sorted[i];
+        const upperMin = i > 0 ? sorted[i - 1].min : null;
+        const cap = upperMin === null
+          ? ((tier.operator || '>=') === '>' ? tier.min + 1 : tier.min)
+          : (upperMin > tier.min ? ((tier.operator || '>=') === '>' ? tier.min + 0.01 : tier.min) : tier.min);
+        const r = evaluateClassification(
+          { nganh: code, capacity: cap, ...(tier.hs === 'DKMT' ? { noWasteGenerated: true } : {}) },
+          { catalog: testCat, ruleSource: 'DATABASE' }
+        );
+        const expGroup = tier.projectGroup || (tier.hs === 'DTM' && tier.tq === 'cap_bo' ? 'Nhóm I' : tier.hs === 'DTM' ? 'Nhóm II' : tier.hs === 'GPMT' ? 'Nhóm III' : 'Nhóm IV');
+        if (r.nhom === expGroup && r.hs === tier.hs) covTiersPassed++;
+        covTiers++;
+      }
+    }
+  }
+  let qcvnMod;
+  try { qcvnMod = require('../../frontend/src/data/qcvn-db.js'); } catch { qcvnMod = await import('../../frontend/src/data/qcvn-db.js'); }
+  const qcvnIds = Object.keys(qcvnMod.QCVN_DATA || {});
+  let covQcvnPassed = 0;
+  for (const qId of qcvnIds) {
+    const qObj = qcvnMod.QCVN_DATA[qId];
+    const reqP = (qObj.tham_so || []).filter(p => !p.nhom && p.key && p.required !== false);
+    const vals = {};
+    for (const p of reqP) {
+      vals[p.key] = p.loai === 'range' ? Number(((p.min + p.max) / 2).toFixed(2)) : p.loai === 'min' ? p.gioi_han * 1.5 + 1 : p.gioi_han * 0.5;
+    }
+    const rPass = evaluateQcvnSample({ qcvnId: qId, measuredValues: vals, receivingWaterConfirmed: true, qcvnDatabase: { [qId]: { ...qObj, verificationStatus: 'VERIFIED', tham_so: (qObj.tham_so || []).map(p => p.nhom ? p : { ...p, verificationStatus: 'VERIFIED' }) } }, ruleSource: 'DATABASE' });
+    if (rPass.overallStatus === 'PASS') covQcvnPassed++;
+  }
+  const covDurationMs = Number((performance.now() - covT0).toFixed(2));
+
+  let postgisStatus = { enabled: false, extensions: [] };
+  try {
+    const pgExt = await db.query("SELECT extname, extversion FROM pg_extension WHERE extname LIKE 'postgis%'");
+    postgisStatus = { enabled: pgExt.rowCount > 0, extensions: pgExt.rows };
+  } catch { /* ignore in mock mode */ }
+
   const summary = {
     environment: envInfo,
+    postgisStatus,
+    exhaustiveCoverage: {
+      industriesCount: covIndustries,
+      processStagesCount: covStages,
+      thresholdsTotal: covTiers,
+      thresholdsPassed: covTiersPassed,
+      qcvnTablesTotal: qcvnIds.length,
+      qcvnTablesPassed: covQcvnPassed,
+      durationMs: covDurationMs,
+    },
     databaseTables: tableCounts,
     functionalClassification: classificationResults,
     functionalQcvn: qcvnResults,

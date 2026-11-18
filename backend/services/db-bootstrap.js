@@ -570,9 +570,11 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
       );
       if (!hasLegacySchema && physicalTables.rows?.[0]?.count === tableKeys.length) {
         await migrateVietnameseSchema(db);
+        await ensureGisSchema(db);
       }
     } else {
       // Đảm bảo bảng mới (nếu có) được tạo trước khi đồng bộ schema/view tiếng Việt.
+      await ensureGisSchema(db);
       await ensureComplianceReminderSchema(db);
       // Đảm bảo các tên SQL tương thích vẫn tồn tại ở ranh giới API/tầng truy cập dữ liệu.
       await migrateVietnameseSchema(db);
@@ -633,4 +635,5 @@ async function ensureRuntimeDatabaseReady({ db = defaultDb, seedIfMissing = true
 
 module.exports = {
   ensureRuntimeDatabaseReady,
+  ensureComplianceReminderSchema,
 };

@@ -6,6 +6,8 @@
 --   - Mỗi bảng có kèm View tương thích tên tiếng Anh (1-1) ở cuối file.
 -- ============================================================================
 
+CREATE EXTENSION IF NOT EXISTS postgis;
+
 -- ----------------------------------------------------------------------------
 -- NHÓM 1: NGƯỜI DÙNG & NHẬT KÝ HỆ THỐNG
 -- ----------------------------------------------------------------------------
@@ -225,7 +227,8 @@ CREATE TABLE IF NOT EXISTS du_an (
     dia_chi_hien_thi TEXT,
     quan_huyen TEXT,
     phuong_xa TEXT,
-    ket_qua_phan_loai JSONB
+    ket_qua_phan_loai JSONB,
+    vi_tri_khong_gian geometry(Point, 4326)
 );
 
 -- 15. Xác minh yếu tố nhạy cảm môi trường của dự án (View tương thích: project_sensitive_verifications)
@@ -255,6 +258,7 @@ CREATE TABLE IF NOT EXISTS lop_ban_do (
     kinh_do DOUBLE PRECISION NOT NULL,
     ban_kinh_km DOUBLE PRECISION NOT NULL DEFAULT 1,
     hinh_hoc JSONB,
+    hinh_hoc_khong_gian geometry(Geometry, 4326),
     tinh VARCHAR(150),
     can_cu_phap_ly TEXT,
     trang_thai_xac_minh VARCHAR(50) NOT NULL DEFAULT 'can_xac_minh_phap_ly',
@@ -265,6 +269,9 @@ CREATE TABLE IF NOT EXISTS lop_ban_do (
     tao_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS du_an_vi_tri_khong_gian_gix ON du_an USING GIST (vi_tri_khong_gian);
+CREATE INDEX IF NOT EXISTS lop_ban_do_hinh_hoc_khong_gian_gix ON lop_ban_do USING GIST (hinh_hoc_khong_gian);
 
 -- 17. Nghĩa vụ tuân thủ & nhắc hạn định kỳ (View tương thích: compliance_obligations)
 CREATE TABLE IF NOT EXISTS nghia_vu_tuan_thu (

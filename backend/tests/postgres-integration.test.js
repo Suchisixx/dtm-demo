@@ -17,6 +17,7 @@ const {
   loadClassificationCatalog,
   loadQcvnCatalog,
   loadGisLayers,
+  evaluateSpatialLayers,
   upsertProjectSensitiveDeclaration,
   reviewProjectSensitiveVerification,
   listLawRuleImpacts,
@@ -25,6 +26,7 @@ const {
   upsertTransitionalQcvn,
 } = require('../services/rule-repository');
 const { migrateVietnameseSchema } = require('../services/vietnamese-schema');
+const { ensureComplianceReminderSchema } = require('../services/db-bootstrap');
 
 const { QCVN_DATA } = require('../../frontend/src/data/qcvn-db');
 
@@ -64,6 +66,7 @@ function buildPgConfig(database) {
 
 let pgPool = null;
 let testUserId = null;
+let postgisAvailable = false;
 
 test.before(async () => {
   const adminPool = new Pool(buildPgConfig('postgres'));
@@ -171,10 +174,18 @@ test.before(async () => {
     await ensureSensitiveVerificationSchema(pgPool);
     await ensureGisSchema(pgPool);
     await ensureCrawlerSyncSchema(pgPool);
+    await ensureComplianceReminderSchema(pgPool);
     await migrateVietnameseSchema(pgPool);
+    await ensureGisSchema(pgPool);
   } else {
+    await ensureComplianceReminderSchema(pgPool);
+    await ensureGisSchema(pgPool);
     await migrateVietnameseSchema(pgPool);
+    await ensureGisSchema(pgPool);
   }
+
+  const postgisCheck = await pgPool.query("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') AS available");
+  postgisAvailable = postgisCheck.rows[0].available === true;
 
   await seedClassificationCatalog(pgPool, { indDb: IND_DB, industryMeta: INDUSTRY_META });
   await seedQcvnCatalog(pgPool, { qcvnData: QCVN_DATA });
@@ -280,6 +291,53 @@ test('PG Integration: Real DATE effective_from/effective_to comparison & histori
   }, { db: pgPool });
   assert.equal(noDateRes.conclusionStatus, 'NEEDS_REVIEW');
   assert.equal(noDateRes.errorCode, 'NO_ACTIVE_RULE_FOR_DATE');
+});
+
+test('PG Integration: PostGIS covers polygon interior and boundary, excludes exterior, and syncs project points', async (t) => {
+  if (!postgisAvailable) {
+    t.skip('PostGIS server files are not installed in this PostgreSQL instance');
+    return;
+  }
+  const id = 'test_postgis_polygon';
+  const schemaRes = await pgPool.query(
+    `SELECT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'public' AND c.relname = 'lop_ban_do' AND c.relkind IN ('r', 'p')) AS vietnamese`
+  );
+  const vietnamese = schemaRes.rows[0].vietnamese;
+  const gisTable = vietnamese ? 'lop_ban_do' : 'gis_layers';
+  const projectTable = vietnamese ? 'du_an' : 'projects';
+  try {
+    await pgPool.query(
+      `INSERT INTO ${gisTable} (${vietnamese ? 'ma, loai_lop, ten_lop, danh_muc, ma_co, vi_do, kinh_do, ban_kinh_km, hinh_hoc, tinh, trang_thai_xac_minh, trang_thai_cong_bo' : 'id, layer_type, name, category, flag_key, latitude, longitude, radius_km, geometry_json, province, verification_status, publication_status'})
+       VALUES ($1, 'SENSITIVE_ZONE', 'PostGIS test polygon', 'test', 'bao_ton', 10, 106, 2,
+               $2::jsonb, 'test', 'VERIFIED', 'PUBLISHED')
+       ON CONFLICT (${vietnamese ? 'ma' : 'id'}) DO UPDATE SET ${vietnamese ? 'hinh_hoc' : 'geometry_json'} = EXCLUDED.${vietnamese ? 'hinh_hoc' : 'geometry_json'},
+         ${vietnamese ? 'trang_thai_xac_minh' : 'verification_status'} = 'VERIFIED', ${vietnamese ? 'trang_thai_cong_bo' : 'publication_status'} = 'PUBLISHED'`,
+      [id, JSON.stringify({ type: 'Polygon', coordinates: [[[106, 10], [106.02, 10], [106.02, 10.02], [106, 10.02], [106, 10]]] })]
+    );
+
+    const inside = await evaluateSpatialLayers(10.01, 106.01, { db: pgPool });
+    const boundary = await evaluateSpatialLayers(10, 106.01, { db: pgPool });
+    const outside = await evaluateSpatialLayers(10.03, 106.01, { db: pgPool });
+    const lookup = rows => rows.find(row => row.id === id);
+    assert.equal(lookup(inside).covers_point, true);
+    assert.equal(lookup(boundary).covers_point, true);
+    assert.equal(lookup(outside).covers_point, false);
+
+    await pgPool.query(
+      `INSERT INTO ${projectTable} (${vietnamese ? 'nguoi_dung_ma, ten_du_an, du_lieu_bieu_mau, vi_do, kinh_do' : 'user_id, name, form_data, latitude, longitude'})
+       VALUES ($1, 'PostGIS point sync test', '{}'::jsonb, 10.01, 106.01)`,
+      [testUserId]
+    );
+    const project = await pgPool.query(
+      `SELECT ST_GeometryType(${vietnamese ? 'vi_tri_khong_gian' : 'spatial_geometry'}) AS spatial_type FROM ${projectTable}
+       WHERE ${vietnamese ? 'ten_du_an' : 'name'} = 'PostGIS point sync test'`
+    );
+    assert.equal(project.rows[0].spatial_type, 'ST_Point');
+  } finally {
+    await pgPool.query(`DELETE FROM ${gisTable} WHERE ${vietnamese ? 'ma' : 'id'} = $1`, [id]);
+    await pgPool.query(`DELETE FROM ${projectTable} WHERE ${vietnamese ? 'ten_du_an' : 'name'} = 'PostGIS point sync test'`);
+  }
 });
 
 test('PG Integration: DB GIS layers & Server Sensitive Verification lifecycle (escalate + reset on edit)', async () => {
