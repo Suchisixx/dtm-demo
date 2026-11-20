@@ -1,8 +1,8 @@
-# 1. Tổng quan nghiệp vụ ETC LegalHub
+# 1. Tổng quan nghiệp vụ — Hệ thống Hỗ trợ Quản lý và Giám sát Tuân thủ Pháp lý Môi trường Doanh nghiệp Tích hợp GIS
 
 ## Mục tiêu hệ thống
 
-ETC LegalHub hỗ trợ đội ngũ tư vấn môi trường quản lý hồ sơ dự án, tra cứu văn bản pháp luật, phân loại nghĩa vụ môi trường, xác định thẩm quyền, đối chiếu kết quả quan trắc với QCVN, theo dõi nghĩa vụ đến hạn và xem dữ liệu theo không gian. Hệ thống hỗ trợ chuyên viên rà soát; chỉ kết luận đủ căn cứ đã xác minh mới được coi là chính thức.
+Hệ thống Hỗ trợ Quản lý và Giám sát Tuân thủ Pháp lý Môi trường Doanh nghiệp Tích hợp GIS hỗ trợ đội ngũ tư vấn môi trường quản lý hồ sơ dự án, tra cứu văn bản pháp luật, phân loại nghĩa vụ môi trường, xác định thẩm quyền, đối chiếu kết quả quan trắc với QCVN, theo dõi nghĩa vụ đến hạn và xem dữ liệu theo không gian. Hệ thống hỗ trợ chuyên viên rà soát; chỉ kết luận đủ căn cứ đã xác minh mới được coi là chính thức. Toàn bộ giao diện và thông báo được chuẩn hóa tiếng Việt thân thiện, không hiển thị mã kỹ thuật thô cho người dùng cuối.
 
 ## Người dùng và quyền
 
@@ -16,11 +16,13 @@ ETC LegalHub hỗ trợ đội ngũ tư vấn môi trường quản lý hồ sơ
 
 ### Thư viện văn bản pháp lý
 
-Tra cứu luật, nghị định, thông tư, văn bản hợp nhất và QCVN; lọc, tìm kiếm, xem hiệu lực và nội dung điều khoản. Quản trị viên cập nhật văn bản. Crawler ghi nhận thay đổi và đề xuất để kiểm duyệt, không tự công bố quy tắc pháp lý.
+Tra cứu luật, nghị định, thông tư, văn bản hợp nhất và QCVN; lọc, tìm kiếm, xem hiệu lực và nội dung điều khoản qua cửa sổ chi tiết ở trung tâm màn hình (`LegalDetailModal`). Quản trị viên cập nhật và kiểm duyệt văn bản. Trình thu thập tự động ghi nhận thay đổi và tạo đề xuất để kiểm duyệt, không tự công bố quy tắc pháp lý.
 
 ### Lập hồ sơ, phân loại và xác định thẩm quyền
 
 Chuyên viên nhập ngành, công suất/quy mô, công đoạn, ngày đánh giá, vị trí, thông tin thủ tục và yếu tố nhạy cảm. Máy chủ đối chiếu catalog và ngưỡng đang hiệu lực trong PostgreSQL, xác định nhóm hồ sơ, thủ tục và thẩm quyền. Khi lưu dự án, máy chủ đánh giá lại từ dữ liệu hiện hành thay vì tin kết quả do trình duyệt gửi.
+
+Khi nhấn **Xem căn cứ pháp lý** ngay trên kết quả phân loại, hệ thống mở cửa sổ chi tiết ở chính giữa màn hình hiển thị đầy đủ văn bản, điều khoản viện dẫn và lý do áp dụng mà không điều hướng rời trang hay làm mất dữ liệu biểu mẫu đang nhập.
 
 Hồ sơ được lưu trong danh sách dự án; màn hình phân loại hỗ trợ nạp hồ sơ cũ và xử lý tên phường/xã trước sáp nhập thông qua bí danh trong danh mục hiện hành. Chọn tỉnh/phường chỉ điều hướng bản đồ và hiển thị ranh giới, không thay tọa độ ghim của dự án.
 
@@ -44,7 +46,7 @@ Dashboard tổng hợp hồ sơ, mẫu quan trắc, trạng thái rà soát và 
 
 ### Quản trị và kiểm duyệt
 
-Quản trị viên quản lý tài khoản, dự án, văn bản, tác động văn bản lên quy tắc, đề xuất crawler, catalog ngành, ngưỡng phân loại, QCVN và xác minh nhạy cảm. Chỉ dữ liệu đủ trạng thái xác minh/công bố mới được dùng trong runtime.
+Quản trị viên quản lý tài khoản, dự án, văn bản, kiểm duyệt dữ liệu pháp lý (tách rõ hàng đợi *Cần xử lý* và *Lịch sử kiểm duyệt* / *Lịch sử phiên bản*, có danh mục kiểm tra 5 mục lưu PostgreSQL), đề xuất từ trình thu thập tự động, catalog ngành, ngưỡng phân loại, QCVN và truy vết dữ liệu kiểm toán. Chỉ dữ liệu đủ trạng thái xác minh/công bố mới được dùng trong runtime.
 
 ## Nguyên tắc kết luận pháp lý
 

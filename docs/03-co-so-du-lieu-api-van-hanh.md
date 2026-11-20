@@ -79,8 +79,9 @@ Tất cả API có tiền tố `/api`, trao đổi JSON; một số API yêu c�
 | `/api/qcvns` | `GET/POST /samples`, `GET /samples/:id`, `DELETE /samples/:id` | Quản lý mẫu quan trắc; thao tác mẫu yêu cầu đăng nhập |
 | `/api/laws` | `GET /`, `POST /`, `PUT /:id`, `DELETE /:id` | Tra cứu văn bản; thay đổi do admin thực hiện |
 | `/api/dashboard` | `GET /stats` | Số liệu dashboard theo quyền |
-| `/api/admin` | `/users`, `/projects` | Quản lý người dùng và dự án |
-| `/api/admin/rules` | `/impacts`, `/candidates`, `/catalog`, `/thresholds` | Kiểm duyệt dữ liệu quy tắc và căn cứ |
+| `/api/admin` | `/users`, `/projects`, `/audit-logs` | Quản lý người dùng, dự án và truy vết nhật ký kiểm toán |
+| `/api/admin/rules` | `/moderation-overview`, `/moderation-history`, `/checklist`, `/laws` | Tổng quan kiểm duyệt, lịch sử phiên bản, lưu danh mục kiểm tra và duyệt văn bản |
+| `/api/admin/rules` | `/impacts`, `/candidates`, `/catalog`, `/thresholds` | Kiểm duyệt đề xuất quy tắc, ngưỡng và căn cứ |
 | `/api/admin/rules` | `/qcvns/:id/verify`, `/industries/:code/verify` | Xác minh QCVN và ngành nghề |
 | `/api/crawler` | `/settings`, `/run`, `/history` | Cấu hình, chạy và theo dõi crawler; admin |
 | `/api/reminders` | `GET/POST /`, `POST /projects/:projectId/sync` | Danh sách và đồng bộ nghĩa vụ; yêu cầu đăng nhập |
@@ -184,7 +185,8 @@ Các bất biến nghiệp vụ, test bắt buộc và trạng thái pháp lý �
 | `backend/services/classification-service.js` | Điều phối phân loại, thẩm quyền, căn cứ và metadata kết luận |
 | `backend/services/classification-rule-helpers.js` | Hàm hỗ trợ tra ngưỡng và xử lý quy tắc phân loại |
 | `backend/services/qcvn-service.js` | Chọn QCVN và đánh giá mẫu phía server |
-| `backend/services/rule-repository.js` | Schema catalog, seed an toàn và truy vấn dữ liệu runtime |
+| `backend/services/rule-repository.js` | Schema catalog, seed an toàn, duyệt đề xuất và truy vấn dữ liệu runtime |
+| `backend/services/moderation-repository.js` | Nghiệp vụ kiểm duyệt 2 tầng, lưu danh mục kiểm tra và lịch sử phiên bản quy tắc |
 | `backend/services/project-verification-repository.js` | Xác minh nhạy cảm dự án và truy cập các lớp GIS |
 | `backend/services/repository-shared.js` | Kết nối, trạng thái công bố và hàm dùng chung cho repository |
 | `backend/services/runtime-policy.js` | Chính sách fallback và fail-closed khi DB lỗi |
@@ -200,6 +202,7 @@ Các bất biến nghiệp vụ, test bắt buộc và trạng thái pháp lý �
 | `backend/utils/audit.js` | Ghi nhật ký kiểm toán |
 | `backend/utils/helpers.js` | Phân trang và tiện ích log truy vấn |
 | `backend/utils/logger.js` | Ghi log thống nhất |
+| `backend/utils/error-messages.js` | Chuyển đổi mã lỗi nội bộ sang thông báo tiếng Việt cho người dùng |
 | `backend/utils/constants.js` | Vai trò, cookie, trạng thái và hằng số backend |
 
 ### Frontend: giao diện và dữ liệu
@@ -214,7 +217,10 @@ Các bất biến nghiệp vụ, test bắt buộc và trạng thái pháp lý �
 | `frontend/src/components/LawsTab.vue` | Tra cứu và đọc văn bản pháp lý |
 | `frontend/src/components/DashboardTab.vue` | KPI, danh sách và biểu đồ tổng quan |
 | `frontend/src/components/MapTab.vue` | Bản đồ dự án, lớp GIS và bộ lọc |
-| `frontend/src/components/AdminTab.vue` | Người dùng, catalog, kiểm duyệt và crawler |
+| `frontend/src/components/AdminTab.vue` | Người dùng, dự án, văn bản, đồng bộ và truy vết dữ liệu |
+| `frontend/src/components/LegalDetailModal.vue` | Cửa sổ modal dùng chung ở trung tâm màn hình cho chi tiết văn bản, căn cứ và QCVN |
+| `frontend/src/components/moderation/ModerationWorkspace.vue` | Giao diện kiểm duyệt dữ liệu pháp lý (Cần xử lý, Lịch sử, Phiên bản) |
+| `frontend/src/components/moderation/ModerationDetailDrawer.vue` | Chi tiết kiểm duyệt 2 cột kèm danh mục kiểm tra 5 mục (hiển thị trong `LegalDetailModal`) |
 | `frontend/src/components/AuthModal.vue` | Biểu mẫu đăng nhập |
 | `frontend/src/components/SearchableSelect.vue` | Bộ chọn có tìm kiếm và nhóm tiêu đề |
 | `frontend/src/composables/useClassificationCatalog.js` | Tải metadata ngành và tạo các nhóm lựa chọn |
@@ -246,7 +252,12 @@ Các bất biến nghiệp vụ, test bắt buộc và trạng thái pháp lý �
 | `backend/tests/routes-and-parity.test.js` | Hợp đồng route và parity giao diện–engine–DB |
 | `backend/tests/administrative-boundaries.test.js` | Danh mục địa giới, API ranh giới và nhận diện tọa độ |
 | `backend/tests/compliance-reminder.test.js` | Hạn, chu kỳ, quyền và trạng thái nghĩa vụ |
-| `backend/tests/postgres-integration.test.js` | Tích hợp thật với PostgreSQL theo cấu hình kiểm thử |
+| `backend/tests/spatial-postgis.test.js` | Kiểm tra không gian PostGIS (`ST_Covers`) và fallback an toàn |
+| `backend/tests/exhaustive-catalog-coverage.test.js` | Bao phủ 100% 39 ngành, 12 công đoạn, 143 ngưỡng và 35 bảng QCVN |
+| `backend/tests/boundary-and-temporal.test.js` | Kiểm thử biên 3 điểm và hiệu lực theo thời gian |
+| `backend/tests/legal-moderation.test.js` | Kiểm thử 12 kịch bản kiểm duyệt dữ liệu pháp lý, RBAC và lịch sử phiên bản |
+| `backend/tests/vietnamese-localization.test.js` | Kiểm thử Việt hóa giao diện, lỗi backend, tách dòng văn bản và modal trung tâm |
+| `backend/tests/postgres-integration.test.js` | Tích hợp thật với PostgreSQL theo cấu hình kiểm thử (6 kịch bản) |
 | `docs/01-tong-quan-nghiep-vu.md` | Mục tiêu và quy trình nghiệp vụ |
 | `docs/02-kien-truc-va-luong-du-lieu.md` | Kiến trúc và luồng giữa giao diện, API, service, DB |
 | `docs/03-co-so-du-lieu-api-van-hanh.md` | Schema, endpoint, cài đặt, vận hành và vai trò tệp |

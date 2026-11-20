@@ -34,6 +34,8 @@ PostgreSQL là nguồn dữ liệu runtime duy nhất cho quy tắc phân loại
 - `frontend/src/main.js`: nạp kiểu giao diện và mount Vue.
 - `frontend/src/App.vue`: khung trang, menu, phiên đăng nhập, phân quyền hiển thị và điều hướng giữa các phân hệ.
 - `frontend/src/components/`: màn hình nghiệp vụ chính gồm `LawsTab.vue`, `ClassifyTab.vue`, `QCVNTab.vue`, `DashboardTab.vue`, `MapTab.vue`, `AdminTab.vue` và `AuthModal.vue`.
+- `frontend/src/components/LegalDetailModal.vue`: cửa sổ modal dùng chung ở trung tâm màn hình cho chi tiết văn bản pháp luật, căn cứ pháp lý kết quả phân loại, chi tiết QCVN và nội dung kiểm duyệt.
+- `frontend/src/components/moderation/`: không gian kiểm duyệt dữ liệu pháp lý (`ModerationWorkspace.vue`, `ModerationDetailDrawer.vue`) tách rõ hàng đợi cần xử lý, lịch sử kiểm duyệt, lịch sử phiên bản và danh mục kiểm tra 5 mục.
 - `frontend/src/components/classify/SavedProjectsDrawer.vue`: danh sách dự án đã lưu, phân trang, chọn, xóa và tạo hồ sơ mới.
 - `frontend/src/components/SearchableSelect.vue`: danh sách chọn có tìm kiếm; hỗ trợ nhóm ngành với tiêu đề riêng.
 - `frontend/src/composables/useClassificationCatalog.js`: tải catalog ngành và tạo nhóm lựa chọn từ metadata API.
@@ -41,7 +43,8 @@ PostgreSQL là nguồn dữ liệu runtime duy nhất cho quy tắc phân loại
 - `frontend/src/composables/useAdminPagination.js`: trạng thái phân trang dùng chung trong quản trị.
 - `frontend/src/services/classification-rules.js`: tiện ích giao diện cho nhãn quy mô; không phải bộ máy kết luận pháp lý.
 - `frontend/src/utils/constants.js`: URL API, cấu hình bản đồ, danh mục và nhãn dùng chung.
-- `frontend/src/utils/legalLabels.js`: nhãn trạng thái, nguồn quy tắc và thông điệp nghiệp vụ.
+- `frontend/src/utils/legalLabels.js`: từ điển ánh xạ duy nhất toàn bộ mã trạng thái, hành động, nguồn dữ liệu, chi tiết kiểm toán và chuẩn hóa tách dòng văn bản pháp lý (`formatLegalTextLines`) sang tiếng Việt.
+- `backend/utils/error-messages.js`: bộ chuyển đổi tập trung mã lỗi nội bộ backend sang thông báo tiếng Việt thân thiện cho người dùng.
 - `frontend/src/utils/qcvn-keywords.js`: từ khóa hỗ trợ nhận diện dữ liệu QCVN nhập/dán.
 - `frontend/src/data/`: dữ liệu seed/fixture và danh mục hành chính; không thay thế catalog runtime đã xác minh trong PostgreSQL.
 - `frontend/src/assets/css/styles.css`: biến màu, bố cục và kiểu dùng chung.
