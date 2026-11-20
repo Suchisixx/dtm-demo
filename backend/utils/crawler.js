@@ -382,25 +382,46 @@ async function runCrawler(updatedByUserId = null) {
           : `${docData.year}-01-01`;
 
         if (!existsInDb) {
-          // Thêm văn bản hợp lệ mới, kèm ngày sắp xếp đã chuẩn hóa
-          await db.query(
-            `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, link, last_crawled_mod)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-            [
-              docData.id,
-              docData.type,
-              docData.year,
-              defaultSortDate,
-              docData.so,
-              docData.ten,
-              docData.hieuluc,
-              docData.status,
-              docData.mo_ta,
-              JSON.stringify(docData.dieu_khoang),
-              docData.link,
-              doc.lastmod
-            ]
-          );
+          // Thêm văn bản hợp lệ mới, kèm ngày sắp xếp đã chuẩn hóa và đưa vào hàng đợi chờ kiểm duyệt (cho_duyet)
+          try {
+            await db.query(
+              `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, link, last_crawled_mod, detection_source, detected_at, verification_status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'crawler', CURRENT_TIMESTAMP, 'cho_duyet')`,
+              [
+                docData.id,
+                docData.type,
+                docData.year,
+                defaultSortDate,
+                docData.so,
+                docData.ten,
+                docData.hieuluc,
+                docData.status,
+                docData.mo_ta,
+                JSON.stringify(docData.dieu_khoang),
+                docData.link,
+                doc.lastmod
+              ]
+            );
+          } catch {
+            await db.query(
+              `INSERT INTO laws (id, type, year, sort_date, so, ten, hieuluc, status, mo_ta, dieu_khoang, link, last_crawled_mod)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+              [
+                docData.id,
+                docData.type,
+                docData.year,
+                defaultSortDate,
+                docData.so,
+                docData.ten,
+                docData.hieuluc,
+                docData.status,
+                docData.mo_ta,
+                JSON.stringify(docData.dieu_khoang),
+                docData.link,
+                doc.lastmod
+              ]
+            );
+          }
 
           await db.query(
             `INSERT INTO law_update_history (law_id, action, updated_by, description)

@@ -334,7 +334,10 @@ test('Parity UI - Backend - Seed: loai bo fallback 100/F2, loai option chet, sua
   assert.ok(!adminVue.includes('(VERIFIED)'), 'AdminTab khong de lo chuoi (VERIFIED) tren template');
   assert.ok(!adminVue.includes('(DRAFT)'), 'AdminTab khong de lo chuoi (DRAFT) tren template');
   assert.ok(!classifyVue.includes('Xem mã kỹ thuật'), 'ClassifyTab an nut Xem ma ky thuat khoi giao dien');
-  assert.ok(adminVue.includes('Xem dữ liệu bóc tách chi tiết'), 'AdminTab phai gap gon JSON candidate log');
+  assert.ok(
+    adminVue.includes('ModerationWorkspace') || adminVue.includes('Xem dữ liệu bóc tách chi tiết'),
+    'AdminTab phai nhung ModerationWorkspace thay vi do JSON tho ra giao dien'
+  );
 });
 
 test('Phase 2-3 Routes & Crawler Sync: /geo, sensitive-verification, qcvn /select+/evaluate+mismatch+IDOR, dashboard cap_xa & crawler PENDING_REVIEW', async () => {
@@ -866,7 +869,11 @@ test('Simplification Plan: Runtime DB Fail-Closed, Standardized Industries & Ali
   assert.ok(!classRulesJs.includes('IND_DB'), 'classification-rules.js khong duoc import IND_DB');
   assert.ok(qcvnVue.includes('Lưu ý pháp lý:'), 'QCVNTab phai co disclaimer banner');
   assert.ok(!qcvnVue.includes('runtimeQcvnData.value = QCVN_DATA'), 'QCVNTab khong duoc fallback tinh ve QCVN_DATA');
-  assert.ok(adminVue.includes('Quản lý Ngưỡng Phân loại (Threshold Rules)'), 'AdminTab phai co Section quan ly nguong toi gian');
+  const modWorkspaceVue = fs.readFileSync(path.join(__dirname, '../../frontend/src/components/moderation/ModerationWorkspace.vue'), 'utf8');
+  assert.ok(
+    adminVue.includes('ModerationWorkspace') && modWorkspaceVue.includes('Kiểm duyệt dữ liệu pháp lý'),
+    'AdminTab phai nhung ModerationWorkspace cho khu vuc kiem duyet quy tac phan loai'
+  );
   assert.ok(adminVue.includes('SHOW_ADVANCED_RULE_TOOLS'), 'AdminTab phai ho tro an/hien cong cu mo rong');
 });
 

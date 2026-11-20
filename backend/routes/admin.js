@@ -205,6 +205,14 @@ const AUDIT_ACTION_META = {
   APPROVE_RULE_CANDIDATE: { label: 'Duyệt đề xuất quy tắc', category: 'legal' },
   REJECT_RULE_CANDIDATE: { label: 'Từ chối đề xuất quy tắc', category: 'legal' },
   RESOLVE_LAW_IMPACT: { label: 'Xử lý tác động văn bản', category: 'legal' },
+  REVIEW_LAW: { label: 'Kiểm duyệt văn bản pháp luật', category: 'legal' },
+  CREATE_MODERATION_PROPOSAL: { label: 'Tạo đề xuất thay đổi quy tắc / QCVN', category: 'legal' },
+  REVIEW_THRESHOLD_RULE: { label: 'Kiểm duyệt quy tắc phân loại', category: 'legal' },
+  REVIEW_QCVN_CATALOG: { label: 'Kiểm duyệt danh mục QCVN', category: 'legal' },
+  kiem_duyet_da_xac_minh: { label: 'Phê duyệt văn bản pháp luật', category: 'legal' },
+  kiem_duyet_tu_choi: { label: 'Từ chối văn bản pháp luật', category: 'legal' },
+  kiem_duyet_can_bo_sung: { label: 'Yêu cầu bổ sung thông tin văn bản', category: 'legal' },
+  kiem_duyet_het_hieu_luc: { label: 'Ngừng áp dụng văn bản pháp luật', category: 'legal' },
   CREATE_PROJECT: { label: 'Tạo hồ sơ dự án', category: 'projects' },
   UPDATE_PROJECT: { label: 'Cập nhật hồ sơ dự án', category: 'projects' },
   DELETE_PROJECT: { label: 'Xóa hồ sơ dự án', category: 'projects' },
@@ -265,6 +273,8 @@ function summarizeAuditEntry(action, payload = {}) {
   if (payload.target_username) parts.push(`Tài khoản: ${payload.target_username}`);
   if (payload.impactId) parts.push(`Tác động #${payload.impactId} (${payload.status || ''})`);
   if (payload.candidateId) parts.push(`Đề xuất #${payload.candidateId}`);
+  if (payload.decision_label || payload.decision) parts.push(`Quyết định: ${payload.decision_label || payload.decision}`);
+  if (payload.reason || payload.reviewNote) parts.push(`Lý do/Ghi chú: ${payload.reason || payload.reviewNote}`);
 
   return {
     targetLabel: String(target),

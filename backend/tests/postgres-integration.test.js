@@ -24,6 +24,15 @@ const {
   listRuleCandidates,
   approveRuleCandidate,
   upsertTransitionalQcvn,
+  getModerationOverview,
+  listLawsForModeration,
+  getLawModerationDetail,
+  reviewLawRecord,
+  getThresholdModerationDetail,
+  createModerationProposal,
+  reviewThresholdRuleRecord,
+  getQcvnModerationDetail,
+  reviewQcvnCatalogRecord,
 } = require('../services/rule-repository');
 const { migrateVietnameseSchema } = require('../services/vietnamese-schema');
 const { ensureComplianceReminderSchema } = require('../services/db-bootstrap');
@@ -487,4 +496,111 @@ test('PG Integration: Crawler sync creates PENDING_REVIEW candidates, Admin appr
   await pgPool.query(`DELETE FROM rule_candidates WHERE law_id = 'vb_pg_test_2026'`);
   await pgPool.query(`DELETE FROM law_rule_impacts WHERE law_id = 'nd_08_2022'`);
   await pgPool.query(`DELETE FROM qcvns WHERE id = 'qcvn40_2011_b'`);
+});
+
+test('PG Integration: Full Legal Data Moderation Workflow (Laws, Threshold Proposals & Versions, QCVN Parameter Table)', async () => {
+  // 1. Tạo văn bản mới ở trạng thái cho_duyet và kiểm tra danh sách chờ duyệt
+  await pgPool.query(
+    `INSERT INTO laws (id, type, year, so, ten, status, hieuluc, mo_ta, dieu_khoang, link)
+     VALUES ('tt_kiem_duyet_pg_2026', 'tt', 2026, '99/2026/TT-BNNMT', 'Thông tư kiểm thử kiểm duyệt PG', 'con_hieu_luc', 'Đang có hiệu lực', 'Mô tả thông tư', $1::jsonb, 'https://www.luatmoitruong.vn/tt-99')
+     ON CONFLICT (id) DO NOTHING`,
+    [JSON.stringify([{ tieu_de: 'Điều 1', noi_dung: 'Nội dung điều 1' }])]
+  );
+
+  // Đưa về trạng thái cho_duyet
+  await reviewLawRecord(pgPool, {
+    lawId: 'tt_kiem_duyet_pg_2026',
+    decision: 'cho_duyet',
+    reviewNote: 'Khởi tạo chờ duyệt từ crawler',
+    reviewedByUserId: testUserId,
+    reviewedByName: 'pg_admin_test',
+  });
+
+  const pendingLaws = await listLawsForModeration({ verificationStatus: 'cho_duyet', db: pgPool });
+  assert.ok(pendingLaws.some(l => l.id === 'tt_kiem_duyet_pg_2026'));
+
+  // 2. Từ chối văn bản kèm lý do -> trạng thái tu_choi trong PostgreSQL
+  const rejectedLaw = await reviewLawRecord(pgPool, {
+    lawId: 'tt_kiem_duyet_pg_2026',
+    decision: 'tu_choi',
+    reviewNote: 'Chưa có hiệu lực thi hành',
+    reviewedByUserId: testUserId,
+    reviewedByName: 'pg_admin_test',
+  });
+  assert.equal(rejectedLaw.after.verification_status, 'tu_choi');
+
+  // 3. Phê duyệt văn bản -> trạng thái da_xac_minh trong PostgreSQL
+  const approvedLaw = await reviewLawRecord(pgPool, {
+    lawId: 'tt_kiem_duyet_pg_2026',
+    decision: 'da_xac_minh',
+    reviewNote: 'Đã xác minh công báo',
+    reviewedByUserId: testUserId,
+    reviewedByName: 'pg_admin_test',
+  });
+  assert.equal(approvedLaw.after.verification_status, 'da_xac_minh');
+
+  const lawDetail = await getLawModerationDetail('tt_kiem_duyet_pg_2026', { db: pgPool });
+  assert.equal(lawDetail.law.verification_status, 'da_xac_minh');
+  assert.ok(lawDetail.history.length >= 2);
+
+  // 4. Kiểm duyệt quy tắc phân loại & tạo đề xuất thay đổi
+  const thrRes = await pgPool.query(
+    `SELECT id, min_value, verification_status FROM classification_thresholds WHERE industry_code = 'che_bien_go' ORDER BY id ASC LIMIT 1`
+  );
+  const targetRuleId = thrRes.rows[0].id;
+
+  const proposal = await createModerationProposal(pgPool, {
+    targetType: 'nguong_phan_loai',
+    targetId: targetRuleId,
+    targetCode: 'che_bien_go',
+    reason: 'Đề xuất điều chỉnh ngưỡng kiểm thử PG',
+    proposedData: {
+      min_value: Number(thrRes.rows[0].min_value),
+      legal_ref: 'Phụ lục III VBHN 49/2026',
+      effective_from: '2026-01-15',
+    },
+    createdByUserId: testUserId,
+    createdByName: 'pg_admin_test',
+  });
+  assert.equal(proposal.status, 'cho_duyet');
+
+  const reviewedThr = await reviewThresholdRuleRecord(pgPool, {
+    id: targetRuleId,
+    decision: 'da_xac_minh',
+    legalRef: 'Phụ lục III Nghị định 08/2022/NĐ-CP (49/VBHN-BNNMT)',
+    effectiveFrom: '2025-02-01',
+    reviewNote: 'Phê duyệt quy tắc trên PostgreSQL thật',
+    reviewedByUserId: testUserId,
+    reviewedByName: 'pg_admin_test',
+  });
+  assert.equal(reviewedThr.after.verification_status, 'da_xac_minh');
+
+  const thrDetail = await getThresholdModerationDetail(targetRuleId, { db: pgPool });
+  assert.equal(thrDetail.rule.verification_status, 'da_xac_minh');
+
+  // 5. Xem chi tiết QCVN kèm bảng thông số môi trường và phê duyệt QCVN
+  const qcvnList = await pgPool.query(`SELECT id FROM qcvns ORDER BY id ASC LIMIT 1`);
+  const targetQcvnId = qcvnList.rows[0].id;
+  const qcvnDetail = await getQcvnModerationDetail(targetQcvnId, { db: pgPool });
+  assert.ok(Array.isArray(qcvnDetail.qcvn.tham_so));
+  assert.ok(qcvnDetail.qcvn.tham_so.length > 0);
+
+  const reviewedQcvn = await reviewQcvnCatalogRecord(pgPool, {
+    id: targetQcvnId,
+    decision: 'da_xac_minh',
+    sourceDocument: 'Thông tư 05/2025/TT-BTNMT',
+    effectiveFrom: '2025-09-01',
+    reviewNote: 'Đã xác minh bảng thông số QCVN trên PostgreSQL',
+    reviewedByUserId: testUserId,
+    reviewedByName: 'pg_admin_test',
+  });
+  assert.equal(reviewedQcvn.after.verification_status, 'da_xac_minh');
+
+  const overview = await getModerationOverview({ db: pgPool });
+  assert.ok(overview.stats.approvedTotalCount >= 2);
+
+  // Dọn dữ liệu kiểm thử
+  await pgPool.query(`DELETE FROM rule_candidates WHERE id = $1`, [proposal.id]);
+  await pgPool.query(`DELETE FROM law_update_history WHERE law_id = 'tt_kiem_duyet_pg_2026'`);
+  await pgPool.query(`DELETE FROM laws WHERE id = 'tt_kiem_duyet_pg_2026'`);
 });

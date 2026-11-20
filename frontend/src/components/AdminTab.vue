@@ -9,6 +9,7 @@ import {
   getAdminStatusLabel,
   getAdminTargetTypeLabel,
 } from '../utils/legalLabels.js'
+import ModerationWorkspace from './moderation/ModerationWorkspace.vue'
 
 const props = defineProps({
   currentUser: Object
@@ -168,11 +169,11 @@ const crawlerMessage = ref('')
 const crawlerStatusType = ref('info')
 const lastCrawlStats = ref(null)
 
-// === Kiểm duyệt quy tắc, tác động văn bản và QCVN chuyển tiếp ===
+// === Kiểm duyệt dữ liệu pháp lý (Văn bản, Quy tắc phân loại, Danh mục QCVN) ===
 const lawImpacts = ref([])
-const impactStatusFilter = ref('OPEN')
+const impactStatusFilter = ref('dang_mo')
 const ruleCandidates = ref([])
-const candidateStatusFilter = ref('PENDING_REVIEW')
+const candidateStatusFilter = ref('cho_duyet')
 const rulesCatalog = ref({ industries: [], qcvns: [], summary: { industriesTotal: 0, industriesVerified: 0, qcvnsTotal: 0, qcvnsVerified: 0 } })
 const rulesLoading = ref(false)
 const rulesFeedback = ref('')
@@ -195,12 +196,91 @@ const transitionalForm = ref({
 })
 
 const SHOW_CRAWLER = ref(true)
-const SHOW_DEV_RULES_PANEL = ref(false)
-const SHOW_ADVANCED_RULE_TOOLS = ref(false)
+const SHOW_DEV_RULES_PANEL = ref(true)
+const SHOW_ADVANCED_RULE_TOOLS = ref(true)
+
+// Thống kê tổng quan 6 thẻ KPI & bộ lọc thống nhất cho Trung tâm Kiểm duyệt Dữ liệu Pháp lý
+const moderationOverview = ref({
+  stats: {
+    totalPendingCount: 0,
+    pendingLawsCount: 0,
+    unverifiedRulesCount: 0,
+    unverifiedQcvnsCount: 0,
+    approvedTotalCount: 0,
+    rejectedTotalCount: 0,
+    openImpactsCount: 0,
+  },
+  recentActionRequired: [],
+})
+
+const activeModerationGroup = ref('quy_tac') // 'van_ban' | 'quy_tac' | 'qcvn'
+const moderationStatusFilter = ref('tat_ca') // 'tat_ca' | 'cho_duyet' | 'can_xac_minh_phap_ly' | 'da_xac_minh' | 'tu_choi' | 'can_bo_sung' | 'het_hieu_luc'
+const moderationSourceFilter = ref('tat_ca') // 'tat_ca' | 'crawler' | 'thu_cong' | 'he_thong'
+const moderationDateFrom = ref('')
+const moderationDateTo = ref('')
+const moderationKeyword = ref('')
+
+// Dữ liệu Nhóm 3.1: Kiểm duyệt văn bản pháp luật
+const moderationLaws = ref([])
+const selectedLawDetail = ref(null)
+const isLawDetailModalOpen = ref(false)
+const lawReviewDecision = ref('da_xac_minh')
+const lawReviewNote = ref('')
+const lawMetadataForm = ref({
+  ten: '',
+  so: '',
+  type: 'luat',
+  issuing_agency: '',
+  issued_date: '',
+  effective_date: '',
+  status: 'con_hieu_luc',
+  link: '',
+  mo_ta: '',
+  note: '',
+})
+
+// Dữ liệu Nhóm 3.2: Chi tiết & kiểm duyệt quy tắc phân loại + tạo đề xuất
+const selectedThresholdDetail = ref(null)
+const isThresholdDetailModalOpen = ref(false)
+const thresholdReviewDecision = ref('da_xac_minh')
+const thresholdReviewLegalRef = ref('')
+const thresholdReviewEffectiveFrom = ref('')
+const thresholdReviewEffectiveTo = ref('')
+const thresholdReviewNote = ref('')
+const isRuleProposalModalOpen = ref(false)
+const ruleProposalForm = ref({
+  targetId: null,
+  targetCode: '',
+  industry_name: '',
+  process_stage: '',
+  operator: '>=',
+  min_value: 0,
+  max_value: null,
+  unit: '',
+  project_group: 'Nhóm III',
+  legal_doc_required: 'GPMT',
+  tq: 'cap_so',
+  phu_luc: '',
+  legal_ref: '',
+  effective_from: '',
+  effective_to: '',
+  reason: '',
+})
+
+// Dữ liệu Nhóm 3.3: Chi tiết & kiểm duyệt QCVN + bảng thông số môi trường
+const selectedQcvnDetail = ref(null)
+const isQcvnDetailModalOpen = ref(false)
+const qcvnReviewDecision = ref('da_xac_minh')
+const qcvnReviewSourceDoc = ref('')
+const qcvnReviewEffectiveFrom = ref('')
+const qcvnReviewEffectiveTo = ref('')
+const qcvnReviewNote = ref('')
+const qcvnEditMode = ref(false)
+const qcvnEditParams = ref([])
 
 const thresholdRules = ref([])
 const thresholdLoading = ref(false)
-const thresholdStatusFilter = ref('ALL')
+const thresholdStatusFilter = ref('tat_ca')
 const thresholdSearch = ref('')
 const isEditingThresholdModalOpen = ref(false)
 const editingThreshold = ref({})
@@ -209,11 +289,98 @@ const verifyingThreshold = ref({})
 const thresholdFeedback = ref('')
 const thresholdFeedbackError = ref('')
 
+// Ánh xạ mã trạng thái sang mã tiếng Việt chuẩn và nhãn tiếng Việt hiển thị
+const toViStatus = (raw) => {
+  const s = String(raw || '').trim().toLowerCase()
+  if (['cho_duyet', 'pending_review', 'extracted', 'da_trich_xuat', 'pending_verification', 'cho_xac_minh'].includes(s)) return 'cho_duyet'
+  if (['can_xac_minh_phap_ly', 'needs_legal_verification', 'needs_review', 'can_ra_soat'].includes(s)) return 'can_xac_minh_phap_ly'
+  if (['da_xac_minh', 'verified', 'da_duyet', 'approved', 'da_ap_dung', 'applied'].includes(s)) return 'da_xac_minh'
+  if (['tu_choi', 'rejected'].includes(s)) return 'tu_choi'
+  if (['can_bo_sung', 'need_more_info'].includes(s)) return 'can_bo_sung'
+  if (['het_hieu_luc', 'expired', 'lich_su', 'historical', 'superseded'].includes(s)) return 'het_hieu_luc'
+  if (['ban_nhap', 'draft'].includes(s)) return 'ban_nhap'
+  return s || 'can_xac_minh_phap_ly'
+}
+
+const getViStatusLabel = (raw) => {
+  const code = toViStatus(raw)
+  const map = {
+    cho_duyet: 'Chờ kiểm duyệt',
+    can_xac_minh_phap_ly: 'Cần xác minh pháp lý',
+    da_xac_minh: 'Đã phê duyệt',
+    tu_choi: 'Từ chối',
+    can_bo_sung: 'Cần bổ sung thông tin',
+    het_hieu_luc: 'Ngừng áp dụng / Hết hiệu lực',
+    ban_nhap: 'Bản nháp',
+  }
+  return map[code] || 'Chờ kiểm duyệt'
+}
+
+const getViStatusChipClass = (raw) => {
+  const code = toViStatus(raw)
+  if (code === 'da_xac_minh') return 'chip-success'
+  if (code === 'tu_choi' || code === 'het_hieu_luc') return 'chip-danger'
+  if (code === 'cho_duyet' || code === 'can_xac_minh_phap_ly' || code === 'can_bo_sung') return 'chip-warning'
+  return 'chip-neutral'
+}
+
+const getAuthorityViLabel = (tq) => {
+  const map = {
+    cap_bo: 'Bộ NN&MT / Bộ TN&MT',
+    btnmt: 'Bộ NN&MT / Bộ TN&MT',
+    cap_so: 'UBND cấp Tỉnh / Sở NN&MT',
+    ubnd_tinh: 'UBND cấp Tỉnh / Sở NN&MT',
+    cap_xa: 'UBND cấp Xã',
+    bql_kcn: 'Ban Quản lý KCN',
+    bo_khac: 'Bộ chuyên ngành khác',
+  }
+  return map[tq] || tq || 'Chưa xác định'
+}
+
+const getQcvnDomainViLabel = (sourceType) => {
+  const map = {
+    nuoc_thai_cn: 'Nước thải công nghiệp',
+    nuoc_thai_sh: 'Nước thải sinh hoạt',
+    nuoc_mat: 'Chất lượng nước mặt',
+    nuoc_ngam: 'Chất lượng nước dưới đất',
+    khong_khi: 'Chất lượng không khí xung quanh',
+    khi_thai: 'Khí thải công nghiệp',
+    dat: 'Chất lượng đất',
+  }
+  return map[sourceType] || sourceType || 'Quy chuẩn môi trường'
+}
+
+const fetchModerationOverview = async () => {
+  try {
+    const res = await fetch(API.ADMIN_MODERATION_OVERVIEW)
+    if (res.ok) {
+      moderationOverview.value = await res.json()
+    }
+  } catch (err) {
+    logger.warn('Không tải được tổng quan kiểm duyệt:', err)
+  }
+}
+
+const fetchModerationLaws = async () => {
+  try {
+    const res = await fetch(API.ADMIN_MODERATION_LAWS)
+    if (res.ok) {
+      const data = await res.json()
+      moderationLaws.value = data.laws || []
+    }
+  } catch (err) {
+    logger.warn('Không tải được danh sách văn bản kiểm duyệt:', err)
+  }
+}
+
 const fetchThresholdRules = async () => {
   thresholdLoading.value = true
   thresholdFeedbackError.value = ''
   try {
-    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}?status=${encodeURIComponent(thresholdStatusFilter.value || 'ALL')}`)
+    const statusParam = thresholdStatusFilter.value && thresholdStatusFilter.value !== 'tat_ca' && thresholdStatusFilter.value !== 'ALL'
+      ? thresholdStatusFilter.value
+      : 'tat_ca'
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}?status=${encodeURIComponent(statusParam)}`)
     if (res.ok) {
       const data = await res.json()
       thresholdRules.value = data.thresholds || []
@@ -225,19 +392,474 @@ const fetchThresholdRules = async () => {
   }
 }
 
-const filteredThresholdRules = computed(() => {
-  let list = thresholdRules.value || []
-  if (thresholdSearch.value.trim()) {
-    const q = thresholdSearch.value.trim().toLowerCase()
-    list = list.filter(r => 
-      (r.industry_name && r.industry_name.toLowerCase().includes(q)) ||
-      (r.industry_code && r.industry_code.toLowerCase().includes(q)) ||
-      (r.process_stage && r.process_stage.toLowerCase().includes(q)) ||
-      (r.legal_ref && r.legal_ref.toLowerCase().includes(q))
+const filteredModerationLaws = computed(() => {
+  let list = moderationLaws.value || []
+  const st = moderationStatusFilter.value
+  if (st && st !== 'tat_ca') {
+    list = list.filter(l => toViStatus(l.verification_status) === st)
+  }
+  const src = moderationSourceFilter.value
+  if (src && src !== 'tat_ca') {
+    list = list.filter(l => l.detection_source === src)
+  }
+  if (moderationDateFrom.value) {
+    list = list.filter(l => !l.issued_date || String(l.issued_date).slice(0, 10) >= moderationDateFrom.value)
+  }
+  if (moderationDateTo.value) {
+    list = list.filter(l => !l.issued_date || String(l.issued_date).slice(0, 10) <= moderationDateTo.value)
+  }
+  const kw = moderationKeyword.value.trim().toLowerCase()
+  if (kw) {
+    list = list.filter(l =>
+      (l.ten && l.ten.toLowerCase().includes(kw)) ||
+      (l.so && l.so.toLowerCase().includes(kw)) ||
+      (l.id && l.id.toLowerCase().includes(kw)) ||
+      (l.issuing_agency && l.issuing_agency.toLowerCase().includes(kw))
     )
   }
   return list
 })
+
+const filteredThresholdRules = computed(() => {
+  let list = thresholdRules.value || []
+  const st = moderationStatusFilter.value !== 'tat_ca' ? moderationStatusFilter.value : thresholdStatusFilter.value
+  if (st && st !== 'tat_ca' && st !== 'ALL') {
+    list = list.filter(r => toViStatus(r.verification_status_vi || r.verification_status) === toViStatus(st))
+  }
+  if (moderationDateFrom.value) {
+    list = list.filter(r => !r.effective_from || String(r.effective_from).slice(0, 10) >= moderationDateFrom.value)
+  }
+  if (moderationDateTo.value) {
+    list = list.filter(r => !r.effective_from || String(r.effective_from).slice(0, 10) <= moderationDateTo.value)
+  }
+  const q = (moderationKeyword.value.trim() || thresholdSearch.value.trim()).toLowerCase()
+  if (q) {
+    list = list.filter(r => 
+      (r.industry_name && r.industry_name.toLowerCase().includes(q)) ||
+      (r.industry_code && r.industry_code.toLowerCase().includes(q)) ||
+      (r.process_stage && r.process_stage.toLowerCase().includes(q)) ||
+      (r.legal_ref && r.legal_ref.toLowerCase().includes(q)) ||
+      String(r.id).includes(q)
+    )
+  }
+  return list
+})
+
+const filteredModerationQcvns = computed(() => {
+  let list = rulesCatalog.value?.qcvns || []
+  const st = moderationStatusFilter.value
+  if (st && st !== 'tat_ca') {
+    list = list.filter(q => toViStatus(q.verification_status_vi || q.verification_status) === st)
+  }
+  if (moderationDateFrom.value) {
+    list = list.filter(q => !q.effective_from || String(q.effective_from).slice(0, 10) >= moderationDateFrom.value)
+  }
+  if (moderationDateTo.value) {
+    list = list.filter(q => !q.effective_from || String(q.effective_from).slice(0, 10) <= moderationDateTo.value)
+  }
+  const kw = moderationKeyword.value.trim().toLowerCase()
+  if (kw) {
+    list = list.filter(q =>
+      (q.id && q.id.toLowerCase().includes(kw)) ||
+      (q.ten && q.ten.toLowerCase().includes(kw)) ||
+      (q.standard_code && q.standard_code.toLowerCase().includes(kw)) ||
+      (q.source_document && q.source_document.toLowerCase().includes(kw))
+    )
+  }
+  return list
+})
+
+const resetModerationFilters = () => {
+  moderationStatusFilter.value = 'tat_ca'
+  moderationSourceFilter.value = 'tat_ca'
+  moderationDateFrom.value = ''
+  moderationDateTo.value = ''
+  moderationKeyword.value = ''
+  thresholdStatusFilter.value = 'tat_ca'
+  thresholdSearch.value = ''
+}
+
+// === Thao tác Nhóm 3.1: Chi tiết & Kiểm duyệt Văn bản pháp luật ===
+const openLawModerationModal = async (lawItem) => {
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_MODERATION_LAWS}/${encodeURIComponent(lawItem.id)}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      rulesFeedbackError.value = err.error || 'Không thể tải chi tiết văn bản!'
+      return
+    }
+    const detail = await res.json()
+    selectedLawDetail.value = detail
+    const l = detail.law || lawItem
+    lawReviewDecision.value = l.verification_status === 'tu_choi' ? 'tu_choi' : (l.verification_status === 'can_bo_sung' ? 'can_bo_sung' : 'da_xac_minh')
+    lawReviewNote.value = l.review_note || ''
+    lawMetadataForm.value = {
+      ten: l.ten || '',
+      so: l.so || '',
+      type: l.type || 'luat',
+      issuing_agency: l.issuing_agency || '',
+      issued_date: l.issued_date || '',
+      effective_date: l.effective_date || '',
+      status: l.status || 'con_hieu_luc',
+      link: l.link || '',
+      mo_ta: l.mo_ta || '',
+      note: l.note || '',
+    }
+    isLawDetailModalOpen.value = true
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi kết nối khi tải chi tiết văn bản.'
+  }
+}
+
+const submitLawReviewAction = async (decisionOverride = null) => {
+  if (!selectedLawDetail.value?.law) return
+  const decision = decisionOverride || lawReviewDecision.value
+  const note = (lawReviewNote.value || '').trim()
+  if ((decision === 'tu_choi' || decision === 'can_bo_sung') && !note) {
+    alert('Bắt buộc phải nhập lý do khi Từ chối hoặc Yêu cầu bổ sung thông tin văn bản!')
+    return
+  }
+  const decisionLabel = getViStatusLabel(decision)
+  if (!confirm(`Xác nhận thực hiện quyết định "${decisionLabel}" đối với văn bản "${selectedLawDetail.value.law.so}"?`)) {
+    return
+  }
+  rulesLoading.value = true
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_MODERATION_LAWS}/${encodeURIComponent(selectedLawDetail.value.law.id)}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision,
+        reviewNote: note || null,
+        metadataPatch: lawMetadataForm.value,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      rulesFeedbackError.value = data.error || 'Không thể lưu kết quả kiểm duyệt văn bản!'
+      return
+    }
+    rulesFeedback.value = data.message || 'Đã lưu kết quả kiểm duyệt văn bản!'
+    isLawDetailModalOpen.value = false
+    await Promise.all([fetchModerationLaws(), fetchModerationOverview(), fetchLaws()])
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi mạng khi kiểm duyệt văn bản.'
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+// === Thao tác Nhóm 3.2: Chi tiết, Kiểm duyệt & Tạo đề xuất Quy tắc phân loại ===
+const openThresholdDetailModal = async (ruleItem) => {
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}/${ruleItem.id}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      rulesFeedbackError.value = err.error || 'Không thể tải chi tiết quy tắc!'
+      return
+    }
+    const detail = await res.json()
+    selectedThresholdDetail.value = detail
+    const r = detail.rule || ruleItem
+    thresholdReviewDecision.value = 'da_xac_minh'
+    thresholdReviewLegalRef.value = r.legal_ref || ''
+    thresholdReviewEffectiveFrom.value = r.effective_from || new Date().toISOString().slice(0, 10)
+    thresholdReviewEffectiveTo.value = r.effective_to || ''
+    thresholdReviewNote.value = ''
+    isThresholdDetailModalOpen.value = true
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi kết nối khi tải chi tiết quy tắc.'
+  }
+}
+
+const submitThresholdReviewAction = async (decisionOverride = null) => {
+  if (!selectedThresholdDetail.value?.rule) return
+  const decision = decisionOverride || thresholdReviewDecision.value
+  const note = (thresholdReviewNote.value || '').trim()
+  const legalRef = (thresholdReviewLegalRef.value || '').trim()
+  const effFrom = thresholdReviewEffectiveFrom.value
+
+  if ((decision === 'tu_choi' || decision === 'can_bo_sung') && !note) {
+    alert('Bắt buộc phải nhập lý do khi Từ chối hoặc Yêu cầu bổ sung thông tin cho quy tắc phân loại!')
+    return
+  }
+  if (decision === 'da_xac_minh' && (!legalRef || !effFrom)) {
+    alert('Bắt buộc nhập đầy đủ Căn cứ pháp lý và Ngày bắt đầu hiệu lực trước khi phê duyệt quy tắc!')
+    return
+  }
+  const decisionLabel = getViStatusLabel(decision)
+  if (!confirm(`Xác nhận thực hiện quyết định "${decisionLabel}" đối với Quy tắc #${selectedThresholdDetail.value.rule.id} (${selectedThresholdDetail.value.rule.industry_name})?`)) {
+    return
+  }
+
+  rulesLoading.value = true
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_THRESHOLDS}/${selectedThresholdDetail.value.rule.id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision,
+        legalRef,
+        effectiveFrom: effFrom || null,
+        effectiveTo: thresholdReviewEffectiveTo.value || null,
+        reviewNote: note || null,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      rulesFeedbackError.value = data.error || 'Không thể lưu kết quả kiểm duyệt quy tắc!'
+      return
+    }
+    rulesFeedback.value = data.message || 'Đã lưu kết quả kiểm duyệt quy tắc!'
+    isThresholdDetailModalOpen.value = false
+    await Promise.all([fetchThresholdRules(), fetchRuleVerificationCenter(), fetchModerationOverview()])
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+const openCreateRuleProposalModal = (rule) => {
+  ruleProposalForm.value = {
+    targetId: rule.id,
+    targetCode: rule.industry_code,
+    industry_name: rule.industry_name,
+    process_stage: rule.process_stage || '',
+    operator: rule.operator || '>=',
+    min_value: rule.min_value ?? 0,
+    max_value: rule.max_value ?? null,
+    unit: rule.unit || '',
+    project_group: rule.project_group || 'Nhóm III',
+    legal_doc_required: rule.legal_doc_required || 'GPMT',
+    tq: rule.tq || 'cap_so',
+    phu_luc: rule.phu_luc || '',
+    legal_ref: rule.legal_ref || '',
+    effective_from: rule.effective_from || new Date().toISOString().slice(0, 10),
+    effective_to: rule.effective_to || '',
+    reason: '',
+  }
+  isRuleProposalModalOpen.value = true
+}
+
+const submitRuleProposalAction = async () => {
+  if (!ruleProposalForm.value.reason?.trim()) {
+    alert('Vui lòng nhập lý do và căn cứ tạo đề xuất thay đổi quy tắc!')
+    return
+  }
+  rulesLoading.value = true
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const f = ruleProposalForm.value
+    const res = await fetch(API.ADMIN_MODERATION_PROPOSALS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetType: 'nguong_phan_loai',
+        targetId: f.targetId,
+        targetCode: f.targetCode,
+        title: `Đề xuất thay đổi Quy tắc #${f.targetId} — ${f.industry_name}`,
+        reason: f.reason.trim(),
+        sourceExcerpt: f.legal_ref,
+        proposedData: {
+          thresholdId: f.targetId,
+          industry_code: f.targetCode,
+          process_stage: f.process_stage,
+          operator: f.operator,
+          min_value: Number(f.min_value),
+          max_value: f.max_value === '' || f.max_value === null ? null : Number(f.max_value),
+          unit: f.unit,
+          project_group: f.project_group,
+          legal_doc_required: f.legal_doc_required,
+          tq: f.tq,
+          phu_luc: f.phu_luc,
+          legal_ref: f.legal_ref,
+          sourceDocument: f.legal_ref,
+          effective_from: f.effective_from || null,
+          effective_to: f.effective_to || null,
+        },
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      rulesFeedbackError.value = data.error || 'Không thể tạo đề xuất thay đổi quy tắc!'
+      return
+    }
+    rulesFeedback.value = data.message || 'Đã tạo đề xuất thay đổi quy tắc thành công!'
+    isRuleProposalModalOpen.value = false
+    await Promise.all([fetchRuleVerificationCenter(), fetchModerationOverview()])
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi mạng khi tạo đề xuất.'
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+// === Thao tác Nhóm 3.3: Chi tiết, Bảng thông số & Kiểm duyệt QCVN ===
+const openQcvnDetailModal = async (qcvnItem) => {
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_QCVN_VERIFY}/${encodeURIComponent(qcvnItem.id)}`)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      rulesFeedbackError.value = err.error || 'Không thể tải chi tiết QCVN!'
+      return
+    }
+    const detail = await res.json()
+    selectedQcvnDetail.value = detail
+    const q = detail.qcvn || qcvnItem
+    qcvnReviewDecision.value = 'da_xac_minh'
+    qcvnReviewSourceDoc.value = q.source_document || qcvnSourceDocs.value[q.id] || q.ap_dung || ''
+    qcvnReviewEffectiveFrom.value = q.effective_from || ''
+    qcvnReviewEffectiveTo.value = q.effective_to || ''
+    qcvnReviewNote.value = ''
+    qcvnEditMode.value = false
+    qcvnEditParams.value = (Array.isArray(q.tham_so) ? q.tham_so : []).map(p => ({ ...p }))
+    isQcvnDetailModalOpen.value = true
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi kết nối khi tải chi tiết QCVN.'
+  }
+}
+
+const addQcvnEditParamRow = () => {
+  qcvnEditParams.value.push({
+    key: '',
+    ten: '',
+    don_vi: 'mg/L',
+    loai: 'max',
+    gioi_han: 50,
+    min: null,
+    max: null,
+    averagingPeriod: '24_gio',
+  })
+}
+
+const removeQcvnEditParamRow = (idx) => {
+  qcvnEditParams.value.splice(idx, 1)
+}
+
+const submitQcvnReviewAction = async (decisionOverride = null) => {
+  if (!selectedQcvnDetail.value?.qcvn) return
+  const q = selectedQcvnDetail.value.qcvn
+  const decision = decisionOverride || qcvnReviewDecision.value
+  const note = (qcvnReviewNote.value || '').trim()
+  const sourceDoc = (qcvnReviewSourceDoc.value || '').trim()
+
+  if ((decision === 'tu_choi' || decision === 'can_bo_sung') && !note) {
+    alert('Bắt buộc phải nhập lý do khi Từ chối hoặc Yêu cầu bổ sung thông tin cho QCVN!')
+    return
+  }
+  if (decision === 'da_xac_minh' && !sourceDoc) {
+    alert('Bắt buộc nhập Căn cứ pháp lý ban hành (Thông tư / Quyết định) trước khi phê duyệt QCVN!')
+    return
+  }
+  const decisionLabel = getViStatusLabel(decision)
+  if (!confirm(`Xác nhận thực hiện quyết định "${decisionLabel}" đối với quy chuẩn "${q.id} — ${q.ten}"?`)) {
+    return
+  }
+
+  rulesLoading.value = true
+  rulesFeedback.value = ''
+  rulesFeedbackError.value = ''
+  try {
+    const res = await fetch(`${API.ADMIN_RULES_QCVN_VERIFY}/${encodeURIComponent(q.id)}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        decision,
+        sourceDocument: sourceDoc || null,
+        effectiveFrom: qcvnReviewEffectiveFrom.value || null,
+        effectiveTo: qcvnReviewEffectiveTo.value || null,
+        reviewNote: note || null,
+        ...(qcvnEditMode.value ? { patch: { tham_so: qcvnEditParams.value } } : {}),
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      rulesFeedbackError.value = data.error || 'Không thể lưu kết quả kiểm duyệt QCVN!'
+      return
+    }
+    rulesFeedback.value = data.message || `Đã cập nhật kiểm duyệt ${q.id}!`
+    isQcvnDetailModalOpen.value = false
+    await Promise.all([fetchRuleVerificationCenter(), fetchModerationOverview()])
+  } catch (err) {
+    rulesFeedbackError.value = err.message || 'Lỗi mạng khi kiểm duyệt QCVN.'
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+const createQcvnProposalFromModal = async () => {
+  if (!selectedQcvnDetail.value?.qcvn) return
+  const q = selectedQcvnDetail.value.qcvn
+  const note = (qcvnReviewNote.value || '').trim()
+  if (!note) {
+    alert('Vui lòng nhập lý do tạo đề xuất thay đổi thông số QCVN!')
+    return
+  }
+  rulesLoading.value = true
+  try {
+    const res = await fetch(API.ADMIN_MODERATION_PROPOSALS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetType: 'quy_chuan_qcvn',
+        targetCode: q.id,
+        title: `Đề xuất cập nhật bảng thông số ${q.id} — ${q.ten}`,
+        reason: note,
+        sourceExcerpt: qcvnReviewSourceDoc.value || q.source_document,
+        proposedData: {
+          id: q.id,
+          ten: q.ten,
+          ap_dung: q.ap_dung,
+          sourceDocument: qcvnReviewSourceDoc.value || q.source_document,
+          effective_from: qcvnReviewEffectiveFrom.value || q.effective_from,
+          effective_to: qcvnReviewEffectiveTo.value || q.effective_to,
+          tham_so: qcvnEditParams.value,
+        },
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      rulesFeedbackError.value = data.error || 'Không thể tạo đề xuất QCVN!'
+      return
+    }
+    rulesFeedback.value = data.message || 'Đã tạo đề xuất thay đổi QCVN!'
+    isQcvnDetailModalOpen.value = false
+    await Promise.all([fetchRuleVerificationCenter(), fetchModerationOverview()])
+  } finally {
+    rulesLoading.value = false
+  }
+}
+
+const jumpToModerationItem = async (item) => {
+  if (!item) return
+  if (item.loai_du_lieu === 'van_ban') {
+    activeModerationGroup.value = 'van_ban'
+    await openLawModerationModal({ id: item.ma })
+  } else if (item.loai_du_lieu === 'qcvn') {
+    activeModerationGroup.value = 'qcvn'
+    if (rulesCatalog.value.qcvns?.some(q => q.id === item.ma)) {
+      await openQcvnDetailModal({ id: item.ma })
+    }
+  } else {
+    activeModerationGroup.value = 'quy_tac'
+    const numId = Number(item.ma)
+    if (Number.isInteger(numId) && numId > 0 && thresholdRules.value.some(t => t.id === numId)) {
+      await openThresholdDetailModal({ id: numId })
+    }
+  }
+}
 
 const openEditThresholdModal = (rule) => {
   editingThreshold.value = { ...rule }
@@ -320,17 +942,19 @@ const confirmVerifyThreshold = async () => {
   }
 }
 
-const pendingImpactsCount = computed(() => lawImpacts.value.filter(i => i.status === 'OPEN').length)
-const pendingCandidatesCount = computed(() => ruleCandidates.value.filter(c => ['PENDING_REVIEW', 'EXTRACTED'].includes(c.status)).length)
+const pendingImpactsCount = computed(() => lawImpacts.value.filter(i => ['OPEN', 'dang_mo'].includes(i.status)).length)
+const pendingCandidatesCount = computed(() => ruleCandidates.value.filter(c => ['PENDING_REVIEW', 'EXTRACTED', 'cho_duyet', 'da_trich_xuat', 'can_bo_sung'].includes(c.status)).length)
 
 const fetchRuleVerificationCenter = async () => {
   rulesLoading.value = true
   rulesFeedbackError.value = ''
   try {
     const [impRes, candRes, catRes] = await Promise.all([
-      fetch(`${API.ADMIN_RULES_IMPACTS}?status=${encodeURIComponent(impactStatusFilter.value || 'ALL')}`),
-      fetch(`${API.ADMIN_RULES_CANDIDATES}?status=${encodeURIComponent(candidateStatusFilter.value || 'ALL')}`),
+      fetch(`${API.ADMIN_RULES_IMPACTS}?status=${encodeURIComponent(impactStatusFilter.value || 'tat_ca')}`),
+      fetch(`${API.ADMIN_RULES_CANDIDATES}?status=${encodeURIComponent(candidateStatusFilter.value || 'tat_ca')}`),
       fetch(API.ADMIN_RULES_CATALOG),
+      fetchModerationOverview(),
+      fetchModerationLaws(),
     ])
     if (impRes.ok) {
       const impData = await impRes.json()
@@ -504,21 +1128,34 @@ const confirmApproveCandidateWithParams = async () => {
   }
 }
 
-const rejectCandidateAction = async (cand) => {
+const rejectCandidateAction = async (cand, targetStatus = 'tu_choi') => {
+  const note = (candidateNotes.value[cand.id] || '').trim()
+  if (!note) {
+    alert('Bắt buộc phải nhập lý do khi Từ chối hoặc Yêu cầu bổ sung thông tin cho đề xuất!')
+    return
+  }
+  const actionLabel = targetStatus === 'can_bo_sung' ? 'Yêu cầu bổ sung thông tin' : 'Từ chối'
+  if (!confirm(`Xác nhận "${actionLabel}" đối với đề xuất #${cand.id} (${cand.title})?`)) {
+    return
+  }
   rulesFeedback.value = ''
   rulesFeedbackError.value = ''
   try {
     const res = await fetch(`${API.ADMIN_RULES_CANDIDATES}/${cand.id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reviewNote: candidateNotes.value[cand.id] || null })
+      body: JSON.stringify({
+        reviewNote: note,
+        status: targetStatus,
+        requireReason: true,
+      })
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      rulesFeedbackError.value = data.error || 'Không thể từ chối đề xuất quy tắc.'
+      rulesFeedbackError.value = data.error || 'Không thể cập nhật đề xuất quy tắc.'
       return
     }
-    rulesFeedback.value = data.message || `Đã từ chối đề xuất #${cand.id}.`
+    rulesFeedback.value = data.message || `Đã cập nhật đề xuất #${cand.id}.`
     await fetchRuleVerificationCenter()
   } catch (err) {
     rulesFeedbackError.value = err.message || 'Lỗi kết nối.'
@@ -721,6 +1358,8 @@ const switchSubpage = (subpage) => {
     fetchAllProjects()
   } else if (subpage === 'laws') fetchLaws()
   else if (subpage === 'rules') {
+    fetchModerationOverview()
+    fetchModerationLaws()
     fetchThresholdRules()
     fetchRuleVerificationCenter()
   }
@@ -987,6 +1626,7 @@ const {
 onMounted(() => {
   fetchUsers()
   fetchAdminIndustriesMeta()
+  fetchModerationOverview()
 })
 </script>
 
@@ -1015,6 +1655,13 @@ onMounted(() => {
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'laws' }" @click="switchSubpage('laws')">
         <i class="ti ti-scale"></i>
         <span>Văn bản &amp; Quy chuẩn ({{ laws.length }})</span>
+      </button>
+      <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'rules' }" @click="switchSubpage('rules')">
+        <i class="ti ti-shield-check"></i>
+        <span>Kiểm duyệt dữ liệu pháp lý</span>
+        <span v-if="moderationOverview.stats?.totalPendingCount > 0" class="chip chip-warning" style="margin-left:6px;padding:1px 7px;font-size:11px;font-weight:700">
+          {{ moderationOverview.stats.totalPendingCount }}
+        </span>
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'crawler' }" @click="switchSubpage('crawler')">
         <i class="ti ti-refresh"></i>
@@ -1374,365 +2021,81 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- Trang con: kiểm duyệt quy tắc và QCVN, ẩn khỏi người dùng thông thường -->
-      <div v-if="SHOW_DEV_RULES_PANEL && currentSubpage === 'rules'" id="admin-rules" class="admin-subpage">
-        <div class="admin-section-header">
-          <div>
-            <div class="admin-section-title">Trung tâm Kiểm duyệt Quy tắc, Tác động Luật &amp; QCVN Chuyển tiếp</div>
-            <div style="font-size:12.5px;color:var(--text3);margin-top:2px">
-              Mọi đề xuất bóc tách tự động đều ở trạng thái <code>Chờ kiểm duyệt</code> và các bảng quy chuẩn chưa có chữ ký chứng từ pháp lý đều được khóa để bảo đảm an toàn.
-            </div>
-          </div>
-          <button type="button" class="btn-secondary btn-sm" :disabled="rulesLoading" @click="fetchRuleVerificationCenter">
-            <i class="ti ti-refresh"></i>
-            <span>{{ rulesLoading ? 'Đang tải...' : 'Làm mới' }}</span>
-          </button>
-        </div>
+      <!-- Trang con: Kiểm duyệt dữ liệu pháp lý (Redesign tối giản, phân cấp trực quan) -->
+      <div v-if="currentSubpage === 'rules'" class="admin-subpage">
+        <ModerationWorkspace
+          @stats-updated="(n) => { if (moderationOverview.stats) moderationOverview.stats.totalPendingCount = n }"
+        />
 
-        <div v-if="rulesFeedback" style="margin-bottom:12px;padding:10px 14px;border-radius:var(--radius);background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);font-size:13px">
-          {{ rulesFeedback }}
-        </div>
-        <div v-if="rulesFeedbackError" style="margin-bottom:12px;padding:10px 14px;border-radius:var(--radius);background:var(--red-bg);border:1px solid var(--danger-border);color:var(--red);font-size:13px">
-          {{ rulesFeedbackError }}
-        </div>
+        <!-- Công cụ quản trị mở rộng thu gọn (mặc định đóng để giữ giao diện kiểm duyệt tối giản) -->
+        <details style="margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:12px 18px">
+          <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--text2);user-select:none">
+            Công cụ chuyên sâu: Nhập bảng QCVN chuyển tiếp (40:2011 / 14:2008) &amp; Cảnh báo tác động văn bản
+          </summary>
+          <div style="margin-top:14px;display:flex;flex-direction:column;gap:16px">
+            <div v-if="lawImpacts.length > 0">
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">Cảnh báo tác động văn bản ({{ pendingImpactsCount }} chờ xử lý)</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div v-for="imp in lawImpacts" :key="imp.id" style="padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12.5px">
+                  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                    <strong>{{ imp.law_id }} — {{ imp.law_title || imp.target_label }}</strong>
+                    <span class="chip chip-gray" style="font-size:11px">{{ getAdminStatusLabel(imp.status) }}</span>
+                  </div>
+                  <div style="color:var(--text2);margin:4px 0">{{ imp.impact_reason }}</div>
+                  <div v-if="['OPEN', 'dang_mo'].includes(imp.status)" style="display:flex;gap:8px;margin-top:6px">
+                    <input type="text" v-model="impactNotes[imp.id]" placeholder="Ghi chú xử lý..." style="flex:1;height:32px;font-size:12px" />
+                    <button type="button" class="btn-primary btn-sm" @click="resolveImpactAction(imp.id, 'da_xu_ly')">Đã xử lý</button>
+                    <button type="button" class="btn-secondary btn-sm" @click="resolveImpactAction(imp.id, 'bo_qua')">Bỏ qua</button>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-        <!-- Chỉ số tổng hợp -->
-        <div class="kpi-grid" style="margin-bottom:20px">
-          <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Cảnh báo tác động văn bản (Chờ xử lý)</span></div>
-            <div class="kpi-value" style="color:var(--warn)">{{ pendingImpactsCount }}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Đề xuất quy tắc chờ duyệt</span></div>
-            <div class="kpi-value" style="color:var(--info)">{{ pendingCandidatesCount }}</div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Ngành nghề đã xác minh</span></div>
-            <div class="kpi-value" style="color:var(--success)">
-              {{ rulesCatalog.summary?.industriesVerified || 0 }}/{{ rulesCatalog.summary?.industriesTotal || 0 }}
-            </div>
-          </div>
-          <div class="kpi-card">
-            <div class="kpi-card-top"><span class="kpi-label">Quy chuẩn QCVN đã xác minh</span></div>
-            <div class="kpi-value" style="color:var(--success)">
-              {{ rulesCatalog.summary?.qcvnsVerified || 0 }}/{{ rulesCatalog.summary?.qcvnsTotal || 0 }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Khu vực quản lý ngưỡng quy tắc -->
-        <div class="card" style="margin-bottom:20px">
-          <div class="card-header" style="flex-wrap:wrap;gap:12px">
-            <div class="card-title">
-              <i class="ti ti-adjustments"></i> Quản lý Ngưỡng Phân loại (Threshold Rules)
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <input
-                type="text"
-                v-model="thresholdSearch"
-                placeholder="🔍 Tìm theo ngành, công đoạn, căn cứ..."
-                style="height:32px;font-size:12.5px;min-width:220px;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--border)"
-              />
-              <select v-model="thresholdStatusFilter" @change="fetchThresholdRules" style="height:32px;font-size:12.5px;width:150px">
-                <option value="ALL">Tất cả trạng thái</option>
-                <option value="VERIFIED">Đã xác minh</option>
-                <option value="NEEDS_REVIEW">Cần rà soát</option>
-                <option value="DRAFT">Bản nháp</option>
-              </select>
-              <button type="button" class="btn-secondary btn-sm" :disabled="thresholdLoading" @click="fetchThresholdRules">
-                <i class="ti ti-refresh"></i>
-                <span>{{ thresholdLoading ? '...' : 'Tải lại' }}</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;margin-bottom:8px">Nhập &amp; Xác nhận Bảng QCVN Chuyển tiếp từ văn bản gốc</div>
+              <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
+                <div class="form-group">
+                  <label class="form-label">Mã QCVN chuyển tiếp *</label>
+                  <select v-model="transitionalForm.id">
+                    <option value="qcvn40_2011_a">qcvn40_2011_a (QCVN 40:2011 Cột A)</option>
+                    <option value="qcvn40_2011_b">qcvn40_2011_b (QCVN 40:2011 Cột B)</option>
+                    <option value="qcvn14_2008_a">qcvn14_2008_a (QCVN 14:2008 Cột A)</option>
+                    <option value="qcvn14_2008_b">qcvn14_2008_b (QCVN 14:2008 Cột B)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Số hiệu chứng từ / Thông tư ban hành *</label>
+                  <input type="text" v-model="transitionalForm.sourceDocument" placeholder="VD: Thông tư 47/2011/TT-BTNMT" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tên quy chuẩn *</label>
+                  <input type="text" v-model="transitionalForm.ten" placeholder="VD: QCVN 40:2011/BTNMT — Nước thải công nghiệp (Cột B)" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Phạm vi áp dụng</label>
+                  <input type="text" v-model="transitionalForm.apDung" placeholder="VD: Cơ sở trước 01/09/2025 trong thời hạn chuyển tiếp" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Hiệu lực từ</label>
+                  <input type="date" v-model="transitionalForm.effectiveFrom" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Hết hiệu lực / Kết thúc chuyển tiếp</label>
+                  <input type="date" v-model="transitionalForm.effectiveTo" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Danh sách thông số &amp; giới hạn từ văn bản gốc (JSON Array) *</label>
+                <textarea v-model="transitionalForm.thamSoText" rows="3" style="font-family:monospace;font-size:12px"
+                          placeholder='[{"key":"pH","ten":"pH","don_vi":"-","loai":"range","min":5.5,"max":9,"required":true}]'></textarea>
+              </div>
+              <button type="button" class="btn-primary btn-sm" @click="submitTransitionalQcvn">
+                <i class="ti ti-device-floppy"></i>
+                <span>Lưu &amp; Xác nhận Bảng Chuyển tiếp</span>
               </button>
             </div>
           </div>
-
-          <div v-if="thresholdFeedback" style="margin:12px 16px 0;padding:8px 12px;border-radius:var(--radius);background:var(--success-bg);border:1px solid var(--success-border);color:var(--success);font-size:12.5px">
-            {{ thresholdFeedback }}
-          </div>
-          <div v-if="thresholdFeedbackError" style="margin:12px 16px 0;padding:8px 12px;border-radius:var(--radius);background:var(--red-bg);border:1px solid var(--danger-border);color:var(--red);font-size:12.5px">
-            {{ thresholdFeedbackError }}
-          </div>
-
-          <div class="table-container" style="margin-top:12px;max-height:500px;overflow-y:auto">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width:60px">ID</th>
-                  <th>Ngành nghề</th>
-                  <th>Công đoạn</th>
-                  <th>Ngưỡng công suất</th>
-                  <th>Nhóm / Hồ sơ</th>
-                  <th>Căn cứ pháp lý</th>
-                  <th>Trạng thái</th>
-                  <th style="text-align:right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="filteredThresholdRules.length === 0">
-                  <td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">
-                    Không tìm thấy quy tắc ngưỡng nào phù hợp.
-                  </td>
-                </tr>
-                <tr v-for="rule in filteredThresholdRules" :key="rule.id">
-                  <td>#{{ rule.id }}</td>
-                  <td>
-                    <strong>{{ rule.industry_name }}</strong>
-                    <div style="font-size:11px;color:var(--text3)"><code>{{ rule.industry_code }}</code></div>
-                  </td>
-                  <td>{{ rule.process_stage || '—' }}</td>
-                  <td>
-                    <span style="font-weight:600">{{ rule.operator || '>=' }} {{ rule.min_value }}</span>
-                    <span v-if="rule.max_value !== null"> đến {{ rule.max_value }}</span>
-                    <span style="font-size:11.5px;color:var(--text3)"> ({{ rule.unit }})</span>
-                  </td>
-                  <td>
-                    <span class="chip" :class="rule.project_group === 'I' ? 'chip-danger' : (rule.project_group === 'II' ? 'chip-warning' : (rule.project_group === 'III' ? 'chip-info' : 'chip-neutral'))" style="font-size:11px">
-                      Nhóm {{ rule.project_group }}
-                    </span>
-                    <div style="font-size:11px;color:var(--text2);margin-top:2px">
-                      HS: <strong>{{ rule.legal_doc_required }}</strong> | TQ: {{ rule.tq }}
-                    </div>
-                  </td>
-                  <td style="max-width:220px">
-                    <div style="font-size:12px;line-height:1.3">{{ rule.legal_ref || 'Chưa gắn căn cứ' }}</div>
-                    <div style="font-size:11px;color:var(--text3);margin-top:2px">
-                      {{ rule.phu_luc ? `PL: ${rule.phu_luc}` : '' }}
-                      {{ rule.effective_from ? ` | HL: ${rule.effective_from}` : '' }}
-                    </div>
-                  </td>
-                  <td>
-                    <span class="chip" :class="rule.verification_status === 'VERIFIED' ? 'chip-success' : (rule.verification_status === 'DRAFT' ? 'chip-neutral' : 'chip-warning')" style="font-size:11px">
-                      {{ rule.verification_status === 'VERIFIED' ? 'Đã xác minh' : (rule.verification_status === 'DRAFT' ? 'Bản nháp' : 'Cần rà soát') }}
-                    </span>
-                    <div v-if="rule.approved_by" style="font-size:10.5px;color:var(--text3);margin-top:2px">
-                      {{ rule.approved_by }}
-                    </div>
-                  </td>
-                  <td style="text-align:right">
-                    <div style="display:flex;gap:6px;justify-content:flex-end">
-                      <button type="button" class="btn-secondary btn-sm" @click="openEditThresholdModal(rule)" title="Chỉnh sửa quy tắc">
-                        <i class="ti ti-edit"></i>
-                        <span>Sửa</span>
-                      </button>
-                      <button
-                        v-if="rule.verification_status !== 'VERIFIED'"
-                        type="button"
-                        class="btn-primary btn-sm"
-                        @click="openVerifyThresholdModal(rule)"
-                        title="Phê duyệt đưa vào áp dụng chính thức"
-                      >
-                        <i class="ti ti-check"></i>
-                        <span>Phê duyệt</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Công cụ quy tắc nâng cao có thể bật/tắt -->
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding:8px 12px;background:var(--bg2, #f5f5f5);border-radius:var(--radius)">
-          <div style="font-size:12.5px;color:var(--text2)">
-            <i class="ti ti-settings"></i> <strong>Công cụ mở rộng:</strong> Rà soát cảnh báo tác động văn bản, đề xuất từ crawler và bảng QCVN chuyển tiếp.
-          </div>
-          <button type="button" class="btn-secondary btn-sm" @click="SHOW_ADVANCED_RULE_TOOLS = !SHOW_ADVANCED_RULE_TOOLS">
-            <i class="ti" :class="SHOW_ADVANCED_RULE_TOOLS ? 'ti-chevron-up' : 'ti-chevron-down'"></i>
-            <span>{{ SHOW_ADVANCED_RULE_TOOLS ? 'Thu gọn công cụ mở rộng' : 'Mở rộng công cụ trích xuất luật & QCVN' }}</span>
-          </button>
-        </div>
-
-        <div v-if="SHOW_ADVANCED_RULE_TOOLS">
-
-        <!-- Khu vực 1: tác động của văn bản đến quy tắc -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-alert-triangle"></i> 1. Cảnh báo Quy tắc chịu tác động khi văn bản thay đổi</div>
-            <select v-model="impactStatusFilter" @change="fetchRuleVerificationCenter" style="width:185px;height:32px;font-size:12.5px">
-              <option value="OPEN">Đang chờ xử lý</option>
-              <option value="RESOLVED">Đã xử lý</option>
-              <option value="IGNORED">Bỏ qua</option>
-              <option value="ALL">Tất cả</option>
-            </select>
-          </div>
-          <div v-if="lawImpacts.length === 0" style="font-size:13px;color:var(--text3);padding:12px 0">
-            Không có cảnh báo tác động nào ở bộ lọc hiện tại.
-          </div>
-          <div v-else style="display:flex;flex-direction:column;gap:10px">
-            <div v-for="imp in lawImpacts" :key="imp.id" style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
-              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
-                <strong style="font-size:13px">{{ imp.law_id }} — {{ imp.law_title || imp.target_label }}</strong>
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                  <span class="chip" :style="{ fontSize: '11px', background: getAdminSeverityMeta(imp.severity).bg, color: getAdminSeverityMeta(imp.severity).color, border: '1px solid var(--border)' }">
-                    {{ getAdminSeverityMeta(imp.severity).label }}
-                  </span>
-                  <span class="chip chip-gray" style="font-size:11px">{{ getAdminEventActionLabel(imp.event_action) }}</span>
-                  <span class="chip chip-gray" style="font-size:11px">{{ getAdminStatusLabel(imp.status) }}</span>
-                </div>
-              </div>
-              <div style="font-size:12.5px;color:var(--text2);margin-bottom:8px">
-                Ảnh hưởng: <code>{{ getAdminTargetTypeLabel(imp.target_type) }}: {{ imp.target_id }}</code> — {{ imp.impact_reason }}
-              </div>
-              <div v-if="imp.status === 'OPEN'" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <input type="text" v-model="impactNotes[imp.id]" placeholder="Ghi chú rà soát..." style="flex:1;min-width:220px" />
-                <button type="button" class="btn-primary btn-sm" @click="resolveImpactAction(imp.id, 'RESOLVED')">Đánh dấu đã xử lý</button>
-                <button type="button" class="btn-secondary btn-sm" @click="resolveImpactAction(imp.id, 'IGNORED')">Bỏ qua</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Khu vực 2: đề xuất quy tắc từ crawler -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-git-pull-request"></i> 2. Đề xuất Quy tắc từ bóc tách tự động</div>
-            <select v-model="candidateStatusFilter" @change="fetchRuleVerificationCenter" style="width:170px;height:32px;font-size:12.5px">
-              <option value="PENDING_REVIEW">Chờ duyệt</option>
-              <option value="APPROVED">Đã duyệt</option>
-              <option value="REJECTED">Đã từ chối</option>
-              <option value="ALL">Tất cả</option>
-            </select>
-          </div>
-          <div v-if="ruleCandidates.length === 0" style="font-size:13px;color:var(--text3);padding:12px 0">
-            Chưa có đề xuất quy tắc nào ở trạng thái đã chọn.
-          </div>
-          <div v-else style="display:flex;flex-direction:column;gap:10px">
-            <div v-for="cand in ruleCandidates" :key="cand.id" style="padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
-              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
-                <strong style="font-size:13px">#{{ cand.id }} · {{ cand.title }}</strong>
-                <span class="chip chip-gray" style="font-size:11px">
-                  {{ getAdminTargetTypeLabel(cand.target_type) }}: {{ cand.target_code }} · {{ getAdminStatusLabel(cand.status) }}
-                </span>
-              </div>
-              <details style="margin:0 0 8px 0;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px">
-                <summary style="cursor:pointer;font-weight:600;color:var(--text2)">
-                  Xem dữ liệu bóc tách chi tiết ▾
-                </summary>
-                <pre style="margin-top:6px;padding:6px;background:var(--bg);border-radius:4px;font-size:11px;overflow-x:auto">{{ JSON.stringify(cand.proposed_data, null, 2) }}</pre>
-              </details>
-              <div v-if="cand.target_type === 'QCVN' && (!Array.isArray(cand.proposed_data?.tham_so) || cand.proposed_data.tham_so.length === 0)" style="font-size:12px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;margin-bottom:8px">
-                <i class="ti ti-alert-triangle"></i> Đề xuất QCVN chưa có bảng thông số đo đạc — vui lòng cấu hình thông số trước khi phê duyệt.
-              </div>
-              <div v-if="['PENDING_REVIEW', 'EXTRACTED'].includes(cand.status)" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-                <input type="text" v-model="candidateSourceDocs[cand.id]" placeholder="Số hiệu văn bản gốc / căn cứ pháp lý *..." style="flex:1;min-width:220px" />
-                <input type="text" v-model="candidateNotes[cand.id]" placeholder="Ghi chú duyệt..." style="flex:1;min-width:180px" />
-                <button v-if="cand.target_type === 'QCVN'" type="button" class="btn-secondary btn-sm" @click="openCandidateParamsModal(cand)">Cấu hình thông số</button>
-                <button type="button" class="btn-primary btn-sm" @click="approveCandidateAction(cand)">Phê duyệt &amp; Công bố</button>
-                <button type="button" class="btn-secondary btn-sm" @click="rejectCandidateAction(cand)">Từ chối</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Khu vực 3: danh mục ngành nghề và QCVN cần xác minh -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-certificate"></i> 3. Xác nhận pháp lý cho QCVN &amp; Ngành nghề</div>
-          </div>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
-            Chỉ sau khi Quản trị viên nhập số hiệu chứng từ công báo và bấm xác nhận, hệ thống mới nâng kết luận thành chính thức.
-          </div>
-          <div style="overflow-x:auto;margin-bottom:16px">
-            <table class="saas-table">
-              <thead>
-                <tr>
-                  <th>Mã QCVN</th>
-                  <th>Tên quy chuẩn</th>
-                  <th>Trạng thái</th>
-                  <th>Hiệu lực</th>
-                  <th>Căn cứ công báo / QĐ ban hành *</th>
-                  <th style="text-align:right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="q in (rulesCatalog.qcvns || [])" :key="q.id">
-                  <td><code>{{ q.id }}</code></td>
-                  <td style="font-size:12.5px">{{ q.ten }}</td>
-                  <td><span class="chip chip-gray">{{ getAdminStatusLabel(q.verification_status) }} / {{ getAdminStatusLabel(q.publication_status) }}</span></td>
-                  <td style="font-size:12px">{{ q.effective_from || '—' }} → {{ q.effective_to || 'Hiện hành' }}</td>
-                  <td><input type="text" v-model="qcvnSourceDocs[q.id]" placeholder="VD: TT .../2025/TT-BTNMT" /></td>
-                  <td style="text-align:right">
-                    <button type="button" class="btn-primary btn-sm" @click="verifyQcvnAction(q)">Xác nhận pháp lý</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div style="overflow-x:auto">
-            <table class="saas-table">
-              <thead>
-                <tr>
-                  <th>Mã ngành</th>
-                  <th>Tên ngành</th>
-                  <th>Trạng thái</th>
-                  <th>Căn cứ pháp lý ban hành *</th>
-                  <th style="text-align:right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="ind in (rulesCatalog.industries || []).slice(0, 50)" :key="ind.code">
-                  <td><code>{{ ind.code }}</code></td>
-                  <td style="font-size:12.5px">{{ ind.display_name || ind.name }}</td>
-                  <td><span class="chip chip-gray">{{ getAdminStatusLabel(ind.verification_status) }} / {{ getAdminStatusLabel(ind.publication_status) }}</span></td>
-                  <td><input type="text" v-model="industrySourceDocs[ind.code]" placeholder="VD: Phụ lục III NĐ 08/2022 + NĐ 05/2025" /></td>
-                  <td style="text-align:right">
-                    <button type="button" class="btn-primary btn-sm" @click="verifyIndustryAction(ind)">Xác nhận pháp lý</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Khu vực 4: nhập bảng QCVN chuyển tiếp từ văn bản gốc -->
-        <div class="card" style="margin-bottom:0">
-          <div class="card-header">
-            <div class="card-title"><i class="ti ti-file-import"></i> 4. Nhập &amp; Xác nhận Bảng QCVN Chuyển tiếp (40:2011 / 14:2008) từ văn bản gốc</div>
-          </div>
-          <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
-            <div class="form-group">
-              <label class="form-label">Mã QCVN chuyển tiếp *</label>
-              <select v-model="transitionalForm.id">
-                <option value="qcvn40_2011_a">qcvn40_2011_a (QCVN 40:2011 Cột A)</option>
-                <option value="qcvn40_2011_b">qcvn40_2011_b (QCVN 40:2011 Cột B)</option>
-                <option value="qcvn14_2008_a">qcvn14_2008_a (QCVN 14:2008 Cột A)</option>
-                <option value="qcvn14_2008_b">qcvn14_2008_b (QCVN 14:2008 Cột B)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Số hiệu chứng từ / Thông tư ban hành *</label>
-              <input type="text" v-model="transitionalForm.sourceDocument" placeholder="VD: Thông tư 47/2011/TT-BTNMT" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Tên quy chuẩn *</label>
-              <input type="text" v-model="transitionalForm.ten" placeholder="VD: QCVN 40:2011/BTNMT — Nước thải công nghiệp (Cột B)" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Cột nguồn tiếp nhận &amp; Phạm vi áp dụng</label>
-              <input type="text" v-model="transitionalForm.apDung" placeholder="VD: Cơ sở trước 01/09/2025 trong thời hạn chuyển tiếp" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Hiệu lực từ (YYYY-MM-DD)</label>
-              <input type="date" v-model="transitionalForm.effectiveFrom" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Hết hiệu lực / Kết thúc chuyển tiếp (YYYY-MM-DD)</label>
-              <input type="date" v-model="transitionalForm.effectiveTo" />
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Danh sách thông số &amp; giới hạn từ văn bản gốc (JSON Array) *</label>
-            <textarea v-model="transitionalForm.thamSoText" rows="5" style="font-family:monospace;font-size:12px"
-                      placeholder='[{"key":"pH","ten":"pH","don_vi":"-","loai":"range","min":5.5,"max":9,"required":true},{"key":"COD","ten":"COD","don_vi":"mg/L","loai":"max","gioi_han":150,"required":true}]'></textarea>
-          </div>
-          <button type="button" class="btn-primary btn-sm" @click="submitTransitionalQcvn">
-            <i class="ti ti-device-floppy"></i>
-            <span>Lưu &amp; Xác nhận Bảng Chuyển tiếp</span>
-          </button>
-        </div>
-        </div> <!-- Kết thúc khối chỉ hiện khi SHOW_ADVANCED_RULE_TOOLS bật -->
+        </details>
       </div>
 
       <!-- Trang con: Truy vết dữ liệu (nhat_ky_kiem_toan & lich_su_cap_nhat_van_ban) -->
@@ -1978,8 +2341,8 @@ onMounted(() => {
           </button>
         </div>
 
-        <div v-if="editingThreshold.verification_status === 'VERIFIED'" style="margin-bottom:14px;padding:8px 12px;border-radius:var(--radius);background:var(--warn-bg, #FFF9EB);border:1px solid var(--warn-border, #FFE5B4);color:var(--warn, #B76E00);font-size:12px">
-          <i class="ti ti-alert-triangle"></i> Lưu ý: Quy tắc này hiện đang ở trạng thái <strong>Đã xác minh</strong>. Khi lưu chỉnh sửa, hệ thống sẽ <strong>tự động thu hồi phê duyệt</strong> và chuyển về trạng thái <strong>Cần rà soát</strong> để bảo đảm tính pháp lý.
+        <div v-if="toViStatus(editingThreshold.verification_status) === 'da_xac_minh'" style="margin-bottom:14px;padding:8px 12px;border-radius:var(--radius);background:var(--warn-bg, #FFF9EB);border:1px solid var(--warn-border, #FFE5B4);color:var(--warn, #B76E00);font-size:12px">
+          <i class="ti ti-alert-triangle"></i> Lưu ý: Quy tắc này hiện đang ở trạng thái <strong>Đã phê duyệt (da_xac_minh)</strong>. Khi lưu chỉnh sửa trực tiếp, hệ thống sẽ <strong>tự động thu hồi phê duyệt</strong> và chuyển về trạng thái <strong>Cần xác minh pháp lý (can_xac_minh_phap_ly)</strong>. Nếu muốn giữ nguyên quy tắc đang chạy, hãy dùng nút <strong>Đề xuất sửa</strong>.
         </div>
 
         <form @submit.prevent="saveThresholdEdit(false)">
@@ -2186,6 +2549,466 @@ onMounted(() => {
             <i class="ti ti-check"></i>
             <span>Lưu thông số &amp; Phê duyệt</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- MODAL 1: CHI TIẾT & KIỂM DUYỆT VĂN BẢN PHÁP LUẬT (MỤC 3.1)              -->
+    <!-- ======================================================================= -->
+    <div v-if="isLawDetailModalOpen && selectedLawDetail?.law" class="modal-overlay" @click.self="isLawDetailModalOpen = false">
+      <div class="modal-card fade-up" style="width:780px;max-width:95vw;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <div>
+            <h3 style="font-size:16px;font-weight:700;color:var(--text);margin:0">
+              Kiểm duyệt Văn bản Pháp luật: {{ selectedLawDetail.law.so }}
+            </h3>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">
+              Mã định danh: <code>{{ selectedLawDetail.law.id }}</code> · Nguồn: {{ selectedLawDetail.law.detection_source_label }} · Trạng thái hiện tại:
+              <span class="chip" :class="getViStatusChipClass(selectedLawDetail.law.verification_status)" style="font-size:11px">
+                {{ getViStatusLabel(selectedLawDetail.law.verification_status) }} ({{ toViStatus(selectedLawDetail.law.verification_status) }})
+              </span>
+            </div>
+          </div>
+          <button type="button" class="drawer-close-btn" @click="isLawDetailModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:12.5px;color:var(--text2)">
+            <strong>Đường dẫn văn bản gốc:</strong>
+            <a v-if="lawMetadataForm.link" :href="lawMetadataForm.link" target="_blank" rel="noopener noreferrer" style="color:var(--accent);margin-left:6px;text-decoration:underline">
+              {{ lawMetadataForm.link }}
+            </a>
+            <span v-else style="color:var(--text3);margin-left:6px">Chưa cập nhật đường dẫn</span>
+          </div>
+          <a v-if="lawMetadataForm.link" :href="lawMetadataForm.link" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-sm" style="text-decoration:none">
+            <i class="ti ti-external-link"></i>
+            <span>Mở nguồn văn bản gốc</span>
+          </a>
+        </div>
+
+        <!-- Thông tin metadata có thể chỉnh sửa trước khi duyệt -->
+        <div class="form-grid-2" style="gap:10px;margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Số hiệu văn bản *</label>
+            <input type="text" v-model="lawMetadataForm.so" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Cơ quan ban hành *</label>
+            <input type="text" v-model="lawMetadataForm.issuing_agency" placeholder="VD: Quốc hội, Chính phủ, Bộ NN&MT..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ngày ban hành</label>
+            <input type="date" v-model="lawMetadataForm.issued_date" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ngày bắt đầu có hiệu lực</label>
+            <input type="date" v-model="lawMetadataForm.effective_date" />
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">Tên đầy đủ của văn bản *</label>
+          <input type="text" v-model="lawMetadataForm.ten" />
+        </div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">Tóm tắt nội dung / Phạm vi điều chỉnh</label>
+          <textarea v-model="lawMetadataForm.mo_ta" rows="2"></textarea>
+        </div>
+
+        <!-- Nội dung điều khoản đã thu thập -->
+        <details style="margin-bottom:12px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+          <summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--text)">
+            Nội dung điều khoản đã thu thập ({{ (selectedLawDetail.law.dieu_khoang || []).length }} điều khoản) ▾
+          </summary>
+          <div style="max-height:200px;overflow-y:auto;margin-top:8px;font-size:12px;display:flex;flex-direction:column;gap:8px">
+            <div v-if="(selectedLawDetail.law.dieu_khoang || []).length === 0" style="color:var(--text3)">
+              Chưa có điều khoản chi tiết.
+            </div>
+            <div v-for="(clause, cIdx) in (selectedLawDetail.law.dieu_khoang || []).slice(0, 30)" :key="cIdx" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+              <strong style="color:var(--accent)">{{ clause.tieu_de || `Điều khoản #${cIdx + 1}` }}</strong>
+              <div style="color:var(--text2);margin-top:4px;line-height:1.45">{{ clause.noi_dung || clause }}</div>
+            </div>
+          </div>
+        </details>
+
+        <!-- Quy tắc liên quan & lịch sử kiểm duyệt -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">Quy tắc &amp; Cảnh báo liên quan ({{ (selectedLawDetail.relatedThresholds || []).length }} quy tắc)</div>
+            <div style="max-height:130px;overflow-y:auto;font-size:11.5px;color:var(--text2)">
+              <div v-if="(selectedLawDetail.relatedThresholds || []).length === 0" style="color:var(--text3)">Không có quy tắc gắn trực tiếp.</div>
+              <div v-for="rt in (selectedLawDetail.relatedThresholds || []).slice(0, 10)" :key="rt.id" style="padding:4px 0;border-bottom:1px dashed var(--border)">
+                <strong>#{{ rt.id }}</strong> · {{ rt.industry_name }} ({{ rt.project_group }} - {{ rt.legal_doc_required }})
+              </div>
+            </div>
+          </div>
+          <div style="padding:10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+            <div style="font-size:12.5px;font-weight:600;margin-bottom:6px">Lịch sử phát hiện &amp; Kiểm duyệt ({{ (selectedLawDetail.history || []).length }})</div>
+            <div style="max-height:130px;overflow-y:auto;font-size:11.5px;color:var(--text2)">
+              <div v-if="(selectedLawDetail.history || []).length === 0" style="color:var(--text3)">Chưa có lịch sử ghi nhận.</div>
+              <div v-for="h in (selectedLawDetail.history || [])" :key="h.id" style="padding:4px 0;border-bottom:1px dashed var(--border)">
+                <div><strong>{{ formatAuditDateTime(h.updated_at) }}</strong> · {{ h.actor_name || h.actor_username || 'Hệ thống' }}</div>
+                <div style="color:var(--text3)">{{ h.description }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Khu vực ra quyết định kiểm duyệt -->
+        <div style="padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Lý do kiểm duyệt / Ghi chú yêu cầu bổ sung (Bắt buộc khi Từ chối hoặc Cần bổ sung thông tin) *</label>
+            <textarea v-model="lawReviewNote" rows="2" placeholder="Nhập căn cứ phê duyệt, lý do từ chối hoặc nội dung yêu cầu bổ sung thông tin..."></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <button type="button" class="btn-secondary" @click="isLawDetailModalOpen = false">Đóng</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn-secondary" @click="submitLawReviewAction('het_hieu_luc')">
+                <span>Ngừng áp dụng (het_hieu_luc)</span>
+              </button>
+              <button type="button" class="btn-secondary" @click="submitLawReviewAction('can_bo_sung')">
+                <span>Yêu cầu bổ sung (can_bo_sung)</span>
+              </button>
+              <button type="button" class="btn-action-delete" @click="submitLawReviewAction('tu_choi')">
+                <span>Từ chối (tu_choi)</span>
+              </button>
+              <button type="button" class="btn-primary" @click="submitLawReviewAction('da_xac_minh')">
+                <i class="ti ti-check"></i>
+                <span>Phê duyệt văn bản (da_xac_minh)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- MODAL 2: CHI TIẾT, LỊCH SỬ PHIÊN BẢN & KIỂM DUYỆT QUY TẮC (MỤC 3.2)      -->
+    <!-- ======================================================================= -->
+    <div v-if="isThresholdDetailModalOpen && selectedThresholdDetail?.rule" class="modal-overlay" @click.self="isThresholdDetailModalOpen = false">
+      <div class="modal-card fade-up" style="width:760px;max-width:95vw;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <div>
+            <h3 style="font-size:16px;font-weight:700;color:var(--text);margin:0">
+              Chi tiết &amp; Kiểm duyệt Quy tắc Phân loại #{{ selectedThresholdDetail.rule.id }}
+            </h3>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">
+              Ngành nghề: <strong>{{ selectedThresholdDetail.rule.industry_name }}</strong> (<code>{{ selectedThresholdDetail.rule.industry_code }}</code>) · Trạng thái:
+              <span class="chip" :class="getViStatusChipClass(selectedThresholdDetail.rule.verification_status)" style="font-size:11px">
+                {{ getViStatusLabel(selectedThresholdDetail.rule.verification_status) }} ({{ toViStatus(selectedThresholdDetail.rule.verification_status) }})
+              </span>
+            </div>
+          </div>
+          <button type="button" class="drawer-close-btn" @click="isThresholdDetailModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <!-- Bảng tóm tắt thông số quy tắc hiện tại -->
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;font-size:12.5px">
+          <div><strong>Nhóm dự án:</strong> {{ selectedThresholdDetail.rule.project_group }}</div>
+          <div><strong>Hồ sơ yêu cầu:</strong> {{ selectedThresholdDetail.rule.legal_doc_required }}</div>
+          <div><strong>Thẩm quyền:</strong> {{ getAuthorityViLabel(selectedThresholdDetail.rule.tq) }}</div>
+          <div><strong>Công đoạn:</strong> {{ selectedThresholdDetail.rule.process_stage || 'Áp dụng chung' }}</div>
+          <div><strong>Ngưỡng công suất:</strong> {{ selectedThresholdDetail.rule.operator || '>=' }} {{ selectedThresholdDetail.rule.min_value }} <span v-if="selectedThresholdDetail.rule.max_value !== null">đến {{ selectedThresholdDetail.rule.max_value }}</span> ({{ selectedThresholdDetail.rule.unit || '—' }})</div>
+          <div><strong>Phụ lục pháp lý:</strong> {{ selectedThresholdDetail.rule.phu_luc || '—' }}</div>
+          <div><strong>Văn bản liên quan:</strong> <code>{{ selectedThresholdDetail.rule.law_id || 'vbhn_49_2026' }}</code></div>
+          <div><strong>Phiên bản quy tắc:</strong> <code>{{ selectedThresholdDetail.rule.rule_version || '2026.2' }}</code></div>
+          <div><strong>Người duyệt gần nhất:</strong> {{ selectedThresholdDetail.rule.approved_by || 'Chưa có' }}</div>
+        </div>
+
+        <!-- Lịch sử phiên bản quy tắc (phien_ban_quy_tac) -->
+        <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px">
+            <i class="ti ti-history"></i> Lịch sử phiên bản &amp; Thay đổi quy tắc ({{ (selectedThresholdDetail.versions || []).length }} bản ghi trong <code>phien_ban_quy_tac</code>)
+          </div>
+          <div v-if="(selectedThresholdDetail.versions || []).length === 0" style="font-size:12px;color:var(--text3)">
+            Quy tắc gốc từ danh mục khởi tạo, chưa có bản ghi thay đổi phiên bản.
+          </div>
+          <div v-else style="max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <div v-for="ver in selectedThresholdDetail.versions" :key="ver.id" style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+              <div style="display:flex;justify-content:space-between">
+                <strong>Phiên bản: <code>{{ ver.version }}</code></strong>
+                <span style="color:var(--text3)">{{ formatAuditDateTime(ver.changed_at) }} · {{ ver.actor_name || ver.expression?.nguoi_thuc_hien || 'Quản trị viên' }}</span>
+              </div>
+              <div style="color:var(--text2);margin-top:2px">{{ ver.change_reason }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form kiểm duyệt quy tắc phân loại -->
+        <div style="padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
+            <div class="form-group">
+              <label class="form-label">Căn cứ pháp lý (Điều, khoản, phụ lục) — Bắt buộc khi Phê duyệt *</label>
+              <input type="text" v-model="thresholdReviewLegalRef" placeholder="VD: Phụ lục III Mục 2 Nghị định 08/2022/NĐ-CP (VBHN 49/2026)" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngày bắt đầu có hiệu lực — Bắt buộc khi Phê duyệt *</label>
+              <input type="date" v-model="thresholdReviewEffectiveFrom" />
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Lý do kiểm duyệt / Yêu cầu bổ sung thông tin (Bắt buộc khi Từ chối hoặc Cần bổ sung) *</label>
+            <textarea v-model="thresholdReviewNote" rows="2" placeholder="Nhập lý do từ chối, yêu cầu bổ sung căn cứ pháp lý hoặc ghi chú phê duyệt..."></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <button type="button" class="btn-secondary" @click="isThresholdDetailModalOpen = false">Đóng</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn-secondary" @click="submitThresholdReviewAction('can_bo_sung')">
+                <span>Yêu cầu bổ sung (can_bo_sung)</span>
+              </button>
+              <button type="button" class="btn-action-delete" @click="submitThresholdReviewAction('tu_choi')">
+                <span>Từ chối (tu_choi)</span>
+              </button>
+              <button type="button" class="btn-primary" @click="submitThresholdReviewAction('da_xac_minh')">
+                <i class="ti ti-check"></i>
+                <span>Phê duyệt quy tắc (da_xac_minh)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- MODAL 3: TẠO ĐỀ XUẤT THAY ĐỔI QUY TẮC PHÂN LOẠI (GIỮ NGUYÊN QUY TẮC CŨ)   -->
+    <!-- ======================================================================= -->
+    <div v-if="isRuleProposalModalOpen" class="modal-overlay" @click.self="isRuleProposalModalOpen = false">
+      <div class="modal-card fade-up" style="width:620px;max-width:95vw;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <h3 style="font-size:16px;font-weight:700;color:var(--text);margin:0">
+            Tạo Đề xuất Thay đổi Quy tắc #{{ ruleProposalForm.targetId }} — {{ ruleProposalForm.industry_name }}
+          </h3>
+          <button type="button" class="drawer-close-btn" @click="isRuleProposalModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+        <div style="margin-bottom:12px;padding:8px 12px;background:var(--info-bg, #eff6ff);border:1px solid var(--info-border, #bfdbfe);border-radius:var(--radius);font-size:12px;color:var(--text2)">
+          Đề xuất này sẽ được lưu vào bảng <code>de_xuat_quy_tac</code> với trạng thái <code>cho_duyet</code> (Chờ kiểm duyệt). Quy tắc đang áp dụng sẽ <strong>không bị thay đổi</strong> cho đến khi đề xuất được phê duyệt chính thức.
+        </div>
+        <form @submit.prevent="submitRuleProposalAction">
+          <div class="form-grid-2" style="gap:10px">
+            <div class="form-group">
+              <label class="form-label">Công đoạn</label>
+              <input type="text" v-model="ruleProposalForm.process_stage" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Toán tử so sánh</label>
+              <select v-model="ruleProposalForm.operator">
+                <option value=">=">&gt;= (Lớn hơn hoặc bằng)</option>
+                <option value=">">&gt; (Lớn hơn)</option>
+                <option value="<=">&lt;= (Nhỏ hơn hoặc bằng)</option>
+                <option value="<">&lt; (Nhỏ hơn)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngưỡng tối thiểu *</label>
+              <input type="number" step="any" v-model="ruleProposalForm.min_value" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngưỡng tối đa</label>
+              <input type="number" step="any" v-model="ruleProposalForm.max_value" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Đơn vị tính</label>
+              <input type="text" v-model="ruleProposalForm.unit" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nhóm dự án đề xuất *</label>
+              <select v-model="ruleProposalForm.project_group">
+                <option value="Nhóm I">Nhóm I</option>
+                <option value="Nhóm II">Nhóm II</option>
+                <option value="Nhóm III">Nhóm III</option>
+                <option value="Nhóm IV">Nhóm IV</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Loại hồ sơ môi trường *</label>
+              <select v-model="ruleProposalForm.legal_doc_required">
+                <option value="DTM">ĐTM (Đánh giá tác động môi trường)</option>
+                <option value="GPMT">GPMT (Giấy phép môi trường)</option>
+                <option value="DKMT">ĐKMT (Đăng ký môi trường)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Thẩm quyền giải quyết *</label>
+              <select v-model="ruleProposalForm.tq">
+                <option value="cap_bo">Bộ NN&amp;MT / Bộ TN&amp;MT</option>
+                <option value="cap_so">UBND cấp Tỉnh / Sở NN&amp;MT</option>
+                <option value="cap_xa">UBND cấp Xã</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Căn cứ pháp lý đề xuất *</label>
+              <input type="text" v-model="ruleProposalForm.legal_ref" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngày bắt đầu hiệu lực *</label>
+              <input type="date" v-model="ruleProposalForm.effective_from" required />
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:8px">
+            <label class="form-label">Lý do đề xuất thay đổi quy tắc *</label>
+            <textarea v-model="ruleProposalForm.reason" rows="2" placeholder="Nhập lý do và trích dẫn điều khoản thay đổi..." required></textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+            <button type="button" class="btn-secondary" @click="isRuleProposalModalOpen = false">Hủy</button>
+            <button type="submit" class="btn-primary">
+              <i class="ti ti-git-pull-request"></i>
+              <span>Gửi đề xuất chờ kiểm duyệt (cho_duyet)</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- MODAL 4: CHI TIẾT QCVN, BẢNG THÔNG SỐ MÔI TRƯỜNG & KIỂM DUYỆT (MỤC 3.3)  -->
+    <!-- ======================================================================= -->
+    <div v-if="isQcvnDetailModalOpen && selectedQcvnDetail?.qcvn" class="modal-overlay" @click.self="isQcvnDetailModalOpen = false">
+      <div class="modal-card fade-up" style="width:860px;max-width:96vw;max-height:90vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+          <div>
+            <h3 style="font-size:16px;font-weight:700;color:var(--text);margin:0">
+              Chi tiết Quy chuẩn &amp; Bảng Thông số Môi trường: {{ selectedQcvnDetail.qcvn.id }}
+            </h3>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">
+              {{ selectedQcvnDetail.qcvn.ten }} · Lĩnh vực: {{ getQcvnDomainViLabel(selectedQcvnDetail.qcvn.source_type) }} · Trạng thái:
+              <span class="chip" :class="getViStatusChipClass(selectedQcvnDetail.qcvn.verification_status)" style="font-size:11px">
+                {{ getViStatusLabel(selectedQcvnDetail.qcvn.verification_status) }} ({{ toViStatus(selectedQcvnDetail.qcvn.verification_status) }})
+              </span>
+            </div>
+          </div>
+          <button type="button" class="drawer-close-btn" @click="isQcvnDetailModalOpen = false">
+            <i class="ti ti-x"></i>
+          </button>
+        </div>
+
+        <!-- Bảng danh sách đầy đủ thông số môi trường của QCVN -->
+        <div style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+            <div style="font-size:13.5px;font-weight:700;color:var(--text)">
+              <i class="ti ti-list-check"></i> Danh sách Thông số Môi trường áp dụng ({{ qcvnEditParams.length }} thông số)
+            </div>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn-secondary btn-sm" @click="qcvnEditMode = !qcvnEditMode">
+                <i class="ti ti-edit"></i>
+                <span>{{ qcvnEditMode ? 'Chuyển sang chế độ Chỉ xem' : 'Bật chỉnh sửa bảng thông số' }}</span>
+              </button>
+              <button v-if="qcvnEditMode" type="button" class="btn-secondary btn-sm" @click="addQcvnEditParamRow">
+                + Thêm thông số
+              </button>
+            </div>
+          </div>
+
+          <div style="max-height:310px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+            <table class="saas-table" style="width:100%">
+              <thead>
+                <tr>
+                  <th style="width:50px">STT</th>
+                  <th style="width:110px">Mã thông số</th>
+                  <th>Tên thông số môi trường</th>
+                  <th style="width:165px">Giá trị giới hạn cho phép</th>
+                  <th style="width:95px">Đơn vị tính</th>
+                  <th style="width:130px">Chu kỳ / Điều kiện</th>
+                  <th v-if="qcvnEditMode" style="width:50px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="qcvnEditParams.length === 0">
+                  <td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Chưa có thông số môi trường nào trong bảng.</td>
+                </tr>
+                <tr v-for="(param, pIdx) in qcvnEditParams" :key="pIdx">
+                  <td>{{ pIdx + 1 }}</td>
+                  <td>
+                    <input v-if="qcvnEditMode" type="text" v-model="param.key" style="width:95px;height:28px;font-size:12px" />
+                    <code v-else>{{ param.key || param.ma || `ts_${pIdx + 1}` }}</code>
+                  </td>
+                  <td>
+                    <input v-if="qcvnEditMode" type="text" v-model="param.ten" style="width:100%;height:28px;font-size:12px" />
+                    <strong v-else>{{ param.ten || param.chi_tieu || param.nhom }}</strong>
+                  </td>
+                  <td>
+                    <template v-if="qcvnEditMode">
+                      <div v-if="param.loai === 'range' || (param.min !== undefined && param.max !== undefined)" style="display:flex;gap:4px;align-items:center">
+                        <input type="number" step="any" v-model.number="param.min" style="width:65px;height:28px;font-size:12px" placeholder="Min" />
+                        <span>–</span>
+                        <input type="number" step="any" v-model.number="param.max" style="width:65px;height:28px;font-size:12px" placeholder="Max" />
+                      </div>
+                      <input v-else type="number" step="any" v-model.number="param.gioi_han" style="width:110px;height:28px;font-size:12px" />
+                    </template>
+                    <template v-else>
+                      <strong style="color:var(--accent)">
+                        <span v-if="param.loai === 'range' || (param.min !== undefined && param.min !== null && param.max !== undefined && param.max !== null)">
+                          {{ param.min }} – {{ param.max }}
+                        </span>
+                        <span v-else-if="param.gioi_han !== undefined && param.gioi_han !== null">
+                          ≤ {{ param.gioi_han }}
+                        </span>
+                        <span v-else-if="param.max !== undefined && param.max !== null">
+                          ≤ {{ param.max }}
+                        </span>
+                        <span v-else>—</span>
+                      </strong>
+                    </template>
+                  </td>
+                  <td>
+                    <input v-if="qcvnEditMode" type="text" v-model="param.don_vi" style="width:80px;height:28px;font-size:12px" />
+                    <span v-else>{{ param.don_vi || 'mg/L' }}</span>
+                  </td>
+                  <td style="font-size:11.5px;color:var(--text2)">
+                    {{ param.averagingPeriod || (param.required ? 'Thông số bắt buộc' : 'Theo quy chuẩn') }}
+                  </td>
+                  <td v-if="qcvnEditMode">
+                    <button type="button" class="btn-secondary btn-sm" @click="removeQcvnEditParamRow(pIdx)">×</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Form kiểm duyệt QCVN -->
+        <div style="padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+          <div class="form-grid-2" style="gap:10px;margin-bottom:10px">
+            <div class="form-group">
+              <label class="form-label">Căn cứ pháp lý ban hành (Thông tư / Công báo) — Bắt buộc khi Phê duyệt *</label>
+              <input type="text" v-model="qcvnReviewSourceDoc" placeholder="VD: Thông tư 05/2025/TT-BTNMT ban hành QCVN 40:2025/BTNMT" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ngày bắt đầu có hiệu lực</label>
+              <input type="date" v-model="qcvnReviewEffectiveFrom" />
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">Lý do kiểm duyệt / Ghi chú (Bắt buộc khi Từ chối, Cần bổ sung hoặc Tạo đề xuất) *</label>
+            <textarea v-model="qcvnReviewNote" rows="2" placeholder="Nhập căn cứ phê duyệt, lý do từ chối hoặc nội dung đề xuất chỉnh sửa thông số..."></textarea>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <button type="button" class="btn-secondary" @click="isQcvnDetailModalOpen = false">Đóng</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button v-if="qcvnEditMode" type="button" class="btn-secondary" @click="createQcvnProposalFromModal">
+                <i class="ti ti-git-pull-request"></i>
+                <span>Tạo đề xuất thay đổi (cho_duyet)</span>
+              </button>
+              <button type="button" class="btn-secondary" @click="submitQcvnReviewAction('can_xac_minh_phap_ly')">
+                <span>Đánh dấu cần xác minh (can_xac_minh_phap_ly)</span>
+              </button>
+              <button type="button" class="btn-secondary" @click="submitQcvnReviewAction('can_bo_sung')">
+                <span>Yêu cầu bổ sung (can_bo_sung)</span>
+              </button>
+              <button type="button" class="btn-action-delete" @click="submitQcvnReviewAction('tu_choi')">
+                <span>Từ chối (tu_choi)</span>
+              </button>
+              <button type="button" class="btn-primary" @click="submitQcvnReviewAction('da_xac_minh')">
+                <i class="ti ti-check"></i>
+                <span>Phê duyệt QCVN (da_xac_minh)</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

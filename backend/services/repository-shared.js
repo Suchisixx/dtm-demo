@@ -45,6 +45,9 @@ const VERIFICATION_STATUS_MAPPER = makeBidirectionalMapper({
   VERIFIED: 'da_xac_minh',
   NEEDS_LEGAL_VERIFICATION: 'can_xac_minh_phap_ly',
   PENDING_VERIFICATION: 'cho_xac_minh',
+  PENDING_REVIEW: 'cho_duyet',
+  NEED_MORE_INFO: 'can_bo_sung',
+  EXPIRED: 'het_hieu_luc',
   DRAFT: 'ban_nhap',
   REJECTED: 'tu_choi',
 }, 'NEEDS_LEGAL_VERIFICATION', 'can_xac_minh_phap_ly');
@@ -96,6 +99,7 @@ const CANDIDATE_STATUS_MAPPER = makeBidirectionalMapper({
   EXTRACTED: 'da_trich_xuat',
   APPROVED: 'da_duyet',
   REJECTED: 'tu_choi',
+  NEED_MORE_INFO: 'can_bo_sung',
 }, 'PENDING_REVIEW', 'cho_duyet');
 
 const SEVERITY_MAPPER = makeBidirectionalMapper({

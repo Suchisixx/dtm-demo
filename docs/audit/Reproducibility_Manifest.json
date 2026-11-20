@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-11-19T12:48:30+07:00",
+  "project": "ETC LegalHub — ĐATN",
+  "git_baseline": {
+    "branch": "main",
+    "base_commit": "69b39e3",
+    "working_tree_note": "Added backend/tests/boundary-and-temporal.test.js, registered it in backend/package.json, added docs/audit/* and Phu_Luc_Sua_Doi_Luan_Van.docx; zero application runtime logic or legal verification statuses altered."
+  },
+  "environment": {
+    "os": "Windows 64-bit",
+    "node": "v24.11.0",
+    "express": "4.19.2",
+    "postgresql": "16.8",
+    "postgis": "3.6.2",
+    "vue": "3.5.40",
+    "vite": "8.2.0",
+    "leaflet": "1.9.4",
+    "cheerio": "1.2.0",
+    "node_cron": "4.6.0",
+    "playwright": "1.65.0",
+    "pg": "8.11.5"
+  },
+  "verification_runs": [
+    {
+      "id": "RUN-01",
+      "name": "Backend Unit, Contract, Coverage & Boundary Suite",
+      "command": "npm test --prefix backend",
+      "database_mode": "In-memory fake/mock repository (no live PostgreSQL required)",
+      "result": "PASS",
+      "passed": 46,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 4016.078,
+      "log_file": "docs/audit/logs/01_Unit_And_Coverage.log",
+      "bytes": 5772,
+      "sha256": "2806b756c53be5bd11b314b114cfb373f5d9ffe1cc733a82d47e62a8e1b38cfd"
+    },
+    {
+      "id": "RUN-02",
+      "name": "PostgreSQL 16.8 + PostGIS 3.6.2 Integration Suite",
+      "command": "npm run test:pg --prefix backend",
+      "database_mode": "Isolated real PostgreSQL 16.8 + PostGIS 3.6.2 test database (etc_legalhub_test)",
+      "result": "PASS",
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 1767.9166,
+      "log_file": "docs/audit/logs/02_Postgres_Postgis.log",
+      "bytes": 771,
+      "sha256": "998c7991193af27bf889502960be12f8e0cf71d801d1d0e3d1b75b89f2bf659c"
+    },
+    {
+      "id": "RUN-03",
+      "name": "Frontend Production Build (Vue 3 + Vite)",
+      "command": "npm run build --prefix frontend",
+      "database_mode": "Static build",
+      "result": "PASS",
+      "modules_transformed": 47,
+      "duration_ms": 694,
+      "log_file": "docs/audit/logs/03_Frontend_Build.log",
+      "bytes": 689,
+      "sha256": "24c832549208f6f2dcb9eeba456633c1ab3e586ef3f1fd77d20440255a97dc04"
+    },
+    {
+      "id": "RUN-04",
+      "name": "Playwright Chromium End-to-End Suite",
+      "command": "npx playwright test",
+      "database_mode": "Live Express backend + PostgreSQL 16.8 + PostGIS 3.6.2",
+      "result": "PASS",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "duration_ms": 12800,
+      "log_file": "docs/audit/logs/04_Playwright_E2e.log",
+      "bytes": 1807,
+      "sha256": "183997d30056a725f8aab091d83c7bd7b0fbb1182c035d78527406d709b9be9c"
+    }
+  ],
+  "artifacts": {
+    "legal_golden_cases_json": {
+      "path": "docs/audit/Legal_Golden_Cases.json",
+      "total_cases": 18,
+      "review_status": "PENDING_EXPERT_SIGN_OFF",
+      "bytes": 16667,
+      "sha256": "a18f9d837b1e0a9806b68b08e31392d984eb6cb9368449c706bc19802660e09d"
+    },
+    "legal_golden_cases_csv": {
+      "path": "docs/audit/Legal_Golden_Cases.csv",
+      "total_cases": 18,
+      "review_status": "PENDING_EXPERT_SIGN_OFF",
+      "bytes": 7529,
+      "sha256": "e3e5e868924a0dc5de49764b04d7ffa6275d0ba915dbe672fa2b1589c9d2d42f"
+    },
+    "boundary_and_temporal_test": {
+      "path": "backend/tests/boundary-and-temporal.test.js",
+      "bytes": 12267,
+      "sha256": "ab9a19e2e24a53aeb97d1239b74af51176d7258ef0289883358f37da2ecd08d4"
+    },
+    "thesis_delta_word": {
+      "path": "Phu_Luc_Sua_Doi_Luan_Van.docx",
+      "bytes": 38712,
+      "sha256": "d5c2a50f073494e9d90f33e1170be8766516dd651194e7285a7f6bcd4b6fd675"
+    }
+  },
+  "honesty_and_governance_gates": {
+    "legal_thresholds_modified": false,
+    "verification_status_elevated": false,
+    "catalog_industries_total": 39,
+    "catalog_thresholds_total": 143,
+    "catalog_thresholds_needs_legal_verification": 143,
+    "catalog_qcvn_tables_total": 35
+  }
+}

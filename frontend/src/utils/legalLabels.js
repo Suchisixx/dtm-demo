@@ -74,11 +74,20 @@ export const QCVN_LIFECYCLE_LABELS = {
 };
 
 export const QCVN_VERIFICATION_LABELS = {
-  VERIFIED: 'Đã xác minh',
-  NEEDS_LEGAL_VERIFICATION: 'Chờ xác minh quy chuẩn',
+  VERIFIED: 'Đã phê duyệt',
+  da_xac_minh: 'Đã phê duyệt',
+  NEEDS_LEGAL_VERIFICATION: 'Cần xác minh pháp lý',
+  can_xac_minh_phap_ly: 'Cần xác minh pháp lý',
   DRAFT: 'Bản nháp',
-  PENDING_REVIEW: 'Chờ duyệt',
+  ban_nhap: 'Bản nháp',
+  PENDING_REVIEW: 'Chờ kiểm duyệt',
+  cho_duyet: 'Chờ kiểm duyệt',
+  NEED_MORE_INFO: 'Cần bổ sung thông tin',
+  can_bo_sung: 'Cần bổ sung thông tin',
   REJECTED: 'Từ chối',
+  tu_choi: 'Từ chối',
+  EXPIRED: 'Ngừng áp dụng / Hết hiệu lực',
+  het_hieu_luc: 'Ngừng áp dụng / Hết hiệu lực',
 };
 
 export const QCVN_REASON_LABELS = {
@@ -136,8 +145,11 @@ export function getQcvnCatalogChipText({ ruleSource, lifecycleStatus, verificati
 
 export const ADMIN_SEVERITY_LABELS = {
   HIGH: { label: 'Mức độ cao', color: '#B91C1C', bg: '#FEE2E2' },
+  cao: { label: 'Mức độ cao', color: '#B91C1C', bg: '#FEE2E2' },
   MEDIUM: { label: 'Mức độ trung bình', color: '#B45309', bg: '#FEF3C7' },
+  trung_binh: { label: 'Mức độ trung bình', color: '#B45309', bg: '#FEF3C7' },
   LOW: { label: 'Mức độ thấp', color: '#1D4ED8', bg: '#DBEAFE' },
+  thap: { label: 'Mức độ thấp', color: '#1D4ED8', bg: '#DBEAFE' },
 };
 
 export const ADMIN_EVENT_LABELS = {
@@ -149,18 +161,39 @@ export const ADMIN_EVENT_LABELS = {
 
 export const ADMIN_STATUS_LABELS = {
   OPEN: 'Đang chờ xử lý',
+  dang_mo: 'Đang chờ xử lý',
   RESOLVED: 'Đã xử lý',
+  da_xu_ly: 'Đã xử lý',
   IGNORED: 'Bỏ qua',
-  EXTRACTED: 'Đã bóc tách (chờ duyệt)',
+  bo_qua: 'Bỏ qua',
+  EXTRACTED: 'Chờ kiểm duyệt',
+  da_trich_xuat: 'Chờ kiểm duyệt',
   PENDING_REVIEW: 'Chờ kiểm duyệt',
-  PENDING_VERIFICATION: 'Chờ xác minh',
-  NEEDS_REVIEW: 'Cần rà soát',
-  APPLIED: 'Đã áp dụng',
-  REJECTED: 'Đã từ chối',
-  VERIFIED: 'Đã xác minh',
-  NEEDS_LEGAL_VERIFICATION: 'Chờ đối chiếu văn bản',
+  cho_duyet: 'Chờ kiểm duyệt',
+  PENDING_VERIFICATION: 'Chờ kiểm duyệt',
+  cho_xac_minh: 'Chờ kiểm duyệt',
+  NEEDS_REVIEW: 'Cần xác minh pháp lý',
+  can_ra_soat: 'Cần xác minh pháp lý',
+  APPLIED: 'Đã phê duyệt',
+  da_ap_dung: 'Đã phê duyệt',
+  APPROVED: 'Đã phê duyệt',
+  da_duyet: 'Đã phê duyệt',
+  REJECTED: 'Từ chối',
+  tu_choi: 'Từ chối',
+  NEED_MORE_INFO: 'Cần bổ sung thông tin',
+  can_bo_sung: 'Cần bổ sung thông tin',
+  VERIFIED: 'Đã phê duyệt',
+  da_xac_minh: 'Đã phê duyệt',
+  NEEDS_LEGAL_VERIFICATION: 'Cần xác minh pháp lý',
+  can_xac_minh_phap_ly: 'Cần xác minh pháp lý',
   DRAFT: 'Bản nháp',
+  ban_nhap: 'Bản nháp',
   PUBLISHED: 'Đã công bố',
+  da_cong_bo: 'Đã công bố',
+  EXPIRED: 'Ngừng áp dụng / Hết hiệu lực',
+  het_hieu_luc: 'Ngừng áp dụng / Hết hiệu lực',
+  HISTORICAL: 'Ngừng áp dụng / Hết hiệu lực',
+  lich_su: 'Ngừng áp dụng / Hết hiệu lực',
   ACTIVE: 'Đang hoạt động',
   INACTIVE: 'Ngưng hoạt động',
   SUCCESS: 'Thành công',
@@ -169,8 +202,13 @@ export const ADMIN_STATUS_LABELS = {
 
 export const ADMIN_TARGET_TYPE_LABELS = {
   INDUSTRY: 'Ngành nghề',
+  nganh_nghe: 'Ngành nghề',
   THRESHOLD: 'Ngưỡng công suất',
+  CLASSIFICATION_THRESHOLD: 'Quy tắc phân loại',
+  INDUSTRY_TIER: 'Quy tắc phân loại',
+  nguong_phan_loai: 'Quy tắc phân loại',
   QCVN: 'Quy chuẩn QCVN',
+  quy_chuan_qcvn: 'Quy chuẩn QCVN',
   PARAMETER: 'Chỉ tiêu giới hạn',
   RULE: 'Quy tắc phân loại',
 };

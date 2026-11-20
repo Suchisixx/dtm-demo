@@ -34,6 +34,11 @@ app.use('/api/crawler', require('./routes/crawler'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/reminders', require('./routes/reminders'));
 
+// Chặn các tuyến /api/* không tồn tại trả JSON 404 thay vì rơi về index.html (<!doctype html>)
+app.use('/api', (req, res) => {
+  return res.status(404).json({ error: `Không tìm thấy API ${req.method} ${req.originalUrl}` });
+});
+
 // Tuyến dự phòng: trả về trang chủ khi địa chỉ không khớp tuyến nào
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));

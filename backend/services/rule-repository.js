@@ -791,7 +791,8 @@ async function loadQcvnCatalog({ db = defaultDb } = {}) {
   }
 }
 
-const projectVerificationRepository = require('./project-verification-repository')
+const projectVerificationRepository = require('./project-verification-repository');
+const moderationRepository = require('./moderation-repository');
 
 /**
  * Schema và kho đồng bộ crawler với bộ quy tắc/trung tâm kiểm duyệt
@@ -1216,7 +1217,7 @@ async function approveRuleCandidate(
   if (candRes.rowCount === 0) throw new Error('CANDIDATE_NOT_FOUND');
 
   const cand = candRes.rows[0];
-  if (!['PENDING_REVIEW', 'EXTRACTED'].includes(toCanonicalCandidateStatus(cand.status))) {
+  if (!['PENDING_REVIEW', 'EXTRACTED', 'NEED_MORE_INFO'].includes(toCanonicalCandidateStatus(cand.status))) {
     throw new Error(`CANDIDATE_ALREADY_PROCESSED:${cand.status}`);
   }
 
@@ -1258,56 +1259,125 @@ async function approveRuleCandidate(
     const maxVal = proposed.max !== undefined && proposed.max !== null ? Number(proposed.max) : null;
     const effFrom = formatDateOnly(proposed.effectiveFrom || proposed.effective_from);
     const effTo = formatDateOnly(proposed.effectiveTo || proposed.effective_to);
+    const targetThrId = Number(proposed.thresholdId || proposed.supersedeThresholdId || cand.target_code);
 
-    if (proposed.supersedeThresholdId) {
-      await client.query(
-        `UPDATE classification_thresholds
-         SET effective_to = COALESCE($1, effective_to),
-             is_active_version = CASE WHEN $2::boolean THEN FALSE ELSE is_active_version END,
-             superseded_at = CURRENT_DATE,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3`,
-        [effFrom || null, Boolean(proposed.deactivateSuperseded), Number(proposed.supersedeThresholdId)]
-      );
+    if (Number.isInteger(targetThrId) && targetThrId > 0 && proposed.updateExisting !== false) {
+      const beforeThrRes = await client.query('SELECT * FROM classification_thresholds WHERE id = $1', [targetThrId]);
+      const beforeThr = beforeThrRes.rows?.[0] || null;
+      if (beforeThr) {
+        const updThr = await client.query(
+          `UPDATE classification_thresholds
+           SET process_stage = $1,
+               min_value = $2,
+               max_value = $3,
+               operator = $4,
+               unit = $5,
+               project_group = $6,
+               legal_doc_required = $7,
+               tq = $8,
+               phu_luc = $9,
+               legal_ref = $10,
+               law_id = COALESCE($11, law_id),
+               effective_from = COALESCE($12, effective_from),
+               effective_to = $13,
+               verification_status = 'da_xac_minh',
+               publication_status = 'da_cong_bo',
+               rule_version = $14,
+               source_ref = $15,
+               approved_by = $16,
+               approved_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $17
+           RETURNING *`,
+          [
+            String(proposed.processStage ?? proposed.process_stage ?? beforeThr.process_stage ?? ''),
+            minVal,
+            maxVal,
+            proposed.operator || beforeThr.operator || '>=',
+            proposed.unit !== undefined ? proposed.unit : beforeThr.unit,
+            proposed.projectGroup || proposed.project_group || beforeThr.project_group || 'Nhóm III',
+            proposed.hs || proposed.legal_doc_required || beforeThr.legal_doc_required || 'GPMT',
+            proposed.tq || beforeThr.tq || 'cap_so',
+            proposed.phu_luc !== undefined ? proposed.phu_luc : beforeThr.phu_luc,
+            proposed.legalRef || proposed.legal_ref || proposed.ref || resolvedSourceDoc,
+            cand.law_id || beforeThr.law_id || null,
+            effFrom || formatDateOnly(beforeThr.effective_from),
+            effTo,
+            proposed.ruleVersion || `2026.2-cand-${numericId}`,
+            resolvedSourceDoc,
+            String(reviewedByName),
+            targetThrId,
+          ]
+        );
+        appliedRecord = updThr.rows[0];
+        await moderationRepository.recordRuleVersionSnapshot(client, {
+          ruleId: targetThrId,
+          version: proposed.ruleVersion || `2026.2-cand-${numericId}`,
+          targetType: 'nguong_phan_loai',
+          targetCode: `${industryCode}#${targetThrId}`,
+          beforeData: beforeThr,
+          afterData: appliedRecord,
+          changedBy: reviewedBy,
+          changedByName: reviewedByName,
+          legalBasis: resolvedSourceDoc,
+          effectiveFrom: effFrom || formatDateOnly(beforeThr.effective_from),
+          effectiveTo: effTo,
+          changeReason: `[Phê duyệt đề xuất #${numericId}] ${reviewNote || resolvedSourceDoc}`,
+        });
+      }
     }
 
-    const insThr = await client.query(
-      `INSERT INTO classification_thresholds (
-         industry_code, process_stage, min_value, max_value, operator, unit,
-         capacity_scale, project_group, legal_doc_required, tq, historical_tq,
-         phu_luc, legal_ref, law_id, effective_from, effective_to,
-         verification_status, publication_status, tier_order, rule_version, source_ref, approved_by, approved_at, is_active_version
-       ) VALUES (
-         $1, $2, $3, $4, $5, $6,
-         $7, $8, $9, $10, $11,
-         $12, $13, $14, $15, $16,
-         'da_xac_minh', 'da_cong_bo', $17, $18, $19, $20, CURRENT_TIMESTAMP, TRUE
-       )
-       RETURNING *`,
-      [
-        industryCode,
-        String(proposed.processStage || proposed.process_stage || ''),
-        minVal,
-        maxVal,
-        proposed.operator || '>=',
-        proposed.unit || null,
-        (proposed.capacityScale || proposed.capacity_scale) ? toDbScale(proposed.capacityScale || proposed.capacity_scale) : null,
-        proposed.projectGroup || proposed.project_group || 'Nhóm III',
-        proposed.hs || proposed.legal_doc_required || 'GPMT',
-        proposed.tq || 'cap_so',
-        proposed.historicalTq || proposed.historical_tq || null,
-        proposed.phu_luc || null,
-        proposed.legalRef || proposed.ref || resolvedSourceDoc,
-        cand.law_id || null,
-        effFrom,
-        effTo,
-        Number.isFinite(Number(proposed.tierOrder)) ? Number(proposed.tierOrder) : 0,
-        proposed.ruleVersion || `2026.2-cand-${numericId}`,
-        resolvedSourceDoc,
-        String(reviewedByName),
-      ]
-    );
-    appliedRecord = insThr.rows[0];
+    if (!appliedRecord) {
+      if (proposed.supersedeThresholdId) {
+        await client.query(
+          `UPDATE classification_thresholds
+           SET effective_to = COALESCE($1, effective_to),
+               is_active_version = CASE WHEN $2::boolean THEN FALSE ELSE is_active_version END,
+               superseded_at = CURRENT_DATE,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $3`,
+          [effFrom || null, Boolean(proposed.deactivateSuperseded), Number(proposed.supersedeThresholdId)]
+        );
+      }
+
+      const insThr = await client.query(
+        `INSERT INTO classification_thresholds (
+           industry_code, process_stage, min_value, max_value, operator, unit,
+           capacity_scale, project_group, legal_doc_required, tq, historical_tq,
+           phu_luc, legal_ref, law_id, effective_from, effective_to,
+           verification_status, publication_status, tier_order, rule_version, source_ref, approved_by, approved_at, is_active_version
+         ) VALUES (
+           $1, $2, $3, $4, $5, $6,
+           $7, $8, $9, $10, $11,
+           $12, $13, $14, $15, $16,
+           'da_xac_minh', 'da_cong_bo', $17, $18, $19, $20, CURRENT_TIMESTAMP, TRUE
+         )
+         RETURNING *`,
+        [
+          industryCode,
+          String(proposed.processStage || proposed.process_stage || ''),
+          minVal,
+          maxVal,
+          proposed.operator || '>=',
+          proposed.unit || null,
+          (proposed.capacityScale || proposed.capacity_scale) ? toDbScale(proposed.capacityScale || proposed.capacity_scale) : null,
+          proposed.projectGroup || proposed.project_group || 'Nhóm III',
+          proposed.hs || proposed.legal_doc_required || 'GPMT',
+          proposed.tq || 'cap_so',
+          proposed.historicalTq || proposed.historical_tq || null,
+          proposed.phu_luc || null,
+          proposed.legalRef || proposed.legal_ref || proposed.ref || resolvedSourceDoc,
+          cand.law_id || null,
+          effFrom,
+          effTo,
+          Number.isFinite(Number(proposed.tierOrder)) ? Number(proposed.tierOrder) : 0,
+          proposed.ruleVersion || `2026.2-cand-${numericId}`,
+          resolvedSourceDoc,
+          String(reviewedByName),
+        ]
+      );
+      appliedRecord = insThr.rows[0];
+    }
   } else {
     throw new Error(`UNSUPPORTED_CANDIDATE_TARGET:${targetType}`);
   }
@@ -1333,24 +1403,26 @@ async function approveRuleCandidate(
   };
 }
 
-async function rejectRuleCandidate(client, { candidateId, reviewedBy, reviewNote = null } = {}) {
+async function rejectRuleCandidate(client, { candidateId, reviewedBy, reviewNote = null, status = 'tu_choi' } = {}) {
   const numericId = Number(candidateId);
   if (!Number.isInteger(numericId) || numericId <= 0) throw new Error('INVALID_CANDIDATE_ID');
+  const nextStatus = status === 'can_bo_sung' || status === 'NEED_MORE_INFO' ? 'can_bo_sung' : 'tu_choi';
   const res = await client.query(
     `UPDATE rule_candidates
-     SET status = 'tu_choi',
-         reviewed_by = $1,
+     SET status = $1,
+         reviewed_by = $2,
          reviewed_at = CURRENT_TIMESTAMP,
-         review_note = COALESCE($2, review_note),
+         review_note = COALESCE($3, review_note),
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $3
+     WHERE id = $4
      RETURNING *`,
-    [reviewedBy || null, reviewNote, numericId]
+    [nextStatus, reviewedBy || null, reviewNote, numericId]
   );
   if (res.rowCount === 0) throw new Error('CANDIDATE_NOT_FOUND');
   return {
     ...res.rows[0],
     status: toCanonicalCandidateStatus(res.rows[0].status),
+    status_vi: moderationRepository.toVietnameseModerationStatus(res.rows[0].status, nextStatus),
   };
 }
 
@@ -1597,4 +1669,6 @@ module.exports = {
   listThresholdRules,
   updateThresholdRule,
   verifyThresholdRule,
+  validateQcvnParameters,
+  ...moderationRepository,
 };

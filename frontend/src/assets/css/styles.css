@@ -2261,3 +2261,633 @@ input:disabled {
     display: block !important;
   }
 }
+
+/* ============================================================================
+   REDESIGN: TRUNG TÂM KIỂM DUYỆT DỮ LIỆU PHÁP LÝ (.mod-*)
+   Phong cách quản trị doanh nghiệp tối giản, xanh lá thương hiệu ETC LegalHub
+   ============================================================================ */
+.mod-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mod-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mod-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.mod-subtitle {
+  font-size: 13.5px;
+  color: var(--text2);
+  margin: 4px 0 0;
+}
+
+.mod-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mod-updated-at {
+  font-size: 12px;
+  color: var(--text3);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* 3 Thẻ thống kê chính */
+.mod-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mod-stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.mod-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--border-strong);
+}
+
+.mod-stat-card.is-pending::before { background: var(--warn); }
+.mod-stat-card.is-approved::before { background: var(--accent); }
+.mod-stat-card.is-rejected::before { background: var(--red); }
+
+.mod-stat-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.mod-stat-card.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent2);
+}
+
+.mod-stat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mod-stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text2);
+}
+
+.mod-stat-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.mod-stat-card.is-pending .mod-stat-icon { background: var(--warn-bg); color: var(--warn); }
+.mod-stat-card.is-approved .mod-stat-icon { background: var(--accent2); color: var(--accent); }
+.mod-stat-card.is-rejected .mod-stat-icon { background: var(--red-bg); color: var(--red); }
+
+.mod-stat-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.mod-stat-breakdown {
+  font-size: 12.5px;
+  color: var(--text3);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mod-stat-breakdown strong {
+  color: var(--text2);
+  font-weight: 600;
+}
+
+/* Khối nội dung chính (Tách 2 tab Cần xử lý & Lịch sử) */
+.mod-workspace-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  overflow: visible;
+}
+
+.mod-mode-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.mod-mode-tabs {
+  display: flex;
+  gap: 24px;
+}
+
+.mod-mode-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 14px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.mod-mode-tab:hover {
+  color: var(--text);
+}
+
+.mod-mode-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.mod-count-pill {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+}
+
+.mod-mode-tab.active .mod-count-pill {
+  background: var(--accent2);
+  color: var(--accent);
+}
+
+/* Hàng chọn nhóm dữ liệu trong Hàng đợi */
+.mod-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px 0;
+  flex-wrap: wrap;
+}
+
+.mod-group-pill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text2);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.14s ease;
+}
+
+.mod-group-pill:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.mod-group-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.mod-group-pill .mod-pill-num {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text2);
+}
+
+.mod-group-pill.active .mod-pill-num {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Thanh bộ lọc 1 hàng gọn + Popover nâng cao */
+.mod-filter-wrap {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.mod-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mod-search-box {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 210px;
+}
+
+.mod-search-box i {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.mod-search-box input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 34px;
+  font-size: 13px;
+}
+
+.mod-filter-select {
+  height: 36px;
+  font-size: 13px;
+  min-width: 155px;
+  max-width: 210px;
+  width: auto;
+}
+
+.mod-adv-popover {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 12px;
+}
+
+.mod-adv-field label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+
+.mod-adv-field input {
+  height: 34px;
+  font-size: 12.5px;
+  width: 100%;
+}
+
+/* Bảng kiểm duyệt sạch, thoáng, tối đa 7 cột */
+.mod-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.mod-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.mod-table th {
+  text-align: left;
+  padding: 11px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.mod-table th.is-sortable {
+  cursor: pointer;
+}
+
+.mod-table th.is-sortable:hover {
+  color: var(--accent);
+}
+
+.mod-table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+}
+
+.mod-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.mod-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.mod-cell-title {
+  font-weight: 600;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 340px;
+  line-height: 1.4;
+}
+
+.mod-cell-sub {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.mod-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mod-status-badge.st-pending { background: var(--warn-bg); color: #9A6700; border: 1px solid var(--warn-border); }
+.mod-status-badge.st-approved { background: var(--success-bg); color: var(--accent); border: 1px solid var(--success-border); }
+.mod-status-badge.st-rejected { background: var(--red-bg); color: #B42318; border: 1px solid var(--danger-border); }
+.mod-status-badge.st-info { background: var(--info-bg); color: #2B5C82; border: 1px solid var(--info-border); }
+.mod-status-badge.st-muted { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+
+.mod-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.mod-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text3);
+}
+
+.mod-empty-state i {
+  font-size: 32px;
+  color: var(--border-strong);
+  display: block;
+  margin-bottom: 8px;
+}
+
+.mod-empty-state strong {
+  display: block;
+  color: var(--text);
+  font-size: 14.5px;
+  margin-bottom: 4px;
+}
+
+/* ============================================================================
+   DRAWER CHI TIẾT KIỂM DUYỆT 2 CỘT (MỤC 8, 9, 10)
+   ============================================================================ */
+.mod-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 28, 21, 0.48);
+  z-index: 1200;
+  display: flex;
+  justify-content: flex-end;
+  backdrop-filter: blur(2px);
+}
+
+.mod-drawer-panel {
+  width: min(1160px, 96vw);
+  height: 100vh;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.16);
+}
+
+.mod-drawer-head {
+  background: var(--surface);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.mod-drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.mod-col-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+
+.mod-col-card:last-child {
+  margin-bottom: 0;
+}
+
+.mod-col-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mod-kv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.mod-kv-label {
+  font-size: 11.5px;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+
+.mod-kv-value {
+  font-size: 13.5px;
+  color: var(--text);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* Bảng so sánh Trước & Sau cho Quy tắc phân loại & QCVN */
+.mod-diff-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.mod-diff-table th,
+.mod-diff-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.mod-diff-table th {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text2);
+  background: var(--bg);
+}
+
+.mod-diff-table tr.is-changed td {
+  background: #FFFBEB;
+}
+
+.mod-diff-table tr.is-changed td.mod-diff-new {
+  background: var(--accent2);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Checklist hỗ trợ người kiểm duyệt */
+.mod-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mod-checklist-item:hover {
+  background: var(--surface-hover);
+}
+
+.mod-checklist-item input[type="checkbox"] {
+  margin-top: 3px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.mod-checklist-item.is-checked span {
+  color: var(--text2);
+}
+
+.mod-drawer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.mod-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mod-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mod-timeline-item {
+  padding-left: 12px;
+  border-left: 2px solid var(--border-strong);
+  font-size: 12.5px;
+}
+
+.mod-timeline-item strong {
+  color: var(--text);
+}
+
+@media (max-width: 1100px) {
+  .mod-drawer-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .mod-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .mod-kv-grid {
+    grid-template-columns: 1fr;
+  }
+}
