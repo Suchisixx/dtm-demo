@@ -98,7 +98,7 @@ router.post('/select', async (req, res) => {
     });
   } catch (error) {
     logger.error('Lỗi xác định QCVN phía server:', error);
-    return res.status(500).json({ error: 'Không thể xác định bộ QCVN áp dụng trên server!' });
+    return res.status(500).json({ error: 'Không thể xác định bộ QCVN áp dụng trên máy chủ!' });
   }
 });
 
@@ -232,7 +232,7 @@ router.post('/evaluate', async (req, res) => {
     });
   } catch (error) {
     logger.error('Lỗi đối chiếu QCVN trên server:', error);
-    return res.status(500).json({ error: 'Không thể thực hiện đối chiếu QCVN trên server!' });
+    return res.status(500).json({ error: 'Không thể thực hiện đối chiếu QCVN trên máy chủ!' });
   }
 });
 

@@ -14,6 +14,7 @@ const db = require('../config/db');
 const { requireAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const { ACTIONS } = require('../utils/constants');
+const { toVietnameseErrorMessage } = require('../utils/error-messages');
 const logger = require('../utils/logger');
 const {
   listLawRuleImpacts,
@@ -90,16 +91,16 @@ router.put('/checklist', async (req, res) => {
       updatedByName: actorName,
     });
     return res.json({
-      message: 'Đã lưu trạng thái danh mục kiểm tra (checklist)!',
+      message: 'Đã lưu trạng thái danh mục kiểm tra!',
       ...saved,
     });
   } catch (error) {
-    if (error.message === 'RECORD_NOT_FOUND') return res.status(404).json({ error: 'Không tìm thấy bản ghi để lưu checklist!' });
+    if (error.message === 'RECORD_NOT_FOUND') return res.status(404).json({ error: toVietnameseErrorMessage('RECORD_NOT_FOUND') });
     if (['TARGET_ID_REQUIRED', 'INVALID_TARGET_TYPE', 'INVALID_RULE_ID', 'INVALID_CANDIDATE_ID'].includes(error.message)) {
-      return res.status(400).json({ error: `Tham số lưu checklist không hợp lệ: ${error.message}` });
+      return res.status(400).json({ error: toVietnameseErrorMessage(error.message) });
     }
     logger.error('Lỗi lưu checklist kiểm duyệt:', error);
-    return res.status(500).json({ error: 'Không thể lưu trạng thái checklist!' });
+    return res.status(500).json({ error: 'Không thể lưu trạng thái danh mục kiểm tra!' });
   }
 });
 
@@ -342,7 +343,7 @@ router.post('/candidates/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'Bắt buộc nhập số hiệu văn bản / căn cứ pháp lý trước khi phê duyệt!' });
     }
     if (error.message.startsWith('CANDIDATE_ALREADY_PROCESSED') || error.message.startsWith('QCVN_PARAMETER') || error.message.startsWith('INVALID_') || error.message.startsWith('UNSUPPORTED_')) {
-      return res.status(400).json({ error: `Dữ liệu duyệt không hợp lệ: ${error.message}` });
+      return res.status(400).json({ error: toVietnameseErrorMessage(error.message) });
     }
     logger.error('Lỗi duyệt đề xuất quy tắc:', error);
     return res.status(500).json({ error: 'Không thể duyệt đề xuất quy tắc!' });
@@ -718,7 +719,7 @@ router.post('/qcvns/:id/review', async (req, res) => {
       return res.status(400).json({ error: 'Bắt buộc nhập căn cứ pháp lý ban hành (sourceDocument) trước khi phê duyệt QCVN!' });
     }
     if (error.message.startsWith('QCVN_PARAMETER') || error.message.startsWith('INVALID_PARAM')) {
-      return res.status(400).json({ error: `Bảng thông số QCVN không hợp lệ: ${error.message}` });
+      return res.status(400).json({ error: toVietnameseErrorMessage(error.message) });
     }
     logger.error('Lỗi kiểm duyệt QCVN:', error);
     return res.status(500).json({ error: 'Không thể lưu kết quả kiểm duyệt QCVN!' });
@@ -746,7 +747,7 @@ router.put('/qcvns/:id/verify', async (req, res) => {
     return res.json({ message: `Đã ký xác minh Đã phê duyệt cho ${qcvn.id}!`, qcvn });
   } catch (error) {
     if (error.message === 'SOURCE_DOCUMENT_REQUIRED' || error.message.startsWith('QCVN_PARAMETER') || error.message.startsWith('INVALID_PARAM')) {
-      return res.status(400).json({ error: `Thiếu hoặc sai dữ liệu xác minh: ${error.message}` });
+      return res.status(400).json({ error: toVietnameseErrorMessage(error.message) });
     }
     logger.error('Lỗi xác minh QCVN:', error);
     return res.status(500).json({ error: 'Không thể xác minh/ban hành QCVN!' });
@@ -771,7 +772,7 @@ router.post('/qcvns/transitional/upsert', async (req, res) => {
     return res.json({ message: `Đã lưu và xác minh bảng chuyển tiếp ${qcvn.id}!`, qcvn });
   } catch (error) {
     if (error.message === 'INVALID_TRANSITIONAL_QCVN_ID' || error.message === 'SOURCE_DOCUMENT_REQUIRED' || error.message.startsWith('QCVN_PARAMETER') || error.message.startsWith('INVALID_PARAM')) {
-      return res.status(400).json({ error: `Dữ liệu bảng chuyển tiếp không hợp lệ: ${error.message}` });
+      return res.status(400).json({ error: toVietnameseErrorMessage(error.message) });
     }
     logger.error('Lỗi lưu QCVN chuyển tiếp:', error);
     return res.status(500).json({ error: 'Không thể lưu bảng QCVN chuyển tiếp!' });

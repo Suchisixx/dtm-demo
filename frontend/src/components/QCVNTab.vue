@@ -12,6 +12,7 @@ import {
   formatReasonForEndUser,
   QCVN_REASON_LABELS
 } from '../utils/legalLabels.js'
+import LegalDetailModal from './LegalDetailModal.vue'
 
 const props = defineProps({
   loadSampleId: { type: Number, default: null }
@@ -28,6 +29,7 @@ const qcvnCatalogError = ref('')
 const sampleName = ref('')
 const pasteArea = ref('')
 const sampleId = ref(null)
+const qcvnDetailOpen = ref(false)
 const measuredValues = ref({})
 const receivingWaterConfirmed = ref(false)
 const flowRate = ref(null)
@@ -1196,6 +1198,11 @@ const showQuickPaste = ref(false)
           <span>{{ isSelectingQcvn ? 'Đang kiểm tra...' : 'Đối chiếu quy chuẩn phù hợp' }}</span>
         </button>
 
+        <button v-if="currentQcvn" type="button" class="btn-secondary btn-sm" @click="qcvnDetailOpen = true" title="Xem căn cứ ban hành và bảng ngưỡng thông số quy chuẩn">
+          <i class="ti ti-scale"></i>
+          <span>Xem chi tiết quy chuẩn</span>
+        </button>
+
         <span class="chip" :class="qcvnRuleSource === 'DATABASE' ? 'chip-info' : 'chip-gray'" style="margin-left:auto;font-size:11px">
           {{ getQcvnCatalogChipText({
             ruleSource: qcvnRuleSource,
@@ -1452,5 +1459,12 @@ const showQuickPaste = ref(false)
         </div>
       </div>
     </div>
+
+    <LegalDetailModal
+      :open="qcvnDetailOpen"
+      mode="qcvn"
+      :qcvn="currentQcvn ? { ...currentQcvn, id: selectedSubType, sourceType: selectedType, ruleSource: qcvnRuleSource, ruleVersion: serverSelection?.ruleVersion } : null"
+      @close="qcvnDetailOpen = false"
+    />
   </div>
 </template>

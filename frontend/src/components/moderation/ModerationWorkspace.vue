@@ -2,6 +2,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { API } from '../../utils/constants.js'
 import { useAdminPagination } from '../../composables/useAdminPagination.js'
+import {
+  toModerationStatusCode as toViStatus,
+  getModerationStatusMeta as getStatusMeta,
+  getLawTypeLabelVi as getLawTypeLabel,
+  getQcvnDomainLabel as getDomainLabel,
+  getAuthorityLabel,
+  getProcedureShortLabel,
+  getRuleVersionTargetLabel,
+} from '../../utils/legalLabels.js'
 import ModerationDetailDrawer from './ModerationDetailDrawer.vue'
 
 const emit = defineEmits(['stats-updated'])
@@ -33,6 +42,7 @@ const versionHistory = ref([])
 
 const loading = ref(false)
 const loadError = ref('')
+const backendOutdatedWarning = ref(false)
 const feedbackSuccess = ref('')
 const feedbackError = ref('')
 
@@ -79,51 +89,6 @@ const proposalForm = ref({
 })
 const proposalSubmitting = ref(false)
 
-const toViStatus = (raw) => {
-  const s = String(raw || '').trim().toLowerCase()
-  if (['cho_duyet', 'pending_review', 'extracted', 'da_trich_xuat', 'pending_verification', 'cho_xac_minh'].includes(s)) return 'cho_duyet'
-  if (['can_xac_minh_phap_ly', 'needs_legal_verification', 'needs_review', 'can_ra_soat'].includes(s)) return 'can_xac_minh_phap_ly'
-  if (['da_xac_minh', 'verified', 'da_duyet', 'approved', 'da_ap_dung', 'applied'].includes(s)) return 'da_xac_minh'
-  if (['tu_choi', 'rejected'].includes(s)) return 'tu_choi'
-  if (['can_bo_sung', 'need_more_info'].includes(s)) return 'can_bo_sung'
-  if (['het_hieu_luc', 'expired', 'lich_su', 'historical', 'superseded'].includes(s)) return 'het_hieu_luc'
-  return s || 'can_xac_minh_phap_ly'
-}
-
-const getStatusMeta = (raw) => {
-  const code = toViStatus(raw)
-  const map = {
-    cho_duyet: { label: 'Chờ kiểm duyệt', cls: 'st-pending' },
-    can_xac_minh_phap_ly: { label: 'Cần xác minh', cls: 'st-pending' },
-    can_bo_sung: { label: 'Cần bổ sung', cls: 'st-info' },
-    da_xac_minh: { label: 'Đã phê duyệt', cls: 'st-approved' },
-    tu_choi: { label: 'Đã từ chối', cls: 'st-rejected' },
-    het_hieu_luc: { label: 'Hết hiệu lực', cls: 'st-muted' },
-  }
-  return map[code] || { label: 'Chờ kiểm duyệt', cls: 'st-pending' }
-}
-
-const getLawTypeLabel = (t) => ({ luat: 'Luật', nd: 'Nghị định', vbhn: 'Văn bản hợp nhất', tt: 'Thông tư', qcvn: 'QCVN', qd: 'Quyết định' }[t] || 'Văn bản')
-
-const getDomainLabel = (sourceType) => ({
-  nuoc_thai_cn: 'Nước thải công nghiệp',
-  nuoc_thai_sh: 'Nước thải sinh hoạt',
-  nuoc_mat: 'Chất lượng nước mặt',
-  nuoc_ngam: 'Chất lượng nước dưới đất',
-  khong_khi: 'Không khí xung quanh',
-  khi_thai: 'Khí thải công nghiệp',
-  dat: 'Chất lượng đất',
-}[sourceType] || 'Quy chuẩn môi trường')
-
-const getAuthorityLabel = (tq) => ({
-  cap_bo: 'Bộ NN&MT',
-  btnmt: 'Bộ NN&MT',
-  cap_so: 'UBND Tỉnh / Sở',
-  ubnd_tinh: 'UBND Tỉnh / Sở',
-  cap_xa: 'UBND cấp Xã',
-  bql_kcn: 'BQL KCN',
-}[tq] || tq || '—')
-
 const formatDateTime = (ts) => {
   if (!ts) return '—'
   const d = new Date(ts)
@@ -169,7 +134,9 @@ const fetchAllModerationData = async () => {
       throw new Error(ovData.error || 'Không thể tải thống kê kiểm duyệt từ máy chủ.')
     }
     overview.value = ovData
-    emit('stats-updated', ovData.stats?.totalPendingCount || 0)
+    const isLegacyOverview = !ovData?.stats?.pending || !Array.isArray(ovData?.queueItems)
+    backendOutdatedWarning.value = isLegacyOverview || !histRes.ok
+    emit('stats-updated', ovData.stats?.pending?.total ?? ovData.stats?.totalPendingCount ?? 0)
 
     if (lawRes.ok) {
       const d = await parseJsonSafeResponse(lawRes)
@@ -193,6 +160,9 @@ const fetchAllModerationData = async () => {
         historyItems.value = d.items || []
         versionHistory.value = d.versions || []
       }
+    } else {
+      historyItems.value = []
+      versionHistory.value = []
     }
   } catch (err) {
     loadError.value = err.message || 'Không thể kết nối máy chủ kiểm duyệt.'
@@ -283,10 +253,201 @@ const applyCommonFilter = (list, getMeta) => {
 }
 
 const PENDING_SET = new Set(['cho_duyet', 'can_xac_minh_phap_ly', 'can_bo_sung'])
+const PROCESSED_SET = new Set(['da_xac_minh', 'tu_choi', 'het_hieu_luc', 'can_bo_sung'])
+
+// Hàng đợi tổng hợp có tương thích ngược nếu máy chủ backend chưa khởi động lại phiên bản mới
+const effectiveQueueItems = computed(() => {
+  if (Array.isArray(overview.value?.queueItems)) {
+    return overview.value.queueItems
+  }
+  const items = []
+  for (const l of lawsList.value) {
+    const st = toViStatus(l.verification_status)
+    if (!PENDING_SET.has(st)) continue
+    items.push({
+      uid: `van_ban:${l.id}`,
+      loai_du_lieu: 'van_ban',
+      loai_du_lieu_label: 'Văn bản pháp luật',
+      sub_type: 'law',
+      ma: l.id,
+      so_hieu: l.so,
+      tieu_de: l.ten || l.so,
+      nguon: l.detection_source || 'he_thong',
+      nguon_label: l.detection_source === 'crawler' ? 'Trình thu thập tự động' : (l.detection_source === 'thu_cong' ? 'Thêm thủ công' : 'Cơ sở dữ liệu hệ thống'),
+      nguoi_de_xuat: l.detection_source === 'crawler' ? 'Trình thu thập dữ liệu tự động' : (l.reviewed_by || 'Quản trị viên'),
+      thoi_gian: l.detected_at || l.updated_at || l.issued_date,
+      ngay_ban_hanh: l.issued_date || null,
+      ngay_hieu_luc: l.effective_date || null,
+      trang_thai: st,
+    })
+  }
+  for (const c of candidatesList.value) {
+    const st = toViStatus(c.status_vi || c.status)
+    if (!PENDING_SET.has(st)) continue
+    const isQcvn = c.target_type === 'QCVN'
+    items.push({
+      uid: `de_xuat:${c.id}`,
+      loai_du_lieu: isQcvn ? 'qcvn' : 'quy_tac',
+      loai_du_lieu_label: isQcvn ? 'Đề xuất QCVN' : 'Đề xuất quy tắc phân loại',
+      sub_type: 'candidate',
+      ma: String(c.id),
+      so_hieu: c.target_code,
+      tieu_de: c.title || `Đề xuất #${c.id} (${c.target_code})`,
+      nguon: c.law_id && c.law_id !== 'cap_nhat_thu_cong' ? 'crawler' : 'thu_cong',
+      nguon_label: c.law_id && c.law_id !== 'cap_nhat_thu_cong' ? 'Đồng bộ văn bản' : 'Đề xuất thủ công',
+      nguoi_de_xuat: c.proposed_data?.nguoi_de_xuat || 'Hệ thống / Quản trị viên',
+      thoi_gian: c.created_at || c.updated_at,
+      ngay_ban_hanh: null,
+      ngay_hieu_luc: c.proposed_data?.effective_from || c.proposed_data?.effectiveFrom || null,
+      trang_thai: st,
+    })
+  }
+  for (const t of thresholdsList.value) {
+    const st = toViStatus(t.verification_status_vi || t.verification_status)
+    if (!PENDING_SET.has(st)) continue
+    items.push({
+      uid: `quy_tac:${t.id}`,
+      loai_du_lieu: 'quy_tac',
+      loai_du_lieu_label: 'Quy tắc phân loại',
+      sub_type: 'threshold',
+      ma: String(t.id),
+      so_hieu: `#${t.id}`,
+      tieu_de: `${t.industry_name || t.industry_code} — ${t.project_group} (${getProcedureShortLabel(t.legal_doc_required)})`,
+      nguon: 'he_thong',
+      nguon_label: 'Danh mục hệ thống',
+      nguoi_de_xuat: 'Danh mục quy tắc',
+      thoi_gian: t.updated_at,
+      ngay_ban_hanh: null,
+      ngay_hieu_luc: t.effective_from || null,
+      trang_thai: st,
+    })
+  }
+  for (const q of qcvnsList.value) {
+    const st = toViStatus(q.verification_status_vi || q.verification_status)
+    if (!PENDING_SET.has(st)) continue
+    items.push({
+      uid: `qcvn:${q.id}`,
+      loai_du_lieu: 'qcvn',
+      loai_du_lieu_label: 'Quy chuẩn QCVN',
+      sub_type: 'qcvn',
+      ma: q.id,
+      so_hieu: q.standard_code || q.id,
+      tieu_de: q.ten || q.id,
+      nguon: 'he_thong',
+      nguon_label: 'Danh mục hệ thống',
+      nguoi_de_xuat: 'Danh mục QCVN',
+      thoi_gian: q.updated_at,
+      ngay_ban_hanh: null,
+      ngay_hieu_luc: q.effective_from || null,
+      trang_thai: st,
+    })
+  }
+  return items.sort((a, b) => new Date(b.thoi_gian || 0).getTime() - new Date(a.thoi_gian || 0).getTime())
+})
+
+const effectiveStats = computed(() => {
+  const s = overview.value?.stats || {}
+  if (s.pending && s.approved && s.rejected) {
+    return { pending: s.pending, approved: s.approved, rejected: s.rejected }
+  }
+  const countByStatus = (list, statusFn, targetSet) => list.filter(item => targetSet.has(toViStatus(statusFn(item)))).length
+  const pLaws = s.pendingLawsCount ?? countByStatus(lawsList.value, l => l.verification_status, PENDING_SET)
+  const pRules = s.unverifiedRulesCount ?? (
+    countByStatus(thresholdsList.value, t => t.verification_status_vi || t.verification_status, PENDING_SET)
+    + countByStatus(candidatesList.value.filter(c => c.target_type !== 'QCVN'), c => c.status_vi || c.status, PENDING_SET)
+  )
+  const pQcvns = s.unverifiedQcvnsCount ?? (
+    countByStatus(qcvnsList.value, q => q.verification_status_vi || q.verification_status, PENDING_SET)
+    + countByStatus(candidatesList.value.filter(c => c.target_type === 'QCVN'), c => c.status_vi || c.status, PENDING_SET)
+  )
+
+  const approvedSet = new Set(['da_xac_minh'])
+  const aLaws = countByStatus(lawsList.value, l => l.verification_status, approvedSet)
+  const aRules = countByStatus(thresholdsList.value, t => t.verification_status_vi || t.verification_status, approvedSet)
+    + countByStatus(candidatesList.value.filter(c => c.target_type !== 'QCVN'), c => c.status_vi || c.status, approvedSet)
+  const aQcvns = countByStatus(qcvnsList.value, q => q.verification_status_vi || q.verification_status, approvedSet)
+    + countByStatus(candidatesList.value.filter(c => c.target_type === 'QCVN'), c => c.status_vi || c.status, approvedSet)
+
+  const rejectedSet = new Set(['tu_choi'])
+  const rLaws = countByStatus(lawsList.value, l => l.verification_status, rejectedSet)
+  const rRules = countByStatus(thresholdsList.value, t => t.verification_status_vi || t.verification_status, rejectedSet)
+    + countByStatus(candidatesList.value.filter(c => c.target_type !== 'QCVN'), c => c.status_vi || c.status, rejectedSet)
+  const rQcvns = countByStatus(qcvnsList.value, q => q.verification_status_vi || q.verification_status, rejectedSet)
+    + countByStatus(candidatesList.value.filter(c => c.target_type === 'QCVN'), c => c.status_vi || c.status, rejectedSet)
+
+  return {
+    pending: { total: s.totalPendingCount ?? (pLaws + pRules + pQcvns), van_ban: pLaws, quy_tac: pRules, qcvn: pQcvns },
+    approved: { total: s.approvedTotalCount ?? (aLaws + aRules + aQcvns), van_ban: aLaws, quy_tac: aRules, qcvn: aQcvns },
+    rejected: { total: s.rejectedTotalCount ?? (rLaws + rRules + rQcvns), van_ban: rLaws, quy_tac: rRules, qcvn: rQcvns },
+  }
+})
+
+const effectiveHistoryItems = computed(() => {
+  if (historyItems.value.length > 0) return historyItems.value
+  const items = []
+  for (const l of lawsList.value) {
+    const st = toViStatus(l.verification_status)
+    if (!PROCESSED_SET.has(st)) continue
+    items.push({
+      uid: `van_ban:${l.id}`,
+      loai_du_lieu: 'van_ban',
+      loai_du_lieu_label: 'Văn bản pháp luật',
+      sub_type: 'law',
+      ma: l.id,
+      so_hieu: l.so,
+      tieu_de: l.ten || l.so,
+      can_cu: l.issuing_agency || '—',
+      hieu_luc: l.effective_date || l.hieuluc || '—',
+      trang_thai: st,
+      nguoi_thuc_hien: l.reviewed_by || 'Hệ thống',
+      thoi_gian: l.reviewed_at || l.updated_at || l.issued_date,
+      ghi_chu: l.review_note || '',
+    })
+  }
+  for (const t of thresholdsList.value) {
+    const st = toViStatus(t.verification_status_vi || t.verification_status)
+    if (!PROCESSED_SET.has(st)) continue
+    items.push({
+      uid: `quy_tac:${t.id}`,
+      loai_du_lieu: 'quy_tac',
+      loai_du_lieu_label: 'Quy tắc phân loại',
+      sub_type: 'threshold',
+      ma: String(t.id),
+      so_hieu: `#${t.id}`,
+      tieu_de: `${t.industry_name || t.industry_code} — ${t.project_group} (${getProcedureShortLabel(t.legal_doc_required)})`,
+      can_cu: t.legal_ref || '—',
+      hieu_luc: t.effective_from || '—',
+      trang_thai: st,
+      nguoi_thuc_hien: t.approved_by || 'Hệ thống',
+      thoi_gian: t.updated_at,
+      ghi_chu: t.review_note || '',
+    })
+  }
+  for (const q of qcvnsList.value) {
+    const st = toViStatus(q.verification_status_vi || q.verification_status)
+    if (!PROCESSED_SET.has(st)) continue
+    items.push({
+      uid: `qcvn:${q.id}`,
+      loai_du_lieu: 'qcvn',
+      loai_du_lieu_label: 'Quy chuẩn QCVN',
+      sub_type: 'qcvn',
+      ma: q.id,
+      so_hieu: q.standard_code || q.id,
+      tieu_de: q.ten || q.id,
+      can_cu: q.source_document || '—',
+      hieu_luc: q.effective_from || '—',
+      trang_thai: st,
+      nguoi_thuc_hien: q.verified_by || 'Hệ thống',
+      thoi_gian: q.updated_at,
+      ghi_chu: q.review_note || '',
+    })
+  }
+  return items.sort((a, b) => new Date(b.thoi_gian || 0).getTime() - new Date(a.thoi_gian || 0).getTime())
+})
 
 // 1. Hàng đợi tổng hợp (Tất cả cần xử lý — KHÔNG trộn bản ghi đã phê duyệt)
 const filteredQueueAll = computed(() => {
-  const base = (overview.value.queueItems || []).filter(i => PENDING_SET.has(toViStatus(i.trang_thai)))
+  const base = effectiveQueueItems.value.filter(i => PENDING_SET.has(toViStatus(i.trang_thai)))
   return applyCommonFilter(base, i => ({
     status: i.trang_thai,
     source: i.nguon,
@@ -309,7 +470,7 @@ const filteredQueueLaws = computed(() => {
     date: l.detected_at || l.issued_date,
     issuedDate: l.issued_date,
     effectiveDate: l.effective_date,
-    proposer: l.detection_source === 'crawler' ? 'Crawler' : 'Quản trị viên',
+    proposer: l.detection_source === 'crawler' ? 'Trình thu thập dữ liệu tự động' : 'Quản trị viên',
     reviewer: l.reviewed_by,
     searchText: `${l.ten} ${l.so} ${l.issuing_agency} ${l.id}`,
     sortValues: { ten: l.ten, so: l.so, hieu_luc: l.effective_date || '', thoi_gian: l.detected_at || '' },
@@ -349,7 +510,7 @@ const filteredQueueRules = computed(() => {
       codeLabel: `#${t.id}`,
       industryLabel: t.industry_name || t.industry_code,
       groupLabel: `${t.project_group}${t.process_stage ? ` · ${t.process_stage}` : ''}`,
-      changeSummary: `${t.operator || '>='} ${t.min_value}${t.max_value !== null && t.max_value !== undefined ? `–${t.max_value}` : ''} ${t.unit || ''} · ${t.legal_doc_required} (${getAuthorityLabel(t.tq)})`,
+      changeSummary: `${t.operator || '>='} ${t.min_value}${t.max_value !== null && t.max_value !== undefined ? `–${t.max_value}` : ''} ${t.unit || ''} · ${getProcedureShortLabel(t.legal_doc_required)} (${getAuthorityLabel(t.tq)})`,
       legalRef: t.legal_ref || 'Chưa gắn căn cứ',
       effectiveFrom: t.effective_from || '—',
       status: toViStatus(t.verification_status_vi || t.verification_status),
@@ -389,7 +550,7 @@ const filteredQueueQcvns = computed(() => {
 
 // 5. Tab 2: Lịch sử kiểm duyệt (Đã phê duyệt, Đã từ chối, Yêu cầu bổ sung, Hết hiệu lực)
 const filteredHistoryItems = computed(() => {
-  let base = historyItems.value || []
+  let base = effectiveHistoryItems.value || []
   if (activeQueueGroup.value !== 'tat_ca') {
     base = base.filter(h => h.loai_du_lieu === activeQueueGroup.value)
   }
@@ -596,13 +757,13 @@ defineExpose({ refresh: fetchAllModerationData })
           <span class="mod-stat-label">Chờ xử lý</span>
           <span class="mod-stat-icon"><i class="ti ti-hourglass-high"></i></span>
         </div>
-        <div class="mod-stat-value">{{ overview.stats?.pending?.total ?? overview.stats?.totalPendingCount ?? 0 }}</div>
+        <div class="mod-stat-value">{{ effectiveStats.pending.total }}</div>
         <div class="mod-stat-breakdown">
-          <span>Văn bản <strong>{{ overview.stats?.pending?.van_ban ?? 0 }}</strong></span>
+          <span>Văn bản <strong>{{ effectiveStats.pending.van_ban }}</strong></span>
           <span>·</span>
-          <span>Quy tắc <strong>{{ overview.stats?.pending?.quy_tac ?? 0 }}</strong></span>
+          <span>Quy tắc <strong>{{ effectiveStats.pending.quy_tac }}</strong></span>
           <span>·</span>
-          <span>QCVN <strong>{{ overview.stats?.pending?.qcvn ?? 0 }}</strong></span>
+          <span>QCVN <strong>{{ effectiveStats.pending.qcvn }}</strong></span>
         </div>
       </button>
 
@@ -616,13 +777,13 @@ defineExpose({ refresh: fetchAllModerationData })
           <span class="mod-stat-label">Đã phê duyệt</span>
           <span class="mod-stat-icon"><i class="ti ti-circle-check"></i></span>
         </div>
-        <div class="mod-stat-value">{{ overview.stats?.approved?.total ?? overview.stats?.approvedTotalCount ?? 0 }}</div>
+        <div class="mod-stat-value">{{ effectiveStats.approved.total }}</div>
         <div class="mod-stat-breakdown">
-          <span>Văn bản <strong>{{ overview.stats?.approved?.van_ban ?? 0 }}</strong></span>
+          <span>Văn bản <strong>{{ effectiveStats.approved.van_ban }}</strong></span>
           <span>·</span>
-          <span>Quy tắc <strong>{{ overview.stats?.approved?.quy_tac ?? 0 }}</strong></span>
+          <span>Quy tắc <strong>{{ effectiveStats.approved.quy_tac }}</strong></span>
           <span>·</span>
-          <span>QCVN <strong>{{ overview.stats?.approved?.qcvn ?? 0 }}</strong></span>
+          <span>QCVN <strong>{{ effectiveStats.approved.qcvn }}</strong></span>
         </div>
       </button>
 
@@ -636,15 +797,19 @@ defineExpose({ refresh: fetchAllModerationData })
           <span class="mod-stat-label">Đã từ chối</span>
           <span class="mod-stat-icon"><i class="ti ti-circle-x"></i></span>
         </div>
-        <div class="mod-stat-value">{{ overview.stats?.rejected?.total ?? overview.stats?.rejectedTotalCount ?? 0 }}</div>
+        <div class="mod-stat-value">{{ effectiveStats.rejected.total }}</div>
         <div class="mod-stat-breakdown">
-          <span>Văn bản <strong>{{ overview.stats?.rejected?.van_ban ?? 0 }}</strong></span>
+          <span>Văn bản <strong>{{ effectiveStats.rejected.van_ban }}</strong></span>
           <span>·</span>
-          <span>Quy tắc <strong>{{ overview.stats?.rejected?.quy_tac ?? 0 }}</strong></span>
+          <span>Quy tắc <strong>{{ effectiveStats.rejected.quy_tac }}</strong></span>
           <span>·</span>
-          <span>QCVN <strong>{{ overview.stats?.rejected?.qcvn ?? 0 }}</strong></span>
+          <span>QCVN <strong>{{ effectiveStats.rejected.qcvn }}</strong></span>
         </div>
       </button>
+    </div>
+
+    <div v-if="backendOutdatedWarning" class="mod-alert-warn" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;padding:10px 14px;border-radius:10px;background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:13px">
+      <span><i class="ti ti-info-circle"></i> Máy chủ nền đang chạy phiên bản cũ. Giao diện đã tự tổng hợp dữ liệu chờ xử lý để bạn xem ngay; vui lòng khởi động lại máy chủ (<code>npm start</code>) để đồng bộ đầy đủ lịch sử phiên bản và lưu danh mục kiểm tra.</span>
     </div>
 
     <!-- Mục 4 & 5: Tách rõ 2 Tab — Cần xử lý (Hàng đợi) & Lịch sử kiểm duyệt -->
@@ -658,7 +823,7 @@ defineExpose({ refresh: fetchAllModerationData })
             @click="switchMode('can_xu_ly')"
           >
             <span>Cần xử lý</span>
-            <span class="mod-count-pill">{{ overview.stats?.pending?.total ?? 0 }}</span>
+            <span class="mod-count-pill">{{ effectiveStats.pending.total }}</span>
           </button>
           <button
             type="button"
@@ -667,7 +832,7 @@ defineExpose({ refresh: fetchAllModerationData })
             @click="switchMode('lich_su')"
           >
             <span>Lịch sử kiểm duyệt</span>
-            <span class="mod-count-pill">{{ historyItems.length }}</span>
+            <span class="mod-count-pill">{{ effectiveHistoryItems.length }}</span>
           </button>
         </div>
 
@@ -696,19 +861,19 @@ defineExpose({ refresh: fetchAllModerationData })
       <div v-if="activeMode === 'can_xu_ly'" class="mod-group-bar">
         <button type="button" class="mod-group-pill" :class="{ active: activeQueueGroup === 'tat_ca' }" @click="activeQueueGroup = 'tat_ca'">
           <span>Tất cả cần xử lý</span>
-          <span class="mod-pill-num">{{ overview.stats?.pending?.total ?? 0 }}</span>
+          <span class="mod-pill-num">{{ effectiveStats.pending.total }}</span>
         </button>
         <button type="button" class="mod-group-pill" :class="{ active: activeQueueGroup === 'van_ban' }" @click="activeQueueGroup = 'van_ban'">
           <span>Văn bản pháp luật</span>
-          <span class="mod-pill-num">{{ overview.stats?.pending?.van_ban ?? 0 }}</span>
+          <span class="mod-pill-num">{{ effectiveStats.pending.van_ban }}</span>
         </button>
         <button type="button" class="mod-group-pill" :class="{ active: activeQueueGroup === 'quy_tac' }" @click="activeQueueGroup = 'quy_tac'">
           <span>Quy tắc phân loại</span>
-          <span class="mod-pill-num">{{ overview.stats?.pending?.quy_tac ?? 0 }}</span>
+          <span class="mod-pill-num">{{ effectiveStats.pending.quy_tac }}</span>
         </button>
         <button type="button" class="mod-group-pill" :class="{ active: activeQueueGroup === 'qcvn' }" @click="activeQueueGroup = 'qcvn'">
           <span>QCVN</span>
-          <span class="mod-pill-num">{{ overview.stats?.pending?.qcvn ?? 0 }}</span>
+          <span class="mod-pill-num">{{ effectiveStats.pending.qcvn }}</span>
         </button>
       </div>
 
@@ -1016,7 +1181,7 @@ defineExpose({ refresh: fetchAllModerationData })
           <tbody>
             <tr v-for="v in paginatedItems" :key="v.id">
               <td><code>{{ v.version }}</code></td>
-              <td style="font-weight:600">{{ v.target_code }}</td>
+              <td style="font-weight:600">{{ getRuleVersionTargetLabel(v.target_code) }}</td>
               <td style="color:var(--text2)">{{ v.change_reason || '—' }}</td>
               <td style="color:var(--text2);font-size:12.5px">{{ v.legal_basis || '—' }}</td>
               <td style="color:var(--text2)">{{ v.actor }}</td>

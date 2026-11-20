@@ -8,6 +8,8 @@ import {
   getAdminEventActionLabel,
   getAdminStatusLabel,
   getAdminTargetTypeLabel,
+  getAuditSourceLabel,
+  formatAuditDetailsForUser,
 } from '../utils/legalLabels.js'
 import ModerationWorkspace from './moderation/ModerationWorkspace.vue'
 
@@ -1326,7 +1328,7 @@ const triggerCrawlNow = async () => {
   if (!confirm('Bạn có chắc chắn muốn kích hoạt quét tự động từ luatmoitruong.vn ngay bây giờ?\nQuá trình này có thể mất từ vài giây đến một phút.')) return
   
   isCrawling.value = true
-  crawlerMessage.value = 'Hệ thống đang kết nối sitemap-pages.xml, đối chiếu lastmod cache và kiểm tra hiệu lực văn bản...'
+  crawlerMessage.value = 'Hệ thống đang kết nối danh mục nguồn văn bản pháp lý, đối chiếu thời gian cập nhật và kiểm tra hiệu lực văn bản...'
   crawlerStatusType.value = 'info'
   
   try {
@@ -1557,7 +1559,7 @@ const handleLawSubmit = async () => {
 }
 
 const handleDeleteLaw = async (id, so) => {
-  if (!confirm(`Bạn có chắc chắn muốn XÓA quy chuẩn/văn bản "${so}" không?\nHành động này sẽ xóa vĩnh viễn dữ liệu trong database!`)) {
+  if (!confirm(`Bạn có chắc chắn muốn XÓA quy chuẩn/văn bản "${so}" không?\nHành động này sẽ xóa vĩnh viễn dữ liệu trong cơ sở dữ liệu!`)) {
     return
   }
   try {
@@ -1642,26 +1644,23 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Các thẻ điều hướng ngang -->
+    <!-- Các thẻ điều hướng ngang gọn, vừa khít không thanh kéo -->
     <div class="admin-tabs-bar">
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'users' }" @click="switchSubpage('users')">
         <i class="ti ti-users"></i>
-        <span>Quản lý Nhân viên ({{ users.length }})</span>
+        <span>Quản lý Nhân viên</span>
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'projects' }" @click="switchSubpage('projects')">
         <i class="ti ti-folders"></i>
-        <span>Dự án toàn hệ thống ({{ projects.length }})</span>
+        <span>Dự án toàn hệ thống</span>
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'laws' }" @click="switchSubpage('laws')">
         <i class="ti ti-scale"></i>
-        <span>Văn bản &amp; Quy chuẩn ({{ laws.length }})</span>
+        <span>Văn bản &amp; Quy chuẩn</span>
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'rules' }" @click="switchSubpage('rules')">
         <i class="ti ti-shield-check"></i>
         <span>Kiểm duyệt dữ liệu pháp lý</span>
-        <span v-if="moderationOverview.stats?.totalPendingCount > 0" class="chip chip-warning" style="margin-left:6px;padding:1px 7px;font-size:11px;font-weight:700">
-          {{ moderationOverview.stats.totalPendingCount }}
-        </span>
       </button>
       <button type="button" class="admin-tab-btn" :class="{ active: currentSubpage === 'crawler' }" @click="switchSubpage('crawler')">
         <i class="ti ti-refresh"></i>
@@ -1678,7 +1677,10 @@ onMounted(() => {
       <!-- Trang con: người dùng -->
       <div v-if="currentSubpage === 'users'" id="admin-users" class="admin-subpage">
         <div class="admin-section-header">
-          <div class="admin-section-title">Danh sách tài khoản nhân sự</div>
+          <div class="admin-section-title" style="display:flex;align-items:center;gap:8px">
+            <span>Danh sách tài khoản nhân sự</span>
+            <span class="chip chip-gray" style="font-size:12px">{{ users.length }}</span>
+          </div>
           <button type="button" class="btn-primary btn-sm" @click="openAddUserModal">
             <i class="ti ti-user-plus"></i>
             <span>Thêm nhân viên</span>
@@ -1753,7 +1755,10 @@ onMounted(() => {
       <!-- Trang con: dự án -->
       <div v-if="currentSubpage === 'projects'" id="admin-projects" class="admin-subpage">
         <div class="admin-section-header">
-          <div class="admin-section-title">Quản lý hồ sơ dự án toàn hệ thống</div>
+          <div class="admin-section-title" style="display:flex;align-items:center;gap:8px">
+            <span>Quản lý hồ sơ dự án toàn hệ thống</span>
+            <span class="chip chip-gray" style="font-size:12px">{{ projects.length }}</span>
+          </div>
         </div>
         <div style="overflow-x:auto">
           <table class="saas-table">
@@ -1815,7 +1820,10 @@ onMounted(() => {
       <!-- Trang con: văn bản -->
       <div v-if="currentSubpage === 'laws'" id="admin-laws" class="admin-subpage">
         <div class="admin-section-header">
-          <div class="admin-section-title">Quản lý cơ sở dữ liệu Văn bản pháp lý &amp; Quy chuẩn</div>
+          <div class="admin-section-title" style="display:flex;align-items:center;gap:8px">
+            <span>Quản lý cơ sở dữ liệu Văn bản pháp lý &amp; Quy chuẩn</span>
+            <span class="chip chip-gray" style="font-size:12px">{{ laws.length }}</span>
+          </div>
           <button type="button" class="btn-primary btn-sm" @click="openAddLawModal">
             <i class="ti ti-plus"></i>
             <span>Thêm văn bản / quy chuẩn</span>
@@ -1916,8 +1924,8 @@ onMounted(() => {
             <span>Trình kiểm tra &amp; đồng bộ văn bản pháp lý (luatmoitruong.vn)</span>
           </div>
           <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-            Hệ thống vận hành theo cơ chế <strong>Đồng bộ 2 tầng theo yêu cầu (On-demand &amp; Human-in-the-loop)</strong>:
-            Tầng 1 chạy khi Quản trị viên kích hoạt kiểm tra, quét <code>sitemap-pages.xml</code> và đối chiếu dấu thời gian <code>lastmod</code> với bộ nhớ đệm PostgreSQL (bỏ qua nhanh văn bản không đổi), đồng thời bóc tách điều khoản và phát hiện văn bản hết hiệu lực.
+            Hệ thống vận hành theo cơ chế <strong>Đồng bộ 2 tầng theo yêu cầu (Chủ động kích hoạt &amp; Quản trị viên kiểm duyệt)</strong>:
+            Tầng 1 chạy khi Quản trị viên kích hoạt kiểm tra, quét danh mục văn bản từ nguồn pháp lý và đối chiếu thời gian cập nhật với bộ nhớ đệm PostgreSQL (bỏ qua nhanh văn bản không đổi), đồng thời bóc tách điều khoản và phát hiện văn bản hết hiệu lực.
             Tầng 2 ghi nhận nhật ký biến động, cảnh báo tác động và đề xuất quy tắc chờ duyệt để Quản trị viên rà soát — không tự động ghi đè ngưỡng phân loại hay QCVN đang hiệu lực.
           </p>
 
@@ -1947,7 +1955,7 @@ onMounted(() => {
         <div v-if="lastCrawlStats" class="kpi-grid fade-up" style="margin-bottom:24px">
           <div class="kpi-card">
             <div class="kpi-header">
-              <span class="kpi-label">Tổng URL Sitemap đã quét</span>
+              <span class="kpi-label">Tổng liên kết danh mục đã quét</span>
               <div class="kpi-icon"><i class="ti ti-sitemap"></i></div>
             </div>
             <div class="kpi-value">{{ lastCrawlStats.totalSitemapUrls || 0 }}</div>
@@ -1956,11 +1964,11 @@ onMounted(() => {
 
           <div class="kpi-card">
             <div class="kpi-header">
-              <span class="kpi-label">Đã đồng bộ (Fast Cache Skip)</span>
+              <span class="kpi-label">Đã đồng bộ (Bỏ qua không đổi)</span>
               <div class="kpi-icon" style="color:var(--success);background:var(--success-bg)"><i class="ti ti-database-check"></i></div>
             </div>
             <div class="kpi-value" style="color:var(--success)">{{ lastCrawlStats.skippedExistingCount || 0 }}</div>
-            <div class="kpi-sub">Khớp dấu thời gian lastmod trong PostgreSQL</div>
+            <div class="kpi-sub">Khớp dấu thời gian cập nhật trong PostgreSQL</div>
           </div>
 
           <div class="kpi-card">
@@ -2085,7 +2093,7 @@ onMounted(() => {
                 </div>
               </div>
               <div class="form-group">
-                <label class="form-label">Danh sách thông số &amp; giới hạn từ văn bản gốc (JSON Array) *</label>
+                <label class="form-label">Danh sách thông số &amp; giới hạn từ văn bản gốc (định dạng JSON) *</label>
                 <textarea v-model="transitionalForm.thamSoText" rows="3" style="font-family:monospace;font-size:12px"
                           placeholder='[{"key":"pH","ten":"pH","don_vi":"-","loai":"range","min":5.5,"max":9,"required":true}]'></textarea>
               </div>
@@ -2179,10 +2187,19 @@ onMounted(() => {
                       </div>
                       <div
                         v-if="expandedAuditUid === item.uid"
-                        style="margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-family:monospace;font-size:11.5px;white-space:pre-wrap;word-break:break-word;color:var(--text2)"
+                        style="margin-top:8px;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:5px"
                       >
-                        <div><strong>Nguồn bảng:</strong> {{ item.source }} <span v-if="item.ip_address">· <strong>IP:</strong> {{ item.ip_address }}</span></div>
-                        <pre style="margin:6px 0 0;font-family:inherit;white-space:pre-wrap">{{ JSON.stringify(item.details, null, 2) }}</pre>
+                        <div>
+                          <strong>Nguồn ghi nhận:</strong> {{ getAuditSourceLabel(item.source) }}
+                          <span v-if="item.ip_address"> · <strong>Địa chỉ IP:</strong> {{ item.ip_address }}</span>
+                        </div>
+                        <div
+                          v-for="(row, rIdx) in formatAuditDetailsForUser(item.details)"
+                          :key="rIdx"
+                          style="line-height:1.45"
+                        >
+                          <strong>{{ row.label }}:</strong> {{ row.value }}
+                        </div>
                       </div>
                     </td>
                   </tr>

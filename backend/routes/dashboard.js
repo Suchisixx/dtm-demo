@@ -18,7 +18,7 @@ router.get('/stats', requireAuth, async (req, res) => {
     return res.json(stats);
   } catch (error) {
     logger.error('Lỗi tải số liệu Dashboard:', error);
-    return res.status(500).json({ error: 'Không thể tải dữ liệu thống kê Dashboard!' });
+    return res.status(500).json({ error: 'Không thể tải dữ liệu thống kê Bảng điều khiển!' });
   }
 });
 

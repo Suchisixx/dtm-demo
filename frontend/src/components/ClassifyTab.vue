@@ -4,6 +4,7 @@ import { useAdministrativeDivisions, loadDivisions } from '../composables/useAdm
 import { useClassificationCatalog } from '../composables/useClassificationCatalog.js'
 import SearchableSelect from './SearchableSelect.vue'
 import SavedProjectsDrawer from './classify/SavedProjectsDrawer.vue'
+import LegalDetailModal from './LegalDetailModal.vue'
 import {
   DEFAULT_LAT,
   DEFAULT_LNG,
@@ -58,6 +59,12 @@ const longitude = ref(DEFAULT_LNG)
 
 // Metadata danh mục runtime lấy từ API/PostgreSQL
 const isLoadingSavedProject = ref(false)
+const legalModalOpen = ref(false)
+const legalModalInitialLawId = ref('')
+const openLegalBasisModal = (lawId = '') => {
+  legalModalInitialLawId.value = String(lawId || '')
+  legalModalOpen.value = true
+}
 
 // Trạng thái bản đồ GIS
 const diaChiHienThi = ref('')
@@ -2723,9 +2730,9 @@ onUnmounted(() => {
               <div>
                 <strong style="color:var(--text)">Căn cứ pháp lý trực tiếp:</strong> {{ result.ref || 'Chưa xác định' }}
               </div>
-              <button v-if="result.ref_law_id" type="button" class="btn-secondary btn-sm" @click="emit('view-law', result.ref_law_id)">
+              <button v-if="result.ref_law_id || result.ref" type="button" class="btn-secondary btn-sm" @click="openLegalBasisModal(result.ref_law_id)">
                 <i class="ti ti-scale"></i>
-                <span>Xem điều khoản</span>
+                <span>Xem căn cứ pháp lý</span>
               </button>
             </div>
 
@@ -2803,9 +2810,9 @@ onUnmounted(() => {
                 <div v-if="displayRationale.legalRefs && displayRationale.legalRefs.length">
                   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
                     <strong style="color:var(--text)">3. Luật, Nghị định &amp; Quy định áp dụng:</strong>
-                    <button v-if="result.ref_law_id" type="button" class="btn-secondary btn-sm" style="padding:2px 8px;font-size:11.5px" @click="emit('view-law', result.ref_law_id)">
+                    <button v-if="result.ref_law_id || result.ref" type="button" class="btn-secondary btn-sm" style="padding:2px 8px;font-size:11.5px" @click="openLegalBasisModal(result.ref_law_id)">
                       <i class="ti ti-book-2"></i>
-                      <span>Mở văn bản luật</span>
+                      <span>Xem căn cứ pháp lý</span>
                     </button>
                   </div>
                   <ul style="margin:4px 0 0 18px;padding:0;line-height:1.55">
@@ -2967,9 +2974,9 @@ onUnmounted(() => {
                 <div class="law-ref-num">{{ r.num }}</div>
                 <div class="law-ref-desc">{{ r.desc }}</div>
               </div>
-              <button v-if="r.law_id" type="button" class="btn-secondary btn-sm" @click="emit('view-law', r.law_id)">
-                <span>Tra cứu</span>
-                <i class="ti ti-arrow-up-right"></i>
+              <button v-if="r.law_id || r.num" type="button" class="btn-secondary btn-sm" @click="openLegalBasisModal(r.law_id)">
+                <span>Xem căn cứ</span>
+                <i class="ti ti-eye"></i>
               </button>
             </div>
           </div>
@@ -3156,6 +3163,15 @@ onUnmounted(() => {
       @select="selectProject($event); showProjectsDrawer = false"
       @remove="handleDeleteProject"
       @change-page="fetchProjects"
+    />
+
+    <!-- Cửa sổ Modal xem căn cứ pháp lý ngay tại màn hình phân loại (không điều hướng, không mất trạng thái) -->
+    <LegalDetailModal
+      :open="legalModalOpen"
+      mode="classification_basis"
+      :classificationResult="result"
+      :initialLawId="legalModalInitialLawId"
+      @close="legalModalOpen = false"
     />
   </div>
 </template>

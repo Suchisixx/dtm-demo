@@ -194,18 +194,23 @@ const AUDIT_ACTION_META = {
   create: { label: 'Thêm văn bản pháp lý', category: 'legal' },
   update: { label: 'Cập nhật văn bản pháp lý', category: 'legal' },
   expire: { label: 'Hết hiệu lực / Xóa văn bản', category: 'legal' },
-  AUTO_CRAWL_CREATE: { label: 'Crawler thêm văn bản mới', category: 'legal' },
-  AUTO_CRAWL_UPDATE: { label: 'Crawler cập nhật văn bản', category: 'legal' },
-  AUTO_CRAWL_EXPIRE: { label: 'Crawler ghi nhận hết hiệu lực', category: 'legal' },
-  auto_crawl_insert: { label: 'Crawler thêm văn bản mới', category: 'legal' },
-  auto_crawl_update: { label: 'Crawler cập nhật văn bản', category: 'legal' },
-  auto_crawl_expire: { label: 'Crawler ghi nhận hết hiệu lực', category: 'legal' },
+  AUTO_CRAWL_CREATE: { label: 'Cập nhật tự động từ nguồn pháp lý (thêm mới)', category: 'legal' },
+  AUTO_CRAWL_UPDATE: { label: 'Cập nhật tự động từ nguồn pháp lý', category: 'legal' },
+  AUTO_CRAWL_EXPIRE: { label: 'Cập nhật tự động ghi nhận hết hiệu lực', category: 'legal' },
+  auto_crawl_insert: { label: 'Cập nhật tự động từ nguồn pháp lý (thêm mới)', category: 'legal' },
+  auto_crawl_update: { label: 'Cập nhật tự động từ nguồn pháp lý', category: 'legal' },
+  auto_crawl_expire: { label: 'Cập nhật tự động ghi nhận hết hiệu lực', category: 'legal' },
+  MANUAL_LEGAL_OVERRIDE: { label: 'Điều chỉnh pháp lý thủ công', category: 'legal' },
+  THRESHOLD_CHANGE: { label: 'Thay đổi ngưỡng phân loại', category: 'legal' },
+  TRANSITIONAL_RULE_APPLIED: { label: 'Áp dụng quy tắc chuyển tiếp', category: 'legal' },
   UPDATE_RULE: { label: 'Sửa ngưỡng phân loại', category: 'legal' },
   VERIFY_RULE_CATALOG: { label: 'Xác minh quy tắc / QCVN', category: 'legal' },
   APPROVE_RULE_CANDIDATE: { label: 'Duyệt đề xuất quy tắc', category: 'legal' },
   REJECT_RULE_CANDIDATE: { label: 'Từ chối đề xuất quy tắc', category: 'legal' },
-  RESOLVE_LAW_IMPACT: { label: 'Xử lý tác động văn bản', category: 'legal' },
+  RESOLVE_LAW_IMPACT: { label: 'Xử lý cảnh báo tác động pháp lý', category: 'legal' },
   REVIEW_LAW: { label: 'Kiểm duyệt văn bản pháp luật', category: 'legal' },
+  REVIEW_RULE: { label: 'Kiểm duyệt quy tắc phân loại', category: 'legal' },
+  REVIEW_QCVN: { label: 'Kiểm duyệt quy chuẩn QCVN', category: 'legal' },
   CREATE_MODERATION_PROPOSAL: { label: 'Tạo đề xuất thay đổi quy tắc / QCVN', category: 'legal' },
   REVIEW_THRESHOLD_RULE: { label: 'Kiểm duyệt quy tắc phân loại', category: 'legal' },
   REVIEW_QCVN_CATALOG: { label: 'Kiểm duyệt danh mục QCVN', category: 'legal' },
@@ -216,7 +221,7 @@ const AUDIT_ACTION_META = {
   CREATE_PROJECT: { label: 'Tạo hồ sơ dự án', category: 'projects' },
   UPDATE_PROJECT: { label: 'Cập nhật hồ sơ dự án', category: 'projects' },
   DELETE_PROJECT: { label: 'Xóa hồ sơ dự án', category: 'projects' },
-  DELETE_PROJECT_ADMIN: { label: 'Admin xóa hồ sơ dự án', category: 'projects' },
+  DELETE_PROJECT_ADMIN: { label: 'Quản trị viên xóa hồ sơ dự án', category: 'projects' },
   VERIFY_SENSITIVE_CRITERIA: { label: 'Xác minh vùng nhạy cảm', category: 'projects' },
   CREATE_QCVN_SAMPLE: { label: 'Tạo mẫu quan trắc QCVN', category: 'projects' },
   UPDATE_QCVN_SAMPLE: { label: 'Cập nhật mẫu quan trắc QCVN', category: 'projects' },
@@ -239,6 +244,40 @@ function parsePayloadObject(raw) {
   }
 }
 
+const AUDIT_STATUS_VI = {
+  VERIFIED: 'Đã xác minh',
+  da_xac_minh: 'Đã xác minh',
+  APPROVED: 'Đã phê duyệt',
+  da_duyet: 'Đã phê duyệt',
+  PENDING_REVIEW: 'Chờ kiểm duyệt',
+  cho_duyet: 'Chờ kiểm duyệt',
+  PENDING_VERIFICATION: 'Chờ xác minh',
+  cho_xac_minh: 'Chờ xác minh',
+  NEEDS_LEGAL_VERIFICATION: 'Cần xác minh pháp lý',
+  can_xac_minh_phap_ly: 'Cần xác minh pháp lý',
+  NEEDS_REVIEW: 'Cần rà soát',
+  can_ra_soat: 'Cần rà soát',
+  REJECTED: 'Đã từ chối',
+  tu_choi: 'Đã từ chối',
+  NEED_MORE_INFO: 'Cần bổ sung thông tin',
+  can_bo_sung: 'Cần bổ sung thông tin',
+  EXPIRED: 'Hết hiệu lực',
+  het_hieu_luc: 'Hết hiệu lực',
+  DRAFT: 'Bản nháp',
+  ban_nhap: 'Bản nháp',
+  OPEN: 'Đang chờ xử lý',
+  dang_mo: 'Đang chờ xử lý',
+  RESOLVED: 'Đã xử lý',
+  da_xu_ly: 'Đã xử lý',
+  IGNORED: 'Đã bỏ qua',
+  bo_qua: 'Đã bỏ qua',
+};
+
+function mapAuditStatusVi(val) {
+  if (!val) return '';
+  return AUDIT_STATUS_VI[val] || AUDIT_STATUS_VI[String(val).toUpperCase()] || val;
+}
+
 function summarizeAuditEntry(action, payload = {}) {
   const target =
     payload.so
@@ -256,29 +295,29 @@ function summarizeAuditEntry(action, payload = {}) {
   if (payload.changedFields && typeof payload.changedFields === 'object') {
     const diffs = Object.entries(payload.changedFields).map(([field, diff]) => {
       if (diff && typeof diff === 'object' && ('from' in diff || 'to' in diff)) {
-        return `${field}: "${diff.from ?? '—'}" → "${diff.to ?? '—'}"`;
+        return `${field}: "${mapAuditStatusVi(diff.from) || '—'}" → "${mapAuditStatusVi(diff.to) || '—'}"`;
       }
-      return `${field}: ${String(diff)}`;
+      return `${field}: ${mapAuditStatusVi(String(diff))}`;
     });
     if (diffs.length > 0) parts.push(`Thay đổi: ${diffs.join('; ')}`);
   }
   if (payload.industry_code) parts.push(`Ngành: ${payload.industry_code}`);
-  if (payload.min_value !== undefined) parts.push(`Ngưỡng min: ${payload.min_value}`);
-  if (payload.max_value !== undefined && payload.max_value !== null) parts.push(`Ngưỡng max: ${payload.max_value}`);
+  if (payload.min_value !== undefined) parts.push(`Ngưỡng tối thiểu: ${payload.min_value}`);
+  if (payload.max_value !== undefined && payload.max_value !== null) parts.push(`Ngưỡng tối đa: ${payload.max_value}`);
   if (payload.legal_doc_required) parts.push(`Hồ sơ: ${payload.legal_doc_required}`);
   if (payload.tq) parts.push(`Thẩm quyền: ${payload.tq}`);
   if (payload.legalRef || payload.legal_ref) parts.push(`Căn cứ: ${payload.legalRef || payload.legal_ref}`);
-  if (payload.verification_status) parts.push(`Trạng thái: ${payload.verification_status}`);
+  if (payload.verification_status) parts.push(`Trạng thái: ${mapAuditStatusVi(payload.verification_status)}`);
   if (payload.project_name || payload.name) parts.push(`Tên: ${payload.project_name || payload.name}`);
   if (payload.target_username) parts.push(`Tài khoản: ${payload.target_username}`);
-  if (payload.impactId) parts.push(`Tác động #${payload.impactId} (${payload.status || ''})`);
+  if (payload.impactId) parts.push(`Tác động #${payload.impactId}${payload.status ? ` (${mapAuditStatusVi(payload.status)})` : ''}`);
   if (payload.candidateId) parts.push(`Đề xuất #${payload.candidateId}`);
-  if (payload.decision_label || payload.decision) parts.push(`Quyết định: ${payload.decision_label || payload.decision}`);
+  if (payload.decision_label || payload.decision) parts.push(`Quyết định: ${payload.decision_label || mapAuditStatusVi(payload.decision)}`);
   if (payload.reason || payload.reviewNote) parts.push(`Lý do/Ghi chú: ${payload.reason || payload.reviewNote}`);
 
   return {
     targetLabel: String(target),
-    summary: parts.join(' · ') || AUDIT_ACTION_META[action]?.label || action,
+    summary: parts.join(' · ') || AUDIT_ACTION_META[action]?.label || 'Thao tác nghiệp vụ hệ thống',
   };
 }
 
@@ -317,7 +356,7 @@ router.get('/audit-logs', async (req, res) => {
 
     for (const row of (auditRes?.rows || [])) {
       const payload = parsePayloadObject(row.payload);
-      const meta = AUDIT_ACTION_META[row.action] || { label: row.action, category: 'system' };
+      const meta = AUDIT_ACTION_META[row.action] || { label: 'Thao tác nghiệp vụ hệ thống', category: 'system' };
       const { targetLabel, summary } = summarizeAuditEntry(row.action, payload);
       items.push({
         uid: `audit-${row.id}`,
@@ -338,15 +377,15 @@ router.get('/audit-logs', async (req, res) => {
     }
 
     for (const h of (lawHistRes?.rows || [])) {
-      const meta = AUDIT_ACTION_META[h.action] || { label: h.action, category: 'legal' };
-      const isCrawler = String(h.action || '').startsWith('auto_crawl');
+      const meta = AUDIT_ACTION_META[h.action] || { label: 'Cập nhật dữ liệu văn bản pháp lý', category: 'legal' };
+      const isCrawler = String(h.action || '').toLowerCase().startsWith('auto_crawl');
       items.push({
         uid: `lawhist-${h.id}`,
         id: h.id,
         source: 'law_update_history',
         created_at: h.updated_at,
         actor_id: h.updated_by || null,
-        actor_name: h.actor_name || h.actor_username || (isCrawler ? 'Hệ thống (Crawler)' : 'Quản trị viên'),
+        actor_name: h.actor_name || h.actor_username || (isCrawler ? 'Trình thu thập dữ liệu tự động' : 'Quản trị viên'),
         actor_username: h.actor_username || (isCrawler ? 'crawler' : null),
         action: h.action,
         action_label: meta.label,

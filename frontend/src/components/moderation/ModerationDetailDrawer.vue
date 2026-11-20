@@ -1,6 +1,15 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { API } from '../../utils/constants.js'
+import {
+  toModerationStatusCode as toViStatus,
+  getModerationStatusMeta as getStatusMeta,
+  getAuthorityLabel,
+  getQcvnDomainLabel as getDomainLabel,
+  getProcedureShortLabel,
+  formatLegalTextLines,
+} from '../../utils/legalLabels.js'
+import LegalDetailModal from '../LegalDetailModal.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -47,56 +56,6 @@ const actionError = ref('')
 const showApproveConfirm = ref(false)
 const showLawEditForm = ref(false)
 const lawMetadataPatch = ref({})
-
-const toViStatus = (raw) => {
-  const s = String(raw || '').trim().toLowerCase()
-  if (['cho_duyet', 'pending_review', 'extracted', 'da_trich_xuat', 'pending_verification', 'cho_xac_minh'].includes(s)) return 'cho_duyet'
-  if (['can_xac_minh_phap_ly', 'needs_legal_verification', 'needs_review', 'can_ra_soat'].includes(s)) return 'can_xac_minh_phap_ly'
-  if (['da_xac_minh', 'verified', 'da_duyet', 'approved', 'da_ap_dung', 'applied'].includes(s)) return 'da_xac_minh'
-  if (['tu_choi', 'rejected'].includes(s)) return 'tu_choi'
-  if (['can_bo_sung', 'need_more_info'].includes(s)) return 'can_bo_sung'
-  if (['het_hieu_luc', 'expired', 'lich_su', 'historical', 'superseded'].includes(s)) return 'het_hieu_luc'
-  return s || 'can_xac_minh_phap_ly'
-}
-
-const getStatusMeta = (raw) => {
-  const code = toViStatus(raw)
-  const map = {
-    cho_duyet: { label: 'Chờ kiểm duyệt', cls: 'st-pending' },
-    can_xac_minh_phap_ly: { label: 'Cần xác minh pháp lý', cls: 'st-pending' },
-    can_bo_sung: { label: 'Cần bổ sung thông tin', cls: 'st-info' },
-    da_xac_minh: { label: 'Đã phê duyệt', cls: 'st-approved' },
-    tu_choi: { label: 'Đã từ chối', cls: 'st-rejected' },
-    het_hieu_luc: { label: 'Hết hiệu lực', cls: 'st-muted' },
-  }
-  return map[code] || { label: 'Chờ kiểm duyệt', cls: 'st-pending' }
-}
-
-const getAuthorityLabel = (tq) => {
-  const map = {
-    cap_bo: 'Bộ NN&MT / Bộ TN&MT',
-    btnmt: 'Bộ NN&MT / Bộ TN&MT',
-    cap_so: 'UBND cấp Tỉnh / Sở NN&MT',
-    ubnd_tinh: 'UBND cấp Tỉnh / Sở NN&MT',
-    cap_xa: 'UBND cấp Xã',
-    bql_kcn: 'Ban Quản lý KCN',
-    bo_khac: 'Bộ chuyên ngành khác',
-  }
-  return map[tq] || tq || '—'
-}
-
-const getDomainLabel = (sourceType) => {
-  const map = {
-    nuoc_thai_cn: 'Nước thải công nghiệp',
-    nuoc_thai_sh: 'Nước thải sinh hoạt',
-    nuoc_mat: 'Chất lượng nước mặt',
-    nuoc_ngam: 'Chất lượng nước dưới đất',
-    khong_khi: 'Chất lượng không khí xung quanh',
-    khi_thai: 'Khí thải công nghiệp',
-    dat: 'Chất lượng đất',
-  }
-  return map[sourceType] || sourceType || 'Quy chuẩn môi trường'
-}
 
 const formatDateTime = (ts) => {
   if (!ts) return '—'
@@ -152,7 +111,7 @@ const recordTypeBadge = computed(() => {
 const proposerName = computed(() => {
   if (!props.detail) return '—'
   if (props.recordType === 'law') {
-    return props.detail.law?.detection_source === 'crawler' ? 'Hệ thống thu thập tự động (Crawler)' : 'Quản trị viên hệ thống'
+    return props.detail.law?.detection_source === 'crawler' ? 'Trình thu thập dữ liệu tự động' : 'Quản trị viên hệ thống'
   }
   if (props.recordType === 'candidate') {
     return props.detail.candidate?.proposed_data?.nguoi_de_xuat || 'Hệ thống / Quản trị viên'
@@ -215,8 +174,8 @@ const ruleDiffRows = computed(() => {
     },
     {
       label: 'Loại hồ sơ môi trường',
-      oldVal: before.legal_doc_required || '—',
-      newVal: after.legal_doc_required || after.hs || before.legal_doc_required || '—',
+      oldVal: getProcedureShortLabel(before.legal_doc_required),
+      newVal: getProcedureShortLabel(after.legal_doc_required || after.hs || before.legal_doc_required),
     },
     {
       label: 'Thẩm quyền giải quyết',
@@ -491,37 +450,35 @@ const executeDecision = async (decision) => {
     submitting.value = false
   }
 }
+const hasUnsavedModerationChanges = computed(() => {
+  return Boolean(showLawEditForm.value || showApproveConfirm.value || (isActionable.value && String(reviewNote.value || '').trim().length > 0))
+})
+
+// Phân biệt "Đề xuất cảnh báo rà soát văn bản" (crawler không tự đoán ngưỡng) với "Đề xuất sửa đổi ngưỡng quy tắc"
+const isReviewAlertCandidate = computed(() => {
+  if (props.recordType !== 'candidate' || semanticType.value !== 'rule') return false
+  const p = props.detail?.candidate?.proposed_data || {}
+  const diff = props.detail?.candidate?.diff_summary || {}
+  const hasQuant = p.min_value !== undefined || p.min !== undefined || p.project_group || p.projectGroup || p.legal_doc_required || p.hs
+  return !hasQuant && Boolean(diff.requiresAdminThresholdVerification || Array.isArray(p.matchedClauses) || p.note)
+})
 </script>
 
 <template>
-  <div v-if="open" class="mod-drawer-overlay" @click.self="emit('close')">
-    <div class="mod-drawer-panel fade-up" role="dialog" aria-modal="true">
-      <!-- Đầu Drawer -->
-      <div class="mod-drawer-head">
-        <div style="min-width:0">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-            <span class="chip chip-gray" style="font-size:11.5px">{{ recordTypeBadge }}</span>
-            <span class="mod-status-badge" :class="getStatusMeta(currentStatusCode).cls">
-              {{ getStatusMeta(currentStatusCode).label }}
-            </span>
-          </div>
-          <h3 style="font-size:16.5px;font-weight:700;color:var(--text);margin:0;line-height:1.35">
-            {{ recordHeaderTitle }}
-          </h3>
-        </div>
-        <button type="button" class="drawer-close-btn" @click="emit('close')" aria-label="Đóng cửa sổ chi tiết">
-          <i class="ti ti-x"></i>
-        </button>
-      </div>
-
-      <!-- Trạng thái đang tải -->
-      <div v-if="loading" class="mod-empty-state" style="margin:auto">
-        <i class="ti ti-loader"></i>
-        <strong>Đang tải thông tin chi tiết...</strong>
-      </div>
-
-      <!-- Nội dung 2 cột trên desktop -->
-      <div v-else-if="detail" class="mod-drawer-body">
+  <LegalDetailModal
+    :open="open"
+    mode="custom"
+    :title="recordHeaderTitle"
+    :typeBadge="recordTypeBadge"
+    :statusLabel="getStatusMeta(currentStatusCode).label"
+    :statusClass="getStatusMeta(currentStatusCode).cls"
+    :loading="loading"
+    :hasUnsavedChanges="hasUnsavedModerationChanges"
+    maxWidth="1200px"
+    @close="emit('close')"
+  >
+    <!-- Nội dung 2 cột trên desktop nằm chính giữa màn hình -->
+    <div v-if="detail" class="mod-drawer-body" style="padding:0">
         <!-- ================================================================ -->
         <!-- CỘT TRÁI: NỘI DUNG DỮ LIỆU                                       -->
         <!-- ================================================================ -->
@@ -649,7 +606,57 @@ const executeDecision = async (decision) => {
 
           <!-- 8.1. CHI TIẾT QUY TẮC PHÂN LOẠI & BẢNG SO SÁNH TRƯỚC / SAU -->
           <template v-else-if="semanticType === 'rule'">
-            <div class="mod-col-card">
+            <!-- Trường hợp 1: Cảnh báo rà soát từ trình thu thập tự động (chưa có ngưỡng định lượng) -->
+            <div v-if="isReviewAlertCandidate" class="mod-col-card">
+              <div class="mod-col-title">
+                <span>Thông tin rà soát tiêu chí phân loại từ văn bản</span>
+                <span class="chip chip-warning" style="font-size:11px">Cần đối chiếu thủ công</span>
+              </div>
+
+              <div style="padding:10px 12px;border-radius:var(--radius);background:#fffbeb;border:1px solid #fde68a;color:#92400e;font-size:12.5px;line-height:1.5;margin-bottom:14px">
+                <strong>Vì sao chưa có ngưỡng công suất / nhóm dự án?</strong> Hệ thống thu thập tự động chỉ phát hiện từ khóa liên quan đến phân loại &amp; thủ tục môi trường trong văn bản, tuyệt đối không tự suy đoán số liệu ngưỡng để bảo đảm an toàn pháp lý.
+              </div>
+
+              <div class="mod-kv-grid" style="margin-bottom:12px">
+                <div>
+                  <div class="mod-kv-label">Căn cứ văn bản phát hiện</div>
+                  <div class="mod-kv-value" style="color:var(--accent);font-weight:700">
+                    {{ detail.candidate?.proposed_data?.sourceDocument || detail.candidate?.law_title || detail.candidate?.law_id || '—' }}
+                  </div>
+                </div>
+                <div>
+                  <div class="mod-kv-label">Số điều khoản liên quan</div>
+                  <div class="mod-kv-value">
+                    {{ detail.candidate?.diff_summary?.matchedClauseCount ?? (detail.candidate?.proposed_data?.matchedClauses?.length || 0) }} điều khoản
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="detail.candidate?.proposed_data?.matchedClauses?.length" style="margin-bottom:12px">
+                <div class="mod-kv-label" style="margin-bottom:6px">Các điều khoản / phụ lục được phát hiện</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span v-for="(cl, idx) in detail.candidate.proposed_data.matchedClauses" :key="idx" class="chip chip-gray" style="font-size:12px">
+                    {{ cl }}
+                  </span>
+                </div>
+              </div>
+
+              <div v-if="detail.candidate?.proposed_data?.note" style="margin-bottom:12px;font-size:13px;color:var(--text2)">
+                <strong>Ghi chú hệ thống:</strong> {{ detail.candidate.proposed_data.note }}
+              </div>
+
+              <div v-if="detail.candidate?.source_excerpt" style="padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius)">
+                <div class="mod-kv-label" style="margin-bottom:6px">Trích đoạn nội dung phát hiện</div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--text2);line-height:1.55">
+                  <div v-for="(line, lIdx) in formatLegalTextLines(detail.candidate.source_excerpt)" :key="lIdx">
+                    {{ line }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trường hợp 2: Quy tắc cụ thể hoặc Đề xuất sửa đổi ngưỡng có số liệu -->
+            <div v-else class="mod-col-card">
               <div class="mod-col-title">
                 <span>So sánh Giá trị hiện tại &amp; Giá trị đề xuất</span>
                 <button
@@ -690,7 +697,12 @@ const executeDecision = async (decision) => {
               </div>
 
               <div v-if="recordType === 'candidate' && detail.candidate?.source_excerpt" style="margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:var(--radius);font-size:12.5px;color:var(--text2)">
-                <strong>Trích dẫn nguồn / Lý do đề xuất:</strong> {{ detail.candidate.source_excerpt }}
+                <strong>Trích dẫn nguồn / Lý do đề xuất:</strong>
+                <div style="display:flex;flex-direction:column;gap:4px;margin-top:4px;line-height:1.5">
+                  <div v-for="(line, lIdx) in formatLegalTextLines(detail.candidate.source_excerpt)" :key="lIdx">
+                    {{ line }}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -729,9 +741,13 @@ const executeDecision = async (decision) => {
                     <span v-if="detail.qcvn?.column_code"> · Cột {{ detail.qcvn.column_code }}</span>
                   </div>
                 </div>
-                <div>
+                <div style="grid-column:1 / -1">
                   <div class="mod-kv-label">Căn cứ pháp lý ban hành</div>
-                  <div class="mod-kv-value">{{ detail.qcvn?.source_document || detail.candidate?.source_excerpt || 'Chưa cập nhật' }}</div>
+                  <div class="mod-kv-value" style="display:flex;flex-direction:column;gap:5px;line-height:1.55;margin-top:4px">
+                    <div v-for="(line, lIdx) in formatLegalTextLines(detail.qcvn?.source_document || detail.candidate?.source_excerpt || 'Chưa cập nhật')" :key="lIdx">
+                      {{ line }}
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <div class="mod-kv-label">Thời gian hiệu lực</div>
@@ -807,17 +823,17 @@ const executeDecision = async (decision) => {
             </div>
           </div>
 
-          <!-- Mục 9: Checklist hỗ trợ người kiểm duyệt (Lưu thật vào PostgreSQL) -->
+          <!-- Mục 9: Danh mục kiểm tra hỗ trợ người kiểm duyệt (Lưu thật vào PostgreSQL) -->
           <div class="mod-col-card">
             <div class="mod-col-title">
-              <span>Checklist xác minh ({{ checkedCount }}/{{ checklistItems.length }})</span>
+              <span>Danh mục kiểm tra xác minh ({{ checkedCount }}/{{ checklistItems.length }})</span>
               <span v-if="checklistSaveState === 'saving'" style="font-size:11.5px;color:var(--text3)">Đang lưu...</span>
               <span v-else-if="checklistSaveState === 'saved'" style="font-size:11.5px;color:var(--accent)">
                 <i class="ti ti-check"></i> Đã lưu
               </span>
             </div>
             <div style="font-size:12px;color:var(--text3);margin-bottom:8px">
-              Checklist hỗ trợ đối chiếu nghiệp vụ, không tự động xác nhận tính đúng đắn pháp lý.
+              Danh mục kiểm tra chỉ hỗ trợ đối chiếu nghiệp vụ, không tự động xác nhận tính đúng đắn pháp lý.
             </div>
             <div style="display:flex;flex-direction:column;gap:2px">
               <label
@@ -917,7 +933,6 @@ const executeDecision = async (decision) => {
           </div>
         </div>
       </div>
-    </div>
 
     <!-- HỘP THOẠI XÁC NHẬN PHÊ DUYỆT (Mục 10: Không phê duyệt chỉ bằng 1 cú nhấn) -->
     <div v-if="showApproveConfirm" class="modal-overlay" style="z-index:1300" @click.self="showApproveConfirm = false">
@@ -937,7 +952,7 @@ const executeDecision = async (decision) => {
           <div><strong>Loại dữ liệu:</strong> {{ recordTypeBadge }}</div>
           <div v-if="legalBasisInput"><strong>Căn cứ pháp lý:</strong> {{ legalBasisInput }}</div>
           <div v-if="effectiveFromInput"><strong>Ngày hiệu lực:</strong> {{ effectiveFromInput }}</div>
-          <div><strong>Tiến độ Checklist:</strong> {{ checkedCount }}/{{ checklistItems.length }} mục đã đối chiếu</div>
+          <div><strong>Tiến độ kiểm tra đối chiếu:</strong> {{ checkedCount }}/{{ checklistItems.length }} mục đã đánh dấu</div>
         </div>
 
         <div style="padding:10px 12px;background:var(--warn-bg);border:1px solid var(--warn-border);border-radius:var(--radius);font-size:12.5px;color:#8A5A00;margin-bottom:16px;line-height:1.5">
@@ -955,5 +970,5 @@ const executeDecision = async (decision) => {
         </div>
       </div>
     </div>
-  </div>
+  </LegalDetailModal>
 </template>

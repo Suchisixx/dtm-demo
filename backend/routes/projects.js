@@ -324,7 +324,7 @@ router.put('/:id/sensitive-verification', requireAdmin, async (req, res) => {
 
   const targetStatus = String(verification_status || verificationStatus || '').toUpperCase();
   if (!['VERIFIED', 'REJECTED', 'PENDING_VERIFICATION'].includes(targetStatus)) {
-    return res.status(400).json({ error: 'Trạng thái xác minh không hợp lệ (VERIFIED, REJECTED, PENDING_VERIFICATION)!' });
+    return res.status(400).json({ error: 'Trạng thái xác minh không hợp lệ (chỉ chấp nhận: Đã xác minh, Từ chối, Chờ xác minh)!' });
   }
 
   try {

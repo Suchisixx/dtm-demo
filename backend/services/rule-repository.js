@@ -1252,16 +1252,29 @@ async function approveRuleCandidate(
       ruleVersion: proposed.ruleVersion || `2026.2-cand-${numericId}`,
     });
   } else if (targetType === 'CLASSIFICATION_THRESHOLD' || targetType === 'INDUSTRY_TIER') {
-    const industryCode = String(proposed.industryCode || proposed.industry_code || cand.target_code || '').trim();
-    if (!industryCode) throw new Error('INDUSTRY_CODE_REQUIRED');
-    const minVal = Number(proposed.min ?? proposed.min_value);
-    if (Number.isNaN(minVal)) throw new Error('INVALID_THRESHOLD_MIN_VALUE');
-    const maxVal = proposed.max !== undefined && proposed.max !== null ? Number(proposed.max) : null;
-    const effFrom = formatDateOnly(proposed.effectiveFrom || proposed.effective_from);
-    const effTo = formatDateOnly(proposed.effectiveTo || proposed.effective_to);
-    const targetThrId = Number(proposed.thresholdId || proposed.supersedeThresholdId || cand.target_code);
+    const diffSummary = parseJsonSafe(cand.diff_summary, {});
+    const hasMinVal = (proposed.min !== undefined && proposed.min !== null && proposed.min !== '')
+      || (proposed.min_value !== undefined && proposed.min_value !== null && proposed.min_value !== '');
+    const isReviewAlert = Boolean(diffSummary.requiresAdminThresholdVerification || Array.isArray(proposed.matchedClauses)) && !hasMinVal;
 
-    if (Number.isInteger(targetThrId) && targetThrId > 0 && proposed.updateExisting !== false) {
+    if (isReviewAlert) {
+      // Đề xuất rà soát văn bản từ trình thu thập tự động: ghi nhận đã đối chiếu mà không tạo ngưỡng giả
+      appliedRecord = {
+        acknowledgedReviewAlert: true,
+        lawId: proposed.lawId || cand.law_id || null,
+        sourceDocument: resolvedSourceDoc,
+      };
+    } else {
+      const industryCode = String(proposed.industryCode || proposed.industry_code || cand.target_code || '').trim();
+      if (!industryCode) throw new Error('INDUSTRY_CODE_REQUIRED');
+      const minVal = Number(proposed.min ?? proposed.min_value);
+      if (Number.isNaN(minVal)) throw new Error('INVALID_THRESHOLD_MIN_VALUE');
+      const maxVal = proposed.max !== undefined && proposed.max !== null ? Number(proposed.max) : null;
+      const effFrom = formatDateOnly(proposed.effectiveFrom || proposed.effective_from);
+      const effTo = formatDateOnly(proposed.effectiveTo || proposed.effective_to);
+      const targetThrId = Number(proposed.thresholdId || proposed.supersedeThresholdId || cand.target_code);
+
+      if (Number.isInteger(targetThrId) && targetThrId > 0 && proposed.updateExisting !== false) {
       const beforeThrRes = await client.query('SELECT * FROM classification_thresholds WHERE id = $1', [targetThrId]);
       const beforeThr = beforeThrRes.rows?.[0] || null;
       if (beforeThr) {
@@ -1377,6 +1390,7 @@ async function approveRuleCandidate(
         ]
       );
       appliedRecord = insThr.rows[0];
+      }
     }
   } else {
     throw new Error(`UNSUPPORTED_CANDIDATE_TARGET:${targetType}`);

@@ -105,7 +105,11 @@ router.get('/', async (req, res) => {
         mo_ta: formatted.mo_ta,
         dieu_khoang: formatted.dieu_khoang,
         note: formatted.note,
-        link: formatted.link
+        link: formatted.link,
+        issuing_agency: formatted.issuing_agency || null,
+        issued_date: formatted.issued_date || null,
+        effective_date: formatted.effective_date || null,
+        verification_status: formatted.verification_status || null
       });
     }
 

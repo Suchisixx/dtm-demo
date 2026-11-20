@@ -78,16 +78,16 @@ router.post('/run', requireAdmin, async (req, res) => {
       success: true,
       ...result,
       stats: result,
-      message: `Hoàn tất kiểm tra ${result.totalSitemapUrls} URLs (${result.totalMainDocs} văn bản gốc) trong ${sec}s: Thêm mới ${result.createdCount}, Cập nhật ${result.updatedCount}, Chuyển hết hiệu lực ${result.expiredUpdatedCount || 0}, Đã đồng bộ (Fast-Skip) ${result.skippedExistingCount}.`
+      message: `Hoàn tất kiểm tra ${result.totalSitemapUrls} liên kết (${result.totalMainDocs} văn bản gốc) trong ${sec} giây: Thêm mới ${result.createdCount}, Cập nhật ${result.updatedCount}, Chuyển hết hiệu lực ${result.expiredUpdatedCount || 0}, Bỏ qua không đổi ${result.skippedExistingCount}.`
     });
   } catch (err) {
     if (err.message === 'CRAWLER_BUSY') {
       return res.status(409).json({
-        error: 'Hệ thống đang trong tiến trình đồng bộ dữ liệu, vui lòng đợi hoàn tất.'
+        error: 'Quá trình đồng bộ dữ liệu pháp lý đang được thực hiện. Vui lòng đợi hoàn tất.'
       });
     }
     logger.error('Lỗi trong quá trình quét thủ công:', err);
-    return res.status(500).json({ error: `Có lỗi xảy ra: ${err.message}` });
+    return res.status(500).json({ error: 'Không thể hoàn tất quá trình đồng bộ dữ liệu pháp lý. Vui lòng thử lại sau.' });
   }
 });
 
